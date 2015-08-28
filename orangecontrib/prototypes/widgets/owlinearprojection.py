@@ -9,6 +9,7 @@ from operator import itemgetter
 from types import SimpleNamespace as namespace
 from xml.sax.saxutils import escape
 
+from scipy.spatial import distance
 import pkg_resources
 
 from PyQt4 import QtGui, QtCore
@@ -238,6 +239,7 @@ class OWLinearProjection(widget.OWWidget):
     point_size = settings.Setting(10)
     alpha_value = settings.Setting(255)
     jitter_value = settings.Setting(0)
+    hide_radius = settings.Setting(0)
 
     auto_commit = settings.Setting(True)
 
@@ -257,6 +259,8 @@ class OWLinearProjection(widget.OWWidget):
         self._subset_mask = None
         self._selection_mask = None
         self._item = None
+        self._axes = None
+        self._max_dist = 0
         self.__legend = None
         self.__selection_item = None
         self.__replot_requested = False
@@ -382,6 +386,12 @@ class OWLinearProjection(widget.OWWidget):
         size_slider.valueChanged.connect(self._set_size)
         form.addRow("", size_slider)
 
+        radius_slider = QSlider(
+            Qt.Horizontal, minimum=0, maximum=100, pageStep=10,
+            tickPosition=QSlider.TicksBelow, value=self.hide_radius)
+        radius_slider.valueChanged.connect(self._set_hide_radius)
+
+        form.addRow("Hide radius", radius_slider)
         toolbox = gui.widgetBox(self.controlArea, "Zoom/Select")
         toollayout = QtGui.QHBoxLayout()
         toolbox.layout().addLayout(toollayout)
@@ -524,7 +534,7 @@ class OWLinearProjection(widget.OWWidget):
             self.__legend.setParentItem(None)
             self.__legend.clear()
             self.__legend.setVisible(False)
-
+        self._axes = None
         self.viewbox.clear()
 
     def _invalidate_plot(self):
@@ -795,10 +805,15 @@ class OWLinearProjection(widget.OWWidget):
 
         self.viewbox.addItem(self._item)
 
+        self._axes = []
         for i, axis in enumerate(axes.T):
             axis_item = AxisItem(line=QLineF(0, 0, axis[0], axis[1]),
                                  label=variables[i].name)
             self.viewbox.addItem(axis_item)
+            dist = distance.euclidean((0, 0), (axis[0], axis[1]))
+            self._axes.append([axis_item, dist])
+        self._max_dist = numpy.max([axis[1] for axis in self._axes])
+        self._on_hide_radius_change()
 
         self.viewbox.setRange(QtCore.QRectF(-1.05, -1.05, 2.1, 2.1))
         self._update_legend()
@@ -997,6 +1012,17 @@ class OWLinearProjection(widget.OWWidget):
     def _set_size(self, value):
         self.point_size = value
         self._on_size_change()
+
+    def _set_hide_radius(self, value):
+        self.hide_radius = value
+        self._on_hide_radius_change()
+
+    def _on_hide_radius_change(self):
+        if not self.opt_radio.buttons[1].isChecked():
+            return
+        for axis_item, dist in self._axes:
+            axis_item.setVisible(dist >=
+                                 self.hide_radius * self._max_dist / 100)
 
     def _selection_finish(self, path):
         self.select(path)
