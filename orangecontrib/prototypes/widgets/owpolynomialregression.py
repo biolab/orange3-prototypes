@@ -225,11 +225,17 @@ class OWPolynomialRegression(widget.OWWidget):
         self.send("Learner", learner)
         self.send("Predictor", predictor)
 
-        print(type(predictor))
-        if isinstance(predictor, PolynomialModel):
-            domain = Domain([ContinuousVariable("coef")],
+        model = None
+        if predictor is not None:
+            model = predictor.model
+            if hasattr(model, "model"):
+                model = model.model
+            elif hasattr(model, "skl_model"):
+                model = model.skl_model
+        if model is not None and hasattr(model, "coef_"):
+            domain = Domain([ContinuousVariable("coef", number_of_decimals=7)],
                             metas=[StringVariable("name")])
-            coefs = predictor.model.model.intercept_ + list(predictor.model.model.coef_)
+            coefs = [model.intercept_ + model.coef_[0]] + list(model.coef_[1:])
             names = ["1", x_label] + \
                     ["{}^{}".format(x_label, i) for i in range(2, degree + 1)]
             coef_table = Table(domain, list(zip(coefs, names)))
