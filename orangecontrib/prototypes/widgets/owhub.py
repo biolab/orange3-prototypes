@@ -12,8 +12,8 @@ class OWHub(widget.OWWidget):
 
     NOTHING = "Nothing on input"
 
-    def __init__(self, parent=None):
-        super().__init__(parent)
+    def __init__(self):
+        super().__init__()
         self.obj_type = self.NOTHING
         gui.label(self.controlArea, self, "Hubbing: %(obj_type)s")
         self.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Maximum)
