@@ -1,4 +1,4 @@
-from PyQt4.QtGui import QSizePolicy, QListWidgetItem
+from PyQt4.QtGui import QListWidgetItem
 from PyQt4.QtCore import Qt, QSize
 from Orange.widgets import widget, gui
 
@@ -11,14 +11,15 @@ class OWHub(widget.OWWidget):
     inputs = [("Object", object, "get_input", widget.Default | widget.Multiple)]
     outputs = [("Object", object, widget.Dynamic)]
 
+    want_main_area = False
+
     def __init__(self):
         super().__init__()
         self.objects = {}
-        self.output_index = [0]
-        self.lb_objects = gui.listBox(self.controlArea, self, "output_index",
+        self.lb_objects = gui.listBox(self.controlArea, self, box="Inputs",
                                       callback=self._on_selection_change,
-                                      sizeHint=QSize(200, 300))
-        self.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Maximum)
+                                      sizeHint=QSize(300, 300))
+        self.lb_objects.setFocusPolicy(Qt.NoFocus)
 
     def get_input(self, obj, key):
         lb = self.lb_objects
@@ -28,7 +29,6 @@ class OWHub(widget.OWWidget):
         else:
             item_index = None
 
-        # TODO: Use model/view instead
         if obj is None:
             if item_index is None:
                 return
