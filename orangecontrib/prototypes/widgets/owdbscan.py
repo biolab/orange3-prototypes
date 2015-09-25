@@ -106,7 +106,7 @@ class OWDBSCAN(widget.OWWidget):
     def send_data(self, row=None):
         model = self.model
         if not self.data or not self.model:
-            self.send("Data", None)
+            self.send("Annotated Data", None)
             return
 
         clusters = [c if c >= 0 else None for c in model.labels_]
