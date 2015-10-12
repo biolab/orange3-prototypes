@@ -30,7 +30,7 @@ import Orange
 from Orange.widgets import widget, gui, settings
 from Orange.widgets.utils import itemmodels, colorpalette
 from Orange.widgets.visualize.owscatterplotgraph import LegendItem, legend_anchor_pos
-from Orange.widgets.io import FileFormats
+from Orange.widgets.io import FileFormat
 
 
 class DnDVariableListModel(itemmodels.VariableListModel):
@@ -1069,8 +1069,8 @@ class OWLinearProjection(widget.OWWidget):
     def save_graph(self):
         from Orange.widgets.data.owsave import OWSave
 
-        save_img = OWSave(parent=self, data=self.viewbox,
-                          file_formats=FileFormats.img_writers)
+        save_img = OWSave(data=self.viewbox,
+                          file_formats=FileFormat.img_writers)
         save_img.exec_()
 
 
