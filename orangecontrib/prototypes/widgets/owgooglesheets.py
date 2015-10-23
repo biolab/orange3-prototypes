@@ -1,17 +1,12 @@
 import re
-import os
-import csv
-import urllib
 from collections import namedtuple
 from datetime import datetime
 import logging
 
-import numpy as np
-
 from PyQt4 import QtGui, QtCore
 
 from Orange.widgets import widget, gui, settings
-from Orange.data import Table, Domain, DiscreteVariable, ContinuousVariable, StringVariable
+from Orange.data.table import Table
 
 
 log = logging.getLogger()
@@ -36,67 +31,6 @@ def SHEETS_URL(url):
 
 
 Sheet = namedtuple('Sheet', ('name', 'url'))
-
-
-# FIXME: This belongs into Table.from_url!!
-#
-#
-#
-#
-# Do not use this, see https://github.com/biolab/orange3/pull/678 instead.
-#
-#
-#
-#
-def from_url(url):
-    name = urllib.parse.urlparse(url)[2].replace('/', '_')
-
-    def suggested_filename(content_disposition):
-        # See https://tools.ietf.org/html/rfc6266#section-4.1
-        matches = re.findall(r"filename\*?=(?:\"|.{0,10}?'[^']*')([^\"]+)",
-                             content_disposition or '')
-        return urllib.parse.unquote(matches[-1]) if matches else ''
-
-    def get_encoding(content_disposition):
-        matches = re.findall(r"filename\*=(.{0,10}?)'[^']*'",
-                             content_disposition or '')
-        return matches[0].lower() if matches else 'utf-8'
-
-    with urllib.request.urlopen(url, timeout=10) as response:
-        name = suggested_filename(response.headers['content-disposition']) or name
-
-        encoding = get_encoding(response.headers['content-disposition'])
-        text = [row.decode(encoding) for row in response]
-        csv_reader = csv.reader(text, delimiter='\t')
-        header = next(csv_reader)
-        data = np.array(list(csv_reader))
-
-        attrs = []
-        metas = []
-        attrs_cols = []
-        metas_cols = []
-        for col in range(data.shape[1]):
-            values = [val for val in data[:, col] if val not in ('', '?', 'nan')]
-            try: floats = [float(i) for i in values]
-            except ValueError:
-                # Not numbers
-                values = set(values)
-                if len(values) < 12:
-                    attrs.append(DiscreteVariable(header[col], values=sorted(values)))
-                    attrs_cols.append(col)
-                else:
-                    metas.append(StringVariable(header[col]))
-                    metas_cols.append(col)
-            else:
-                attrs.append(ContinuousVariable(header[col]))
-                attrs_cols.append(col)
-
-        domain = Domain(attrs, metas=metas)
-        data = np.hstack((data[:, attrs_cols], data[:, metas_cols]))
-        table = Table.from_list(domain, data.tolist())
-
-    table.name = os.path.splitext(name)[0]
-    return table
 
 
 class OWGoogleSheets(widget.OWWidget):
@@ -156,10 +90,12 @@ class OWGoogleSheets(widget.OWWidget):
 
     def on_combo_activated(self, index=float('inf'), url=''):
         self.error()
+        # Index from combobox selection
         if 0 <= index < len(self.recent):
             sheet = self.recent.pop(index)
             self.table = self.retrieve(sheet.url)
             self.recent.insert(0, sheet)
+        # URL from textchanged event
         elif url:
             table = self.table = self.retrieve(url)
             if not table: return
@@ -192,12 +128,12 @@ class OWGoogleSheets(widget.OWWidget):
         if not url: return
         progress = gui.ProgressBar(self, 10)
         for i in range(3): progress.advance()
-        try: table = from_url(url)
+        try: table = Table.from_url(url)
         except Exception as e:
             import traceback
             log.error(traceback.format_exc())
             log.error("Couldn't load spreadsheet %s: %s", url, e)
-            self.error("Couldn't load spreadsheet. Ensure correct read permissions; rectangle, top-left aligned sheet data ...")
+            self.error("Couldn't load spreadsheet. Ensure correct read permissions; rectangular, top-left aligned sheet data ...")
             return
         else:
             for i in range(7): progress.advance()
