@@ -15,14 +15,6 @@ from Orange.widgets import widget, gui, settings
 from Orange.widgets.utils import colorpalette
 
 
-def is_discrete(var):
-    return isinstance(var, Orange.data.DiscreteVariable)
-
-
-def is_string(var):
-    return isinstance(var, Orange.data.StringVariable)
-
-
 def disconnected_curve_data(data, x=None):
     C, P = data.shape
     if x is not None:
@@ -41,69 +33,8 @@ def disconnected_curve_data(data, x=None):
     return X, validdata, connect
 
 
-def shape_from_path(path, width=1,):
-    stroker = QtGui.QPainterPathStroker()
-    stroker.setWidth(width)
-    return stroker.createStroke(path)
-
-
-class HoverCurve(pg.PlotCurveItem):
-    def __init__(self, *args, **kwargs):
-        self.__shape = None
-        super().__init__(*args, **kwargs)
-        self.setAcceptHoverEvents(True)
-        self.setFlag(QGraphicsItem.ItemIsSelectable, True)
-        self.setBoundingRegionGranularity(0.1)
-
-    def shape(self):
-        if self.__shape is None:
-            path = self.getPath()
-            d = self.pixelLength(QPointF(0, self.opts["mouseWidth"]))
-            self.__shape = shape_from_path(path, width=d)
-        return self.__shape
-
-    def boundingRect(self):
-        shape = self.shape()
-        return shape.controlPointRect()
-
-    def contains(self, point):
-        return self.shape().contains(point)
-
-    def collidesWithPath(self, path, mode=Qt.IntersectsItemShape):
-        if mode == Qt.IntersectsItemShape:
-            return path.intersects(self.shape())
-        elif mode == Qt.ContainsItemShape:
-            return path.contains(self.shape())
-        elif mode == Qt.IntersectsItemBoundingRect:
-            return path.contains(self.boundingRect())
-        elif mode == Qt.ContainsItemBoundingRect:
-            return path.contains(self.boundingRect())
-
-    def hoverEnterEvent(self, event):
-        event.accept()
-        self.update()
-
-    def hoverLeaveEvent(self, event):
-        event.accept()
-        self.update()
-
-    def setData(self, *args, **kwargs):
-        self.__shape = None
-        super().setData(*args, **kwargs)
-
-    def viewTransformChanged(self):
-        self.__shape = None
-        self.prepareGeometryChange()
-        super().viewTransformChanged()
-
-    def paint(self, painter, option, widget):
-        if option.state & QStyle.State_MouseOver or self.isSelected():
-            super().paint(painter, option, widget)
-
-
 # TODO:
 #  * Box plot item
-#  * Speed up single profile hover and selection renders
 
 class OWLinePlot(widget.OWWidget):
     name = "Line Plot"
@@ -200,7 +131,7 @@ class OWLinePlot(widget.OWWidget):
             self.infoLabel.setText("%i instances on input\n%i attributes"%(n_instances, n_attrs))
 
             annotvars = [var for var in data.domain.variables + data.domain.metas
-                         if is_discrete(var) or is_string(var)]
+                         if var.is_discrete or var.is_string]
             for var in annotvars:
                 self.annot_cb.addItem(*gui.attributeItem(var))
             if data.domain.class_var in annotvars:
@@ -211,7 +142,7 @@ class OWLinePlot(widget.OWWidget):
                                     if var.is_continuous]
 
             groupvars = [var for var in data.domain.variables + data.domain.metas
-                        if is_discrete(var)]
+                        if var.is_discrete]
             if len(groupvars) > 0:
                 self.cb_attr.addItems([str(var) for var in groupvars])
                 self.group_var = str(groupvars[0])
@@ -259,8 +190,6 @@ class OWLinePlot(widget.OWWidget):
 
                 lightpen = QPen(lightcolor, 1)
                 lightpen.setCosmetic(True)
-                hoverpen = QPen(pen)
-                hoverpen.setWidth(2)
 
                 curve = pg.PlotCurveItem(
                     x=plot_x, y=plot_y, connect=connect,
@@ -268,29 +197,14 @@ class OWLinePlot(widget.OWWidget):
                 )
                 self.graph.addItem(curve)
 
-                hovercurves = []
-                for index, profile in zip(indices, group_data.X):
-                    hcurve = HoverCurve(x=X, y=profile, pen=hoverpen,
-                                        antialias=True)
-                    hcurve.setToolTip('{}'.format(index))
-                    hcurve._data_index = index
-                    hovercurves.append(hcurve)
-                    self.graph.addItem(hcurve)
-
                 mean = np.nanmean(group_data.X, axis=0)
 
                 meancurve = pg.PlotDataItem(
                     x=X, y=mean, pen=pen, size=5, symbol="o", pxMode=True,
                     symbolSize=5, antialias=True
                 )
-                hoverpen = QPen(hoverpen)
-                hoverpen.setWidth(5)
-
-                meanhover = HoverCurve(x=X, y=mean, pen=hoverpen, antialias=True)
-                meanhover.setFlag(QGraphicsItem.ItemIsSelectable, False)
-                self.graph.addItem(meanhover)
-
                 self.graph.addItem(meancurve)
+
                 q1, q2, q3 = np.nanpercentile(group_data.X, [25, 50, 75], axis=0)
                 # TODO: implement and use a box plot item
                 errorbar = pg.ErrorBarItem(
@@ -303,8 +217,7 @@ class OWLinePlot(widget.OWWidget):
                 groups.append(
                     namespace(
                         data=group_data, indices=indices,
-                        profiles=curve, hovercurves=hovercurves,
-                        mean=meancurve, meanhover=meanhover,
+                        profiles=curve, mean=meancurve,
                         boxplot=errorbar)
                 )
 
@@ -325,10 +238,7 @@ class OWLinePlot(widget.OWWidget):
                 isselected = selected(i)
                 group.profiles.setVisible(isselected and self.display_individual)
                 group.mean.setVisible(isselected)
-                group.meanhover.setVisible(isselected)
                 group.boxplot.setVisible(isselected and self.display_quartiles)
-                for hc in group.hovercurves:
-                    hc.setVisible(isselected and self.display_individual)
 
     def __update_tooltips(self):
         if self.__groups is None:
@@ -341,13 +251,6 @@ class OWLinePlot(widget.OWWidget):
         else:
             annotvar = None
             column = [str(i) for i in range(len(self.data))]
-
-        for group in self.__groups:
-            if group is not None:
-                for hcurve in group.hovercurves:
-                    if hasattr(hcurve, '_data_index'):
-                        value = column[hcurve._data_index]
-                        hcurve.setToolTip(value)
 
     def __select_all_toggle(self):
         allselected = len(self.selected_classes) == len(self.classes)
