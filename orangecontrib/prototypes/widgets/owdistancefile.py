@@ -141,7 +141,7 @@ class OWDistanceFile(widget.OWWidget):
                 self.information("Loading '{}' from the current directory."
                                  .format(basename))
         if fn == "(none)":
-            self.send("Data", None)
+            self.send("Distances", None)
             self.infoa.setText("No data loaded")
             self.infob.setText("")
             self.warnings.setText("")
