@@ -12,6 +12,7 @@ class OWHub(widget.OWWidget):
     outputs = [("Object", object, widget.Dynamic)]
 
     want_main_area = False
+    resizing_enabled = False
 
     def __init__(self):
         super().__init__()

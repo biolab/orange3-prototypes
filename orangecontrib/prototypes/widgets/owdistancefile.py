@@ -23,6 +23,7 @@ class OWDistanceFile(widget.OWWidget):
     outputs = [("Distances", DistMatrix)]
 
     want_main_area = False
+    resizing_enabled = False
 
     recent_files = Setting(["(none)"])
 

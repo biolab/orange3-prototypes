@@ -41,6 +41,7 @@ class OWGoogleSheets(widget.OWWidget):
     outputs = [("Data", Table)]
 
     want_main_area = False
+    resizing_enabled = False
 
     recent = settings.Setting([])
     autocommit = settings.Setting(True)
