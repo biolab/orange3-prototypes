@@ -43,7 +43,7 @@ class OWLinePlot(widget.OWWidget):
     priority = 1030
 
     inputs = [("Data", Orange.data.Table, "set_data")]
-    outputs = [("Selected Data", Orange.data.Table)]
+    outputs = []
     settingsHandler = settings.DomainContextHandler()
 
     group_var = settings.Setting("")                #: Group by group_var's values
@@ -51,8 +51,6 @@ class OWLinePlot(widget.OWWidget):
     display_individual = settings.Setting(False)    #: Show individual profiles
     display_average = settings.Setting(True)        #: Show average profile
     display_quartiles = settings.Setting(True)      #: Show data quartiles
-    annot_index = settings.ContextSetting(0)        #: Profile label/id colum
-    auto_commit = settings.Setting(True)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -60,7 +58,6 @@ class OWLinePlot(widget.OWWidget):
         self.classes = []
 
         self.data = None
-        self.annotation_variables = []
         self.group_variables = []
         self.graph_variables = []
         self.__groups = None
@@ -88,12 +85,7 @@ class OWLinePlot(widget.OWWidget):
             group_box, self, "Unselect all",
             callback=self.__select_all_toggle)
 
-        self.annot_cb = gui.comboBox(
-            self.controlArea, self, "annot_index", box="Profile Labels",
-            callback=self.__update_tooltips)
-
         gui.rubber(self.controlArea)
-        gui.auto_commit(self.controlArea, self, "auto_commit", "Commit")
 
         self.graph = pg.PlotWidget(background="w", enableMenu=False)
         self.graph.setRenderHint(QtGui.QPainter.Antialiasing, True)
@@ -110,9 +102,7 @@ class OWLinePlot(widget.OWWidget):
         """
         self.cb_attr.clear()
         self.group_listbox.clear()
-        self.annot_cb.clear()
         self.data = None
-        self.annotation_variables = []
         self.__groups = None
         self.__selected_data_indices = []
         self.graph.clear()
@@ -130,14 +120,6 @@ class OWLinePlot(widget.OWWidget):
             n_attrs = len(data.domain.attributes)
             self.infoLabel.setText("%i instances on input\n%i attributes"%(n_instances, n_attrs))
 
-            annotvars = [var for var in data.domain.variables + data.domain.metas
-                         if var.is_discrete or var.is_string]
-            for var in annotvars:
-                self.annot_cb.addItem(*gui.attributeItem(var))
-            if data.domain.class_var in annotvars:
-                self.annot_index = annotvars.index(data.domain.class_var)
-            self.annotation_variables = annotvars
-
             self.graph_variables = [var for var in data.domain.attributes
                                     if var.is_continuous]
 
@@ -150,8 +132,6 @@ class OWLinePlot(widget.OWWidget):
                 self.update_group_var()
 
             self.openContext(data)
-
-        self.commit()
 
     def _setup_plot(self):
         """Setup the plot with new curve data."""
@@ -223,7 +203,6 @@ class OWLinePlot(widget.OWWidget):
 
         self.__groups = groups
         self.__update_visibility()
-        self.__update_tooltips()
 
     def __update_visibility(self):
         if self.__groups is None:
@@ -239,18 +218,6 @@ class OWLinePlot(widget.OWWidget):
                 group.profiles.setVisible(isselected and self.display_individual)
                 group.mean.setVisible(isselected)
                 group.boxplot.setVisible(isselected and self.display_quartiles)
-
-    def __update_tooltips(self):
-        if self.__groups is None:
-            return
-
-        if 0 <= self.annot_index < len(self.annotation_variables):
-            annotvar = self.annotation_variables[self.annot_index]
-            column, _ = self.data.get_column_view(annotvar)
-            column = [annotvar.str_val(val) for val in column]
-        else:
-            annotvar = None
-            column = [str(i) for i in range(len(self.data))]
 
     def __select_all_toggle(self):
         allselected = len(self.selected_classes) == len(self.classes)
@@ -269,22 +236,11 @@ class OWLinePlot(widget.OWWidget):
 
         self.__update_visibility()
 
-    def __on_annotation_index_changed(self):
-        self.__update_tooltips()
-
     def __on_curve_selection_changed(self):
         if self.data is not None:
             selected = self.graph.scene().selectedItems()
             indices = [item._data_index for item in selected]
             self.__selected_data_indices = np.array(indices, dtype=int)
-            self.commit()
-
-    def commit(self):
-        subset = None
-        if self.data is not None and len(self.__selected_data_indices) > 0:
-            subset = self.data[self.__selected_data_indices]
-
-        self.send("Selected Data", subset)
 
     def update_group_var(self):
         data_attr, _ = self.data.get_column_view(self.group_var)
