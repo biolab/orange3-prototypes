@@ -1,4 +1,5 @@
 import sys
+import itertools
 from xml.sax.saxutils import escape
 from types import SimpleNamespace as namespace
 
@@ -33,6 +34,8 @@ class OWSilhouettePlot(widget.OWWidget):
     distance_idx = settings.Setting(0)
     #: Group/cluster variable index
     cluster_var_idx = settings.ContextSetting(0)
+    #: Annotation variable index
+    annotation_var_idx = settings.ContextSetting(0)
     #: Group the silhouettes by cluster
     group_by_cluster = settings.Setting(True)
     #: A fixed size for an instance bar
@@ -69,6 +72,13 @@ class OWSilhouettePlot(widget.OWWidget):
 
         gui.checkBox(box, self, "group_by_cluster", "Group by cluster",
                      callback=self._replot)
+
+        self.annotation_cb = gui.comboBox(
+            box, self, "annotation_var_idx", label="Annotations",
+            callback=self._update_annotations)
+        self.annotation_var_model = itemmodels.VariableListModel(parent=self)
+        self.annotation_var_model[:] = ["None"]
+        self.annotation_cb.setModel(self.annotation_var_model)
 
         gui.rubber(self.controlArea)
 
@@ -108,6 +118,9 @@ class OWSilhouettePlot(widget.OWWidget):
 
         self.data = data
         if data is not None:
+            annotvars = [var for var in data.domain.metas if var.is_string]
+            self.annotation_var_model[:] = ["None"] + annotvars
+            self.annotation_var_idx = 1 if len(annotvars) else 0
             self._effective_data = Orange.distance._preprocess(data)
             self.openContext(Orange.data.Domain(candidatevars))
 
@@ -128,6 +141,7 @@ class OWSilhouettePlot(widget.OWWidget):
         self._effective_data = None
         self._matrix = None
         self.cluster_var_model[:] = []
+        self.annotation_var_model[:] = ["None"]
         self._clear_scene()
 
     def _clear_scene(self):
@@ -193,11 +207,14 @@ class OWSilhouettePlot(widget.OWWidget):
                     numpy.zeros(len(self._silhouette), dtype=int),
                     [""]
                 )
-            silplot.resize(silplot.effectiveSizeHint(Qt.PreferredSize))
 
             self.scene.addItem(silplot)
             self._silplot = silplot
+            self._update_annotations()
+
+            silplot.resize(silplot.effectiveSizeHint(Qt.PreferredSize))
             silplot.selectionChanged.connect(self.commit)
+
             self.scene.setSceneRect(
                 QRectF(QtCore.QPointF(0, 0),
                        self._silplot.effectiveSizeHint(Qt.PreferredSize)))
@@ -208,6 +225,20 @@ class OWSilhouettePlot(widget.OWWidget):
             self.scene.setSceneRect(
                 QRectF(QtCore.QPointF(0, 0),
                        self._silplot.effectiveSizeHint(Qt.PreferredSize)))
+
+    def _update_annotations(self):
+        if 0 < self.annotation_var_idx < len(self.annotation_var_model):
+            annot_var = self.annotation_var_model[self.annotation_var_idx]
+        else:
+            annot_var = None
+
+        if self._silplot is not None:
+            if annot_var is not None:
+                column, _ = self.data.get_column_view(annot_var)
+                self._silplot.setRowNames(
+                    [annot_var.str_val(value) for value in column])
+            else:
+                self._silplot.setRowNames(None)
 
     def commit(self):
         """
@@ -265,10 +296,11 @@ class SilhouettePlot(QtGui.QGraphicsWidget):
         self.__selection = numpy.asarray([], dtype=int)
         self.__pen = QtGui.QPen(Qt.NoPen)
         self.__brush = QtGui.QBrush(QtGui.QColor("#3FCFCF"))
-        self.setLayout(QtGui.QGraphicsGridLayout())
+        self.__layout = QtGui.QGraphicsGridLayout()
+        self.setLayout(self.__layout)
         self.layout().setColumnSpacing(0, 1.)
 
-    def setScores(self, scores, labels, values):
+    def setScores(self, scores, labels, values, rownames=None):
         """
         Set the silhouette scores/labels to for display.
 
@@ -280,13 +312,20 @@ class SilhouettePlot(QtGui.QGraphicsWidget):
             A ndarray (dtype=int) of label/clusters indices.
         values : list of str
             A list of label/cluster names.
+        rownames : list of str, optional
+            A list (len == N) of row names.
         """
         scores = numpy.asarray(scores, dtype=float)
         labels = numpy.asarray(labels, dtype=int)
+        if rownames is not None:
+            rownames = numpy.asarray(rownames, dtype=object)
+
         if not (scores.ndim == labels.ndim == 1):
             raise ValueError("scores and labels must be 1 dimensional")
         if scores.shape != labels.shape:
             raise ValueError("scores and labels must have the same shape")
+        if rownames is not None and rownames.shape != scores.shape:
+            raise ValueError("rownames must have the same size as scores")
 
         Ck = numpy.unique(labels)
         assert Ck[0] >= 0 and Ck[-1] < len(values)
@@ -295,18 +334,57 @@ class SilhouettePlot(QtGui.QGraphicsWidget):
         cluster_indices = [indices[numpy.argsort(scores[indices])[::-1]]
                            for indices in cluster_indices]
         groups = [
-            namespace(scores=scores[indices], indices=indices, label=label)
+            namespace(scores=scores[indices], indices=indices, label=label,
+                      rownames=(rownames[indices] if rownames is not None
+                                else None))
             for indices, label in zip(cluster_indices, values)
         ]
         self.clear()
         self.__groups = groups
         self.__setup()
 
+    def setRowNames(self, names):
+        if names is not None:
+            names = numpy.asarray(names, dtype=object)
+
+        layout = self.layout()
+
+        font = self.font()
+        font.setPixelSize(self.__barHeight)
+
+        for i, grp in enumerate(self.__groups):
+            grp.rownames = names[grp.indices] if names is not None else None
+            item = layout.itemAt(i, 3)
+
+            if grp.rownames is not None:
+                item.setItems(grp.rownames)
+                item.setVisible(True)
+            else:
+                item.setItems([])
+                item.setVisible(False)
+
+            barplot = list(self.__plotItems())[i]
+            baritems = barplot.items()
+
+            if grp.rownames is None:
+                tooltips = itertools.repeat("")
+            else:
+                tooltips = grp.rownames
+
+            for bar, tooltip in zip(baritems, tooltips):
+                bar.setToolTip(tooltip)
+
+        self.layout().activate()
+
     def setBarHeight(self, height):
         if height != self.__barHeight:
             self.__barHeight = height
             for item in self.__plotItems():
                 item.setPreferredBarSize(height)
+            font = self.font()
+            font.setPixelSize(height)
+            for item in self.__textItems():
+                item.setFont(font)
 
     def barHeight(self):
         return self.__barHeight
@@ -332,6 +410,9 @@ class SilhouettePlot(QtGui.QGraphicsWidget):
                    default=-1)
         smin = min(smin, 0)
 
+        font = self.font()
+        font.setPixelSize(self.__barHeight)
+
         for i, group in enumerate(self.__groups):
             silhouettegroup = BarPlotItem(parent=self)
             silhouettegroup.setBrush(self.__brush)
@@ -349,9 +430,22 @@ class SilhouettePlot(QtGui.QGraphicsWidget):
                 self.layout().addItem(proxy, i, 1)
                 label = QtGui.QGraphicsSimpleTextItem(self)
                 label.setText("{} ({})".format(escape(group.label),
-                                              len(group.scores)))
+                                               len(group.scores)))
                 item = WrapperLayoutItem(label, Qt.Vertical, parent=self)
                 self.layout().addItem(item, i, 0, Qt.AlignCenter)
+
+            textlist = TextListWidget(self, font=font)
+            sp = textlist.sizePolicy()
+            sp.setVerticalPolicy(QtGui.QSizePolicy.Ignored)
+            textlist.setSizePolicy(sp)
+            textlist.setParent(self)
+            if group.rownames is not None:
+                textlist.setItems(group.items)
+                textlist.setVisible(True)
+            else:
+                textlist.setVisible(False)
+
+            self.layout().addItem(textlist, i, 3)
 
     def event(self, event):
         if event.type() == QEvent.LayoutRequest and \
@@ -457,6 +551,13 @@ class SilhouettePlot(QtGui.QGraphicsWidget):
                 assert isinstance(item, BarPlotItem)
                 yield item
 
+    def __textItems(self):
+        for i in range(len(self.__groups)):
+            item = self.layout().itemAt(i, 3)
+            if item is not None:
+                assert isinstance(item, TextListWidget)
+                yield item
+
     def setSelection(self, indices):
         indices = numpy.unique(numpy.asarray(indices, dtype=int))
         select = numpy.setdiff1d(indices, self.__selection)
@@ -480,14 +581,11 @@ class BarPlotItem(QtGui.QGraphicsWidget):
         self.__pen = QtGui.QPen(Qt.NoPen)
         self.__brush = QtGui.QBrush(QtGui.QColor("#3FCFCF"))
         self.__range = (0., 1.)
-        self.__data = None
+        self.__data = numpy.array([], dtype=float)
         self.__items = []
 
     def count(self):
-        if self.__data is not None:
-            return self.__data.size
-        else:
-            return 0
+        return self.__data.size
 
     def items(self):
         return list(self.__items)
@@ -495,6 +593,11 @@ class BarPlotItem(QtGui.QGraphicsWidget):
     def setGeometry(self, geom):
         super().setGeometry(geom)
         self.__layout()
+
+    def event(self, event):
+        if event.type() == QEvent.GraphicsSceneResize:
+            self.__layout()
+        return super().event(event)
 
     def sizeHint(self, which, constraint=QSizeF()):
         spacing = max(self.__spacing * (self.count() - 1), 0)
@@ -554,24 +657,18 @@ class BarPlotItem(QtGui.QGraphicsWidget):
 
     def __update(self):
         self.__clear()
-        if self.__data is None:
-            return
 
         pen = self.pen()
         brush = self.brush()
-        for i, v in enumerate(self.__data):
+        for i in range(self.count()):
             item = QtGui.QGraphicsRectItem(self)
             item.setPen(pen)
             item.setBrush(brush)
             self.__items.append(item)
 
         self.__layout()
-        return
 
     def __layout(self):
-        if self.__data is None:
-            return
-
         (N, ) = self.__data.shape
         if not N:
             return
@@ -596,6 +693,115 @@ class BarPlotItem(QtGui.QGraphicsWidget):
         for i, (v, item) in enumerate(zip(datascaled, self.__items)):
             item.setRect(QRectF(base, rect.top() + i * (h + spacing),
                                 v - base, h).normalized())
+
+
+from Orange.widgets.visualize.owheatmap import scaled
+
+
+class TextListWidget(QtGui.QGraphicsWidget):
+    def __init__(self, parent=None, items=None, **kwargs):
+        super().__init__(parent, **kwargs)
+        self.setFlag(QtGui.QGraphicsWidget.ItemClipsChildrenToShape, True)
+        self.__items = []
+        self.__textitems = []
+        self.__group = None
+        self.__spacing = 0
+
+        sp = QtGui.QSizePolicy(QtGui.QSizePolicy.Preferred,
+                               QtGui.QSizePolicy.Preferred)
+        sp.setWidthForHeight(True)
+        self.setSizePolicy(sp)
+
+        if items is not None:
+            self.setItems(items)
+
+    def setItems(self, items):
+        self.__clear()
+        self.__items = list(items)
+        self.__setup()
+        self.__layout()
+        self.updateGeometry()
+
+    def clear(self):
+        self.__clear()
+        self.__items = []
+        self.updateGeometry()
+
+    def sizeHint(self, which, constraint=QSizeF()):
+        if which == Qt.PreferredSize:
+            sh = self.__naturalsh()
+            if 0 < constraint.height() < sh.height():
+                sh = scaled(sh, constraint, Qt.KeepAspectRatioByExpanding)
+            return sh
+
+        return super().sizeHint(which, constraint)
+
+    def __naturalsh(self):
+        fm = QtGui.QFontMetrics(self.font())
+        spacing = self.__spacing
+        N = len(self.__items)
+        width = max((fm.width(text) for text in self.__items),
+                    default=0)
+        height = N * fm.height() + (N - 1) * spacing
+        return QSizeF(width, height)
+
+    def event(self, event):
+        if event.type() == QEvent.LayoutRequest:
+            self.__layout()
+        elif event.type() == QEvent.GraphicsSceneResize:
+            self.__layout()
+
+        return super().event(event)
+
+    def changeEvent(self, event):
+        if event.type() == QEvent.FontChange:
+            self.updateGeometry()
+            font = self.font()
+            for item in self.__textitems:
+                item.setFont(font)
+
+    def __setup(self):
+        self.__clear()
+        font = self.font()
+        group = QtGui.QGraphicsItemGroup(self)
+
+        for text in self.__items:
+            t = QtGui.QGraphicsSimpleTextItem(text, group)
+            t.setData(0, text)
+            t.setFont(font)
+            t.setToolTip(text)
+            self.__textitems.append(t)
+
+    def __layout(self):
+        crect = self.contentsRect()
+        spacing = self.__spacing
+        N = len(self.__items)
+
+        if not N:
+            return
+
+        fm = QtGui.QFontMetrics(self.font())
+        naturalheight = fm.height()
+        th = (crect.height() - (N - 1) * spacing) / N
+        if th > naturalheight:
+            th = naturalheight
+            spacing = (crect.height() - N * th) / (N - 1)
+
+        for i, item in enumerate(self.__textitems):
+            item.setPos(crect.left(), crect.top() + i * (th + spacing))
+
+    def __clear(self):
+        def remove(items, scene):
+            for item in items:
+                item.setParentItem(None)
+                if scene is not None:
+                    scene.removeItem(item)
+
+        remove(self.__textitems, self.scene())
+        if self.__group is not None:
+            remove([self.__group], self.scene())
+
+        self.__textitems = []
 
 
 def main(argv=sys.argv):
