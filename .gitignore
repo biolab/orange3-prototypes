@@ -1,7 +1,7 @@
 # Build files
 build
 dist
-.egg-info/*
+*.egg-info
 *.so
 *.pyd
 *.pyc
