@@ -1,5 +1,7 @@
 import sys
 import itertools
+import enum
+
 from xml.sax.saxutils import escape
 from types import SimpleNamespace as namespace
 
@@ -281,6 +283,10 @@ class OWSilhouettePlot(widget.OWWidget):
         self.send("Other Data", other)
 
 
+class SelectAction(enum.IntEnum):
+    NoUpdate, Clear, Select, Deselect, Toogle, Current = 1, 2, 4, 8, 16, 32
+
+
 class SilhouettePlot(QtGui.QGraphicsWidget):
     """
     A silhouette plot widget.
@@ -295,6 +301,7 @@ class SilhouettePlot(QtGui.QGraphicsWidget):
         self.__barHeight = 3
         self.__selectionRect = None
         self.__selection = numpy.asarray([], dtype=int)
+        self.__selstate = None
         self.__pen = QtGui.QPen(Qt.NoPen)
         self.__brush = QtGui.QBrush(QtGui.QColor("#3FCFCF"))
         self.__layout = QtGui.QGraphicsGridLayout()
@@ -379,6 +386,9 @@ class SilhouettePlot(QtGui.QGraphicsWidget):
         self.layout().activate()
 
     def setBarHeight(self, height):
+        """
+        Set silhouette bar height (row height).
+        """
         if height != self.__barHeight:
             self.__barHeight = height
             for item in self.__plotItems():
@@ -389,6 +399,9 @@ class SilhouettePlot(QtGui.QGraphicsWidget):
                 item.setFont(font)
 
     def barHeight(self):
+        """
+        Return the silhouette bar (row) height.
+        """
         return self.__barHeight
 
     def clear(self):
@@ -450,12 +463,14 @@ class SilhouettePlot(QtGui.QGraphicsWidget):
             self.layout().addItem(textlist, i, 3)
 
     def event(self, event):
+        # Reimplemented
         if event.type() == QEvent.LayoutRequest and \
                 self.parentLayoutItem() is None:
             self.resize(self.effectiveSizeHint(Qt.PreferredSize))
         return super().event(event)
 
     def __setHoveredItem(self, item):
+        # Set the current hovered `item` (:class:`QGraphicsRectItem`)
         if self.__hoveredItem is not item:
             if self.__hoveredItem is not None:
                 self.__hoveredItem.setPen(QtGui.QPen(Qt.NoPen))
@@ -464,36 +479,65 @@ class SilhouettePlot(QtGui.QGraphicsWidget):
                 item.setPen(QtGui.QPen(Qt.lightGray))
 
     def hoverEnterEvent(self, event):
+        # Reimplemented
         event.accept()
 
     def hoverMoveEvent(self, event):
+        # Reimplemented
         event.accept()
         item = self.itemAtPos(event.pos())
         self.__setHoveredItem(item)
 
     def hoverLeaveEvent(self, event):
+        # Reimplemented
         self.__setHoveredItem(None)
         event.accept()
 
     def mousePressEvent(self, event):
+        # Reimplemented
         if event.button() == Qt.LeftButton:
+            if event.modifiers() & Qt.ControlModifier:
+                saction = SelectAction.Toogle
+            elif event.modifiers() & Qt.AltModifier:
+                saction = SelectAction.Deselect
+            elif event.modifiers() & Qt.ShiftModifier:
+                saction = SelectAction.Select
+            else:
+                saction = SelectAction.Clear | SelectAction.Select
+            self.__selstate = namespace(
+                modifiers=event.modifiers(),
+                selection=self.__selection,
+                action=saction,
+                rect=None,
+            )
+            if saction & SelectAction.Clear:
+                self.__selstate.selection = numpy.array([], dtype=int)
+                self.setSelection(self.__selstate.selection)
             event.accept()
 
     def mouseMoveEvent(self, event):
+        # Reimplemented
         if event.buttons() & Qt.LeftButton:
+            assert self.__selstate is not None
             if self.__selectionRect is None:
-                self.__selectionRect = QtGui.QGraphicsRectItem(
-                    QRectF(event.buttonDownPos(Qt.LeftButton),
+                self.__selectionRect = QtGui.QGraphicsRectItem(self)
+
+            rect = (QRectF(event.buttonDownPos(Qt.LeftButton),
                            event.pos()).normalized())
-                self.__selectionRect.setParentItem(self)
-            self.__selectionRect.setRect(
-                QRectF(event.buttonDownPos(Qt.LeftButton),
-                       event.pos()).normalized()
-                .intersected(self.contentsRect())
-            )
+
+            if not rect.width():
+                rect = rect.adjusted(-1e-7, -1e-7, 1e-7, 1e-7)
+
+            rect = rect.intersected(self.contentsRect())
+            self.__selectionRect.setRect(rect)
+            self.__selstate.rect = rect
+            self.__selstate.action |= SelectAction.Current
+
+            self.__setSelectionRect(rect, self.__selstate.action)
             event.accept()
 
     def mouseReleaseEvent(self, event):
+        # Reimplemented
         if event.button() == Qt.LeftButton:
             if self.__selectionRect is not None:
                 self.__selectionRect.setParentItem(None)
@@ -506,33 +550,39 @@ class SilhouettePlot(QtGui.QGraphicsWidget):
                     .normalized())
 
             if not rect.isValid():
-                rect = rect.adjusted(-0.01, -0.01, 0.01, 0.01)
+                rect = rect.adjusted(-1e-7, -1e-7, 1e-7, 1e-7)
 
             rect = rect.intersected(self.contentsRect())
-            Clear, Select, Deselect, Toogle = 1, 2, 4, 8
+            action = action = self.__selstate.action & ~SelectAction.Current
+            self.__setSelectionRect(rect, action)
+            self.__selstate = None
 
-            if event.modifiers() & Qt.ControlModifier:
-                saction = Toogle
-            elif event.modifiers() & Qt.AltModifier:
-                saction = Deselect
-            elif event.modifiers() & Qt.ShiftModifier:
-                saction = Select
-            else:
-                saction = Clear | Select
+    def __setSelectionRect(self, rect, action):
+        # Set the current mouse drag selection rectangle
+        if not rect.isValid():
+            rect = rect.adjusted(-0.01, -0.01, 0.01, 0.01)
 
-            indices = self.__selectionIndices(rect)
+        rect = rect.intersected(self.contentsRect())
 
-            if saction & Clear:
-                selection = []
-            else:
-                selection = self.__selection
-            if saction & Toogle:
-                selection = numpy.setxor1d(selection, indices)
-            elif saction & Deselect:
-                selection = numpy.setdiff1d(selection, indices)
-            elif saction & Select:
-                selection = numpy.union1d(selection, indices)
-            self.setSelection(selection)
+        indices = self.__selectionIndices(rect)
+
+        if action & SelectAction.Clear:
+            selection = []
+        elif self.__selstate is not None:
+            # Mouse drag selection is in progress. Update only the current
+            # selection
+            selection = self.__selstate.selection
+        else:
+            selection = self.__selection
+
+        if action & SelectAction.Toogle:
+            selection = numpy.setxor1d(selection, indices)
+        elif action & SelectAction.Deselect:
+            selection = numpy.setdiff1d(selection, indices)
+        elif action & SelectAction.Select:
+            selection = numpy.union1d(selection, indices)
+
+        self.setSelection(selection)
 
     def __selectionIndices(self, rect):
         items = [item for item in self.__plotItems()
@@ -565,8 +615,37 @@ class SilhouettePlot(QtGui.QGraphicsWidget):
 
         assert pos.x() >= 0
         rowh = crect.height() / item.count()
+        index = int(numpy.floor(pos.y() / rowh))
+        index = min(index, item.count() - 1)
+        if index >= 0:
+            return item.items()[index]
+        else:
+            return None
+
+    def indexAtPos(self, pos):
+        items = [item for item in self.__plotItems()
+                 if item.geometry().contains(pos)]
+        if not items:
+            return -1
+        else:
+            item = items[0]
+        indices = item.data(0)
+        assert (isinstance(indices, numpy.ndarray) and
+                indices.shape == (item.count(),))
+        crect = item.contentsRect()
+        pos = item.mapFromParent(pos)
+        if not crect.contains(pos):
+            return -1
+
+        assert pos.x() >= 0
+        rowh = crect.height() / item.count()
         index = numpy.floor(pos.y() / rowh)
-        return item.items()[int(index)]
+        index = min(index, indices.size - 1)
+
+        if index >= 0:
+            return indices[index]
+        else:
+            return -1
 
     def __selectionChanged(self, selected, deselected):
         for item, grp in zip(self.__plotItems(), self.__groups):
@@ -603,6 +682,7 @@ class SilhouettePlot(QtGui.QGraphicsWidget):
         deselect = numpy.setdiff1d(self.__selection, indices)
 
         self.__selectionChanged(select, deselect)
+
         self.__selection = indices
 
         if deselect.size or select.size:
