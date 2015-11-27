@@ -290,6 +290,7 @@ class SilhouettePlot(QtGui.QGraphicsWidget):
 
     def __init__(self, parent=None, **kwargs):
         super().__init__(parent, **kwargs)
+        self.setAcceptHoverEvents(True)
         self.__groups = []
         self.__barHeight = 3
         self.__selectionRect = None
@@ -297,6 +298,7 @@ class SilhouettePlot(QtGui.QGraphicsWidget):
         self.__pen = QtGui.QPen(Qt.NoPen)
         self.__brush = QtGui.QBrush(QtGui.QColor("#3FCFCF"))
         self.__layout = QtGui.QGraphicsGridLayout()
+        self.__hoveredItem = None
         self.setLayout(self.__layout)
         self.layout().setColumnSpacing(0, 1.)
 
@@ -453,6 +455,26 @@ class SilhouettePlot(QtGui.QGraphicsWidget):
             self.resize(self.effectiveSizeHint(Qt.PreferredSize))
         return super().event(event)
 
+    def __setHoveredItem(self, item):
+        if self.__hoveredItem is not item:
+            if self.__hoveredItem is not None:
+                self.__hoveredItem.setPen(QtGui.QPen(Qt.NoPen))
+            self.__hoveredItem = item
+            if item is not None:
+                item.setPen(QtGui.QPen(Qt.lightGray))
+
+    def hoverEnterEvent(self, event):
+        event.accept()
+
+    def hoverMoveEvent(self, event):
+        event.accept()
+        item = self.itemAtPos(event.pos())
+        self.__setHoveredItem(item)
+
+    def hoverLeaveEvent(self, event):
+        self.__setHoveredItem(None)
+        event.accept()
+
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
             event.accept()
@@ -528,6 +550,23 @@ class SilhouettePlot(QtGui.QGraphicsWidget):
             indexbottom = numpy.ceil(itemrect.bottom() / rowh)
             selection.append(indices[int(indextop): int(indexbottom)])
         return numpy.hstack(selection)
+
+    def itemAtPos(self, pos):
+        items = [item for item in self.__plotItems()
+                 if item.geometry().contains(pos)]
+        if not items:
+            return None
+        else:
+            item = items[0]
+        crect = item.contentsRect()
+        pos = item.mapFromParent(pos)
+        if not crect.contains(pos):
+            return None
+
+        assert pos.x() >= 0
+        rowh = crect.height() / item.count()
+        index = numpy.floor(pos.y() / rowh)
+        return item.items()[int(index)]
 
     def __selectionChanged(self, selected, deselected):
         for item, grp in zip(self.__plotItems(), self.__groups):
