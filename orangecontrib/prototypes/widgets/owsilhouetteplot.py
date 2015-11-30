@@ -27,7 +27,7 @@ class OWSilhouettePlot(widget.OWWidget):
     icon = "icons/Silhouette.svg"
 
     inputs = [("Data", Orange.data.Table, "set_data")]
-    outputs = [("Selected Data", Orange.data.Table),
+    outputs = [("Selected Data", Orange.data.Table, widget.Default),
                ("Other Data", Orange.data.Table)]
 
     settingsHandler = settings.PerfectDomainContextHandler()
