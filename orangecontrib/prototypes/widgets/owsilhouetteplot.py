@@ -142,6 +142,8 @@ class OWSilhouettePlot(widget.OWWidget):
         self.data = None
         self._effective_data = None
         self._matrix = None
+        self._silhouette = None
+        self._labels = None
         self.cluster_var_model[:] = []
         self.annotation_var_model[:] = ["None"]
         self._clear_scene()
@@ -281,6 +283,10 @@ class OWSilhouettePlot(widget.OWWidget):
 
         self.send("Selected Data", selected)
         self.send("Other Data", other)
+
+    def onDeleteWidget(self):
+        self.clear()
+        super().onDeleteWidget()
 
 
 class SelectAction(enum.IntEnum):
