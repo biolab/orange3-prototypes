@@ -202,6 +202,7 @@ class OWSilhouettePlot(widget.OWWidget):
             var = self.cluster_var_model[self.cluster_var_idx]
             silplot = SilhouettePlot()
             silplot.setBarHeight(self.bar_size)
+            silplot.setRowNamesVisible(self.bar_size >= 5)
 
             if self.group_by_cluster:
                 silplot.setScores(self._silhouette, self._labels, var.values)
@@ -226,6 +227,8 @@ class OWSilhouettePlot(widget.OWWidget):
     def _update_bar_size(self):
         if self._silplot is not None:
             self._silplot.setBarHeight(self.bar_size)
+            self._silplot.setRowNamesVisible(self.bar_size >= 5)
+
             self.scene.setSceneRect(
                 QRectF(QtCore.QPointF(0, 0),
                        self._silplot.effectiveSizeHint(Qt.PreferredSize)))
@@ -304,6 +307,7 @@ class SilhouettePlot(QtGui.QGraphicsWidget):
         super().__init__(parent, **kwargs)
         self.setAcceptHoverEvents(True)
         self.__groups = []
+        self.__rowNamesVisible = True
         self.__barHeight = 3
         self.__selectionRect = None
         self.__selection = numpy.asarray([], dtype=int)
@@ -373,7 +377,7 @@ class SilhouettePlot(QtGui.QGraphicsWidget):
 
             if grp.rownames is not None:
                 item.setItems(grp.rownames)
-                item.setVisible(True)
+                item.setVisible(self.__rowNamesVisible)
             else:
                 item.setItems([])
                 item.setVisible(False)
@@ -390,6 +394,15 @@ class SilhouettePlot(QtGui.QGraphicsWidget):
                 bar.setToolTip(tooltip)
 
         self.layout().activate()
+
+    def setRowNamesVisible(self, visible):
+        if self.__rowNamesVisible != visible:
+            self.__rowNamesVisible = visible
+            for item in self.__textItems():
+                item.setVisible(visible)
+
+    def rowNamesVisible(self):
+        return self.__rowNamesVisible
 
     def setBarHeight(self, height):
         """
@@ -462,7 +475,7 @@ class SilhouettePlot(QtGui.QGraphicsWidget):
             textlist.setParent(self)
             if group.rownames is not None:
                 textlist.setItems(group.items)
-                textlist.setVisible(True)
+                textlist.setVisible(self.__rowNamesVisible)
             else:
                 textlist.setVisible(False)
 
