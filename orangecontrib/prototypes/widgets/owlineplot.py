@@ -68,12 +68,12 @@ class OWLinePlot(widget.OWWidget):
         self.infoLabel = gui.widgetLabel(infobox, "No data on input.")
         displaybox = gui.widgetBox(self.controlArea, "Display")
         gui.checkBox(displaybox, self, "display_individual",
-                     "Expression Profiles",
+                     "Line plots",
                      callback=self.__update_visibility)
-        gui.checkBox(displaybox, self, "display_quartiles", "Quartiles",
+        gui.checkBox(displaybox, self, "display_quartiles", "Box plot",
                      callback=self.__update_visibility)
 
-        group_box = gui.widgetBox(self.controlArea, "Classes")
+        group_box = gui.widgetBox(self.controlArea, "Group by")
         self.cb_attr = gui.comboBox(
             group_box, self, "group_var", sendSelectedValue=True,
             callback=self.update_group_var)
