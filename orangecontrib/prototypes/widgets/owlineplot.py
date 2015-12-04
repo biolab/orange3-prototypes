@@ -61,19 +61,18 @@ class OWLinePlot(widget.OWWidget):
         self.group_variables = []
         self.graph_variables = []
         self.__groups = None
-        self.__selected_data_indices = []
 
         # Setup GUI
         infobox = gui.widgetBox(self.controlArea, "Info")
         self.infoLabel = gui.widgetLabel(infobox, "No data on input.")
         displaybox = gui.widgetBox(self.controlArea, "Display")
         gui.checkBox(displaybox, self, "display_individual",
-                     "Expression Profiles",
+                     "Line plots",
                      callback=self.__update_visibility)
-        gui.checkBox(displaybox, self, "display_quartiles", "Quartiles",
+        gui.checkBox(displaybox, self, "display_quartiles", "Box plot",
                      callback=self.__update_visibility)
 
-        group_box = gui.widgetBox(self.controlArea, "Classes")
+        group_box = gui.widgetBox(self.controlArea, "Group by")
         self.cb_attr = gui.comboBox(
             group_box, self, "group_var", sendSelectedValue=True,
             callback=self.update_group_var)
@@ -89,8 +88,6 @@ class OWLinePlot(widget.OWWidget):
 
         self.graph = pg.PlotWidget(background="w", enableMenu=False)
         self.graph.setRenderHint(QtGui.QPainter.Antialiasing, True)
-        self.graph.scene().selectionChanged.connect(
-            self.__on_curve_selection_changed)
         self.mainArea.layout().addWidget(self.graph)
 
     def sizeHint(self):
@@ -104,7 +101,6 @@ class OWLinePlot(widget.OWWidget):
         self.group_listbox.clear()
         self.data = None
         self.__groups = None
-        self.__selected_data_indices = []
         self.graph.clear()
 
     def set_data(self, data):
@@ -235,12 +231,6 @@ class OWLinePlot(widget.OWWidget):
             "Select all" if not all(mask) else "Unselect all")
 
         self.__update_visibility()
-
-    def __on_curve_selection_changed(self):
-        if self.data is not None:
-            selected = self.graph.scene().selectedItems()
-            indices = [item._data_index for item in selected]
-            self.__selected_data_indices = np.array(indices, dtype=int)
 
     def update_group_var(self):
         data_attr, _ = self.data.get_column_view(self.group_var)
