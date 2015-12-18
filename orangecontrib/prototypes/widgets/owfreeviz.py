@@ -1,4 +1,6 @@
 import sys
+import enum
+
 from types import SimpleNamespace as namespace
 
 import pkg_resources
@@ -12,10 +14,13 @@ from PyQt4.QtCore import pyqtSignal as Signal, pyqtSlot as Slot
 import pyqtgraph as pg
 
 import Orange.data
+import Orange.projection
 
 from Orange.widgets import widget, gui, settings
 from Orange.widgets.utils import colorpalette
 from Orange.widgets.visualize import owlinearprojection as linproj
+
+from ..projection.freeviz import freeviz
 
 
 class AsyncUpdateLoop(QObject):
@@ -129,8 +134,6 @@ class AsyncUpdateLoop(QObject):
             else:
                 # warn
                 self.__schedule_next()
-
-import enum
 
 
 class PlotToolBox(QtCore.QObject):
@@ -499,10 +502,13 @@ class OWFreeViz(widget.OWWidget):
         self.clear()
         error_msg = ""
         if data is not None:
-            if data.domain.class_var is None or \
-                    not data.domain.class_var.is_discrete or \
+            if data.domain.class_var is None:
+                error_msg = "Need a class variable"
+                data = None
+            elif data.domain.class_var.is_discrete and \
                     len(data.domain.class_var.values) < 2:
-                error_msg = "Needs discrete class variable"
+                error_msg = "Needs discrete class variable with at" \
+                            " lest 2 values"
                 data = None
 
         self.data = data
@@ -540,6 +546,8 @@ class OWFreeViz(widget.OWWidget):
         X = X[valid, :]
         Y = Y[valid]
 
+        if self.data.domain.class_var.is_discrete:
+            Y = Y.astype(int)
         X = (X - numpy.mean(X, axis=0))
         span = numpy.ptp(X, axis=0)
         X[:, span > 0] /= span[span > 0].reshape(1, -1)
@@ -550,10 +558,14 @@ class OWFreeViz(widget.OWWidget):
             anchors = numpy.random.random((X.shape[1], 2)) * 2 - 1
 
         EX = numpy.dot(X, anchors)
-
-        colgen = colorpalette.ColorPaletteGenerator(
-            len(self.data.domain.class_var.values))
-        colors = numpy.array(colgen[Y], dtype=object)
+        if self.data.domain.class_var.is_discrete:
+            colgen = colorpalette.ColorPaletteGenerator(
+                len(self.data.domain.class_var.values))
+            colors = numpy.array(colgen[Y], dtype=object)
+        else:
+            colors = linproj.plotutils.continuous_colors(Y)
+            colors = numpy.array([QtGui.QBrush(QtGui.QColor(*c))
+                                   for c in colors])
 
         rad = numpy.max(numpy.linalg.norm(EX, axis=1))
 
@@ -569,16 +581,17 @@ class OWFreeViz(widget.OWWidget):
         self.plot.addItem(item)
         self.plot.setRange(QtCore.QRectF(-1.05, -1.05, 2.1, 2.1))
 
-        for i, name in enumerate(self.data.domain.class_var.values):
-            color = colgen[i]
-            self.legend.addItem(
-                linproj.ScatterPlotItem(pen=color, brush=color, size=10),
-                name,
-            )
-        self.legend.show()
+        if self.data.domain.class_var.is_discrete:
+            for i, name in enumerate(self.data.domain.class_var.values):
+                color = colgen[i]
+                self.legend.addItem(
+                    linproj.ScatterPlotItem(pen=color, brush=color, size=10),
+                    name,
+                )
+            self.legend.show()
 
         # minimum visible anchor radius
-        minradius = self.min_anchor_radius / 100
+        minradius = self.min_anchor_radius / 100 + 1e-5
         axisitems = []
         for anchor, var in zip(anchors, self.data.domain.attributes):
             axitem = AxisItem(
@@ -628,10 +641,11 @@ class OWFreeViz(widget.OWWidget):
             done = False
             anchors = initial
             while not done:
-                res = freeviz(X, Y, initial=anchors, p=p,
+                res = freeviz(X, Y, scale=False, center=False,
+                              initial=anchors, p=p,
                               maxiter=min(itersteps, maxiter))
-                EX, anchors_new = res
-                yield res
+                EX, anchors_new = res[:2]
+                yield res[:2]
 
                 if numpy.all(numpy.isclose(anchors, anchors_new,
                                            rtol=1e-5, atol=1e-4)):
@@ -710,7 +724,7 @@ class OWFreeViz(widget.OWWidget):
         if self.plotdata is None:
             return
 
-        minradius = self.min_anchor_radius / 100
+        minradius = self.min_anchor_radius / 100 + 1e-5
         for anchor, item in zip(self.plotdata.anchors, self.plotdata.axisitems):
             item.setVisible(numpy.linalg.norm(anchor) > minradius)
         self.plotdata.hidecircle.setRect(
@@ -825,7 +839,7 @@ class OWFreeViz(widget.OWWidget):
                 self.data.domain.attributes,
                 metas=[Orange.data.StringVariable(name='component')])
 
-            metas = numpy.array([["Component_1"], ["Component_2"]])
+            metas = numpy.array([["FreeViz 1"], ["FreeViz 2"]])
             components = Orange.data.Table(
                 compdomain, self.plotdata.anchors.T,
                 metas=metas)
@@ -837,205 +851,6 @@ class OWFreeViz(widget.OWWidget):
 
     def sizeHint(self):
         return QtCore.QSize(900, 700)
-
-
-import numpy
-import scipy.spatial
-
-
-def freeviz_gradient(X, y, embeddings, p=1, weights=None):
-    """
-    Return the gradient for the FreeViz [1]_ projection.
-
-    Parameters
-    ----------
-    X : (N, P) ndarray
-        The data instance coordinates
-    y : (N, 1) ndarray
-        The instance target/class values
-    embeddings : (N, dim) ndarray
-        The current FreeViz point embeddings.
-    p : number
-        The 'power' of the force (p == 1 is [inverse] linear,  p == 2 is
-        [inverse] squared, ...)
-    weights : (N, ) ndarray, optional
-        Optional vector of sample weights.
-
-    Returns
-    -------
-    G : (P, dim) ndarray
-        The projection gradient.
-
-    .. [1] Janez Demsar, Gregor Leban, Blaz Zupan
-           FreeViz - An Intelligent Visualization Approach for Class-Labeled
-           Multidimensional Data Sets, Proceedings of IDAMAP 2005, Edinburgh.
-    """
-    X = numpy.asarray(X)
-    y = numpy.asarray(y)
-    embeddings = numpy.asarray(embeddings)
-
-    if weights is not None:
-        weights = numpy.asarray(weights)
-        if weights.ndim != 1:
-            raise ValueError("weights.ndim != 1 ({})".format(weights.ndim))
-
-    N, P = X.shape
-    _, dim = embeddings.shape
-
-    if not N == embeddings.shape[0]:
-        raise ValueError("X and embeddings must have the same length ({}!={})"
-                         .format(X.shape[0] != embeddings.shape[0]))
-
-    if weights is not None and X.shape[0] != weights.shape[0]:
-        raise ValueError("X.shape[0] != weights.shape[0] ({}!={})"
-                         .format(X.shape[0], weights.shape[0]))
-
-    # All pairwise distances between point embeddings
-    D = scipy.spatial.distance.pdist(embeddings, "euclidean")
-    D = scipy.spatial.distance.squareform(D, checks=False)
-    # All pairwise vector differences between embeddings
-    DeltaP = embeddings[:, numpy.newaxis, :] - embeddings[numpy.newaxis, :, :]
-    assert DeltaP.shape == (N, N, dim)
-    assert numpy.all(numpy.isclose(DeltaP[0, 1], embeddings[0] - embeddings[1]))
-    assert numpy.all(numpy.isclose(DeltaP[1, 0], -DeltaP[0, 1]))
-    # D = numpy.linalg.norm(DeltaP, axis=2)
-
-    nonzero_mask = D >= numpy.finfo(float).eps * 100
-    # Normalize to unit direction vectors
-    DeltaP /= numpy.where(nonzero_mask, D, 1)[:, :, numpy.newaxis]
-
-    # Handle attractive force
-    if p == 1:
-        F = -D
-    else:
-        F = -(D ** p)
-
-    mask = numpy.c_[y] != numpy.r_[y]
-    mask &= nonzero_mask
-
-    # Handle repulsive force
-    if p == 1:
-        F[mask] = 1. / D[mask]
-    else:
-        F[mask] = 1. / (D[mask] ** p)
-
-    if weights is not None:
-        # Multiply in the pairwise weights
-        F *= weights.reshape((1, N))
-        F *= weights.reshape((N, 1))
-
-    # multiply unit direction vectors with the force magnitude
-    F = DeltaP * F[:, :, numpy.newaxis]
-    assert F.shape == (N, N, dim)
-    # sum all the forces acting on a particle
-    F = numpy.sum(F, axis=0)
-    assert F.shape == (N, dim)
-    # Transfer forces to the 'anchors'
-    # (P, dim) array of gradients
-    G = X.T.dot(F)
-    assert G.shape == (P, dim)
-    return G
-
-
-def _rotate(A, ):
-    # Rotate (2D) projection A so the first anchor is aligned with
-    # vector (1, 0)
-    phi = numpy.arctan2(A[0, 1], A[0, 0])
-    R = [[numpy.cos(-phi), numpy.sin(-phi)],
-         [-numpy.sin(-phi), numpy.cos(-phi)]]
-    return numpy.dot(A, R)
-
-
-def freeviz(X, y, weights=None, dim=2, p=1, initial=None, maxiter=500,
-            lambda_=0.1, atol=1e-5):
-    """
-    FreeViz
-
-    Compute a linear lower dimensional projection to optimize separation
-    between classes ([1]_).
-
-    Parameters
-    ----------
-    X : (N, P) ndarray
-        The input data instances
-    y : (N, ) ndarray
-        The instance class labels
-    weights : (N, ) ndarray, optional
-        Instance weights
-    dim : int
-        The dimension of the projected points
-    p : number
-        The force 'power', e.g. if p=1 the attractive/repulsive forces
-        follow linear/inverse linear law, for p=2 the forces follow
-        square/inverse square law, ...
-    initial : (P, dim) ndarray, optional
-        Initial projection matrix
-    maxiter : int
-        Maximum number of iterations.
-
-    Returns
-    -------
-    embeddings : (N, dim) ndarray
-        The point projections (`= X.dot(P)`)
-    P : (P, dim)
-        The projection matrix.
-
-    .. [1] Janez Demsar, Gregor Leban, Blaz Zupan
-           FreeViz - An Intelligent Visualization Approach for Class-Labeled
-           Multidimensional Data Sets, Proceedings of IDAMAP 2005, Edinburgh.
-    """
-    X = numpy.asarray(X)
-    y = numpy.asarray(y)
-    N, P = X.shape
-    _N, = y.shape
-    if N != _N:
-        raise ValueError("X and y must have the same length")
-
-    if weights is not None:
-        weights = numpy.asarray(weights)
-
-    if initial is not None:
-        initial = numpy.asarray(initial)
-        if initial.ndim != 2 or initial.shape != (P, dim):
-            raise ValueError
-    else:
-        initial = numpy.random.random((P, dim)) * 2 - 1
-
-    A = initial
-    embeddings = numpy.dot(X, A)
-
-    step_i = 0
-    while step_i < maxiter:
-        G = freeviz_gradient(X, y, embeddings, p=p, weights=weights)
-
-        # Scale the changes (the largest anchor move is lambda * radius)
-        maxg = numpy.max(numpy.linalg.norm(G, axis=1))
-        maxr = numpy.max(numpy.linalg.norm(A, axis=1))
-
-        step = lambda_ * maxr / maxg
-        Anew = A - step * G
-
-        # Center anchors (?? This does not seem right; it changes the
-        # projection axes direction somewhat arbitrarily)
-        Anew = Anew - numpy.mean(Anew, axis=0)
-
-        # Scale (so that the largest radius is 1)
-        maxr = numpy.max(numpy.linalg.norm(Anew, axis=1))
-        if maxr >= 0.001:
-            Anew /= maxr
-
-        if dim == 2:
-            Anew = _rotate(Anew)
-
-        change = numpy.linalg.norm(Anew - A, axis=1)
-        if numpy.all(numpy.isclose(change, 0, atol=atol)):
-            break
-
-        A = Anew
-        embeddings = numpy.dot(X, A)
-        step_i = step_i + 1
-
-    return embeddings, A
 
 
 def main(argv=sys.argv):
