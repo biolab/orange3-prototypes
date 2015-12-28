@@ -11,6 +11,9 @@ import sklearn.metrics
 from PyQt4 import QtGui, QtCore
 from PyQt4.QtCore import Qt, QEvent, QRectF, QSizeF
 from PyQt4.QtCore import pyqtSignal as Signal
+
+import pyqtgraph as pg
+
 import Orange.data
 import Orange.distance
 
@@ -373,7 +376,7 @@ class SilhouettePlot(QtGui.QGraphicsWidget):
 
         for i, grp in enumerate(self.__groups):
             grp.rownames = names[grp.indices] if names is not None else None
-            item = layout.itemAt(i, 3)
+            item = layout.itemAt(i + 1, 3)
 
             if grp.rownames is not None:
                 item.setItems(grp.rownames)
@@ -446,6 +449,12 @@ class SilhouettePlot(QtGui.QGraphicsWidget):
 
         font = self.font()
         font.setPixelSize(self.__barHeight)
+        axispen = QtGui.QPen(Qt.black)
+
+        ax = pg.AxisItem(parent=self, orientation="top", maxTickLength=7,
+                         pen=axispen)
+        ax.setRange(smin, smax)
+        self.layout().addItem(ax, 0, 2)
 
         for i, group in enumerate(self.__groups):
             silhouettegroup = BarPlotItem(parent=self)
@@ -455,18 +464,18 @@ class SilhouettePlot(QtGui.QGraphicsWidget):
             silhouettegroup.setPlotData(group.scores)
             silhouettegroup.setPreferredBarSize(self.__barHeight)
             silhouettegroup.setData(0, group.indices)
-            self.layout().addItem(silhouettegroup, i, 2)
+            self.layout().addItem(silhouettegroup, i + 1, 2)
 
             if group.label:
                 line = QtGui.QFrame(frameShape=QtGui.QFrame.VLine)
                 proxy = QtGui.QGraphicsProxyWidget(self)
                 proxy.setWidget(line)
-                self.layout().addItem(proxy, i, 1)
+                self.layout().addItem(proxy, i + 1, 1)
                 label = QtGui.QGraphicsSimpleTextItem(self)
                 label.setText("{} ({})".format(escape(group.label),
                                                len(group.scores)))
                 item = WrapperLayoutItem(label, Qt.Vertical, parent=self)
-                self.layout().addItem(item, i, 0, Qt.AlignCenter)
+                self.layout().addItem(item, i + 1, 0, Qt.AlignCenter)
 
             textlist = TextListWidget(self, font=font)
             sp = textlist.sizePolicy()
@@ -479,7 +488,12 @@ class SilhouettePlot(QtGui.QGraphicsWidget):
             else:
                 textlist.setVisible(False)
 
-            self.layout().addItem(textlist, i, 3)
+            self.layout().addItem(textlist, i + 1, 3)
+
+        ax = pg.AxisItem(parent=self, orientation="bottom", maxTickLength=7,
+                         pen=axispen)
+        ax.setRange(smin, smax)
+        self.layout().addItem(ax, len(self.__groups) + 1, 2)
 
     def event(self, event):
         # Reimplemented
@@ -683,14 +697,14 @@ class SilhouettePlot(QtGui.QGraphicsWidget):
 
     def __plotItems(self):
         for i in range(len(self.__groups)):
-            item = self.layout().itemAt(i, 2)
+            item = self.layout().itemAt(i + 1, 2)
             if item is not None:
                 assert isinstance(item, BarPlotItem)
                 yield item
 
     def __textItems(self):
         for i in range(len(self.__groups)):
-            item = self.layout().itemAt(i, 3)
+            item = self.layout().itemAt(i + 1, 3)
             if item is not None:
                 assert isinstance(item, TextListWidget)
                 yield item
