@@ -17,8 +17,9 @@ import Orange.data
 import Orange.projection
 
 from Orange.widgets import widget, gui, settings
-from Orange.widgets.utils import colorpalette
+from Orange.widgets.utils import colorpalette, itemmodels, classdensity
 from Orange.widgets.visualize import owlinearprojection as linproj
+from Orange.widgets.unsupervised.owmds import mdsplotutils as plotutils
 
 from ..projection.freeviz import freeviz
 
@@ -344,6 +345,13 @@ class AxisItem(pg.GraphicsObject):
         self._arrow.setRotation(180 - angle)
 
 
+def make_pen(color, width=1.0, style=Qt.SolidLine, cap=Qt.SquareCap,
+             join=Qt.BevelJoin, cosmetic=True):
+    pen = QtGui.QPen(color, width, style=style, cap=cap, join=join)
+    pen.setCosmetic(cosmetic)
+    return pen
+
+
 class OWFreeViz(widget.OWWidget):
     name = "FreeViz"
     description = "FreeViz Visualization"
@@ -353,6 +361,7 @@ class OWFreeViz(widget.OWWidget):
                ("Selected Data", Orange.data.Table),
                ("Components", Orange.data.Table)]
 
+    settingsHandler = settings.DomainContextHandler()
     #: Initialization type
     Circular, Random = 0, 1
     #: Force law
@@ -381,6 +390,16 @@ class OWFreeViz(widget.OWWidget):
     min_anchor_radius = settings.Setting(0)
     embedding_domain_role = settings.Setting(Meta)
     autocommit = settings.Setting(True)
+
+    color_var = settings.ContextSetting("", exclude_metas=False)
+    shape_var = settings.ContextSetting("", exclude_metas=False)
+    size_var = settings.ContextSetting("", exclude_metas=False)
+    label_var = settings.ContextSetting("", exclude_metas=False)
+
+    opacity = settings.Setting(255)
+    point_size = settings.Setting(5)
+    jitter = settings.Setting(0)
+    class_density = settings.Setting(False)
 
     def __init__(self):
         super().__init__()
@@ -422,11 +441,66 @@ class OWFreeViz(widget.OWWidget):
         self.start_button = gui.button(
             box, self, "Optimize", self._toogle_start)
 
+        self.color_varmodel = itemmodels.VariableListModel(parent=self)
+        self.shape_varmodel = itemmodels.VariableListModel(parent=self)
+        self.size_varmodel = itemmodels.VariableListModel(parent=self)
+        self.label_varmodel = itemmodels.VariableListModel(parent=self)
+
+        box = gui.widgetBox(self.controlArea, "Plot")
+        form = QtGui.QFormLayout(
+            formAlignment=Qt.AlignLeft,
+            labelAlignment=Qt.AlignLeft,
+            fieldGrowthPolicy=QtGui.QFormLayout.AllNonFixedFieldsGrow,
+            spacing=8,
+        )
+        box.layout().addLayout(form)
+        color_cb = gui.comboBox(
+            box, self, "color_var", sendSelectedValue=True,
+            emptyString="(Same color)", contentsLength=10,
+            callback=self._update_color)
+
+        color_cb.setModel(self.color_varmodel)
+        form.addRow("Color", color_cb)
+        opacity_slider = gui.hSlider(
+            box, self, "opacity", minValue=50, maxValue=255, ticks=True,
+            createLabel=False, callback=self._update_color)
+        opacity_slider.setTickInterval(0)
+        opacity_slider.setPageStep(10)
+        form.addRow("Opacity", opacity_slider)
+
+        shape_cb = gui.comboBox(
+            box, self, "shape_var", contentsLength=10, sendSelectedValue=True,
+            emptyString="(Same shape)", callback=self._update_shape)
+        shape_cb.setModel(self.shape_varmodel)
+        form.addRow("Shape", shape_cb)
+
+        size_cb = gui.comboBox(
+            box, self, "size_var", contentsLength=10, sendSelectedValue=True,
+            emptyString="(Same size)", callback=self._update_size)
+        size_cb.setModel(self.size_varmodel)
+        form.addRow("Size", size_cb)
+        size_slider = gui.hSlider(
+            box, self, "point_size", minValue=3, maxValue=20, ticks=True,
+            createLabel=False, callback=self._update_size)
+        form.addRow(None, size_slider)
+
+        label_cb = gui.comboBox(
+            box, self, "label_var", contentsLength=10, sendSelectedValue=True,
+            emptyString="(No labels)", callback=self._update_labels)
+        label_cb.setModel(self.label_varmodel)
+        form.addRow("Label", label_cb)
+
+        self.class_density_cb = gui.checkBox(
+            box, self, "class_density", "", callback=self._update_density)
+        form.addRow("Class density", self.class_density_cb)
+
         box = gui.widgetBox(self.controlArea, "Hide anchors")
-        gui.hSlider(box, self, "min_anchor_radius", minValue=0, maxValue=100,
-                    step=5, ticks=10,
-                    label="Hide radius", createLabel=False,
-                    callback=self.__update_anchor_visibility)
+        rslider = gui.hSlider(
+            box, self, "min_anchor_radius", minValue=0, maxValue=100,
+            step=5, label="Hide radius", createLabel=False, ticks=True,
+            callback=self.__update_anchor_visibility)
+        rslider.setTickInterval(0)
+        rslider.setPageStep(10)
 
         box = gui.widgetBox(self.controlArea, "Zoom/Select")
         hlayout = QtGui.QHBoxLayout()
@@ -455,7 +529,7 @@ class OWFreeViz(widget.OWWidget):
 
         box = gui.widgetBox(self.controlArea, "Output")
         gui.comboBox(box, self, "embedding_domain_role",
-                     items=["Origninal features only",
+                     items=["Original features only",
                             "Coordinates as features",
                             "Coordinates as meta attributes"])
         gui.auto_commit(box, self, "autocommit", "Commit", box=False,
@@ -491,14 +565,20 @@ class OWFreeViz(widget.OWWidget):
         Clear/reset the widget state
         """
         self.data = None
-        self.projection = None
         self._clear_plot()
         self._loop.cancel()
+
+        self.color_varmodel[:] = ["(Same color)"]
+        self.shape_varmodel[:] = ["(Same shape)"]
+        self.size_varmodel[:] = ["(Same size)"]
+        self.label_varmodel[:] = ["(No labels)"]
+        self.color_var = self.shape_var = self.size_var = self.label_var = ""
 
     def set_data(self, data):
         """
         Set the input dataset.
         """
+        self.closeContext()
         self.clear()
         error_msg = ""
         if data is not None:
@@ -513,6 +593,46 @@ class OWFreeViz(widget.OWWidget):
 
         self.data = data
         self.error(0, error_msg)
+        if data is not None:
+            separator = itemmodels.VariableListModel.Separator
+            domain = data.domain
+            colorvars = ["(Same color)"] + list(domain)
+            colorvars_meta = [var for var in domain.metas
+                              if var.is_primitive()]
+            if colorvars_meta:
+                colorvars += [separator] + colorvars_meta
+            self.color_varmodel[:] = colorvars
+            self.color_var = domain.class_var.name
+
+            def is_discrete(var): return var.is_discrete
+            def is_continuous(var): return var.is_continuous
+            def is_string(var): return var.is_string
+            def filter_(func, iterable): return list(filter(func, iterable))
+            maxsymbols = len(linproj.ScatterPlotItem.Symbols) - 1
+            def can_be_shape(var):
+                return is_discrete(var) and len(var.values) < maxsymbols
+
+            shapevars = ["(Same shape)"] + filter_(can_be_shape, domain)
+            shapevars_meta = filter_(can_be_shape, domain.metas)
+            if shapevars_meta:
+                shapevars += [separator] + shapevars_meta
+            self.shape_varmodel[:] = shapevars
+
+            sizevars = ["(Same size)"] + filter_(is_continuous, domain)
+            sizevars_meta = filter_(is_continuous, domain.metas)
+            if sizevars_meta:
+                sizevars += [separator] + sizevars_meta
+            self.size_varmodel[:] = sizevars
+
+            labelvars = ["(No labels)"]
+            labelvars_meta = filter_(is_string, domain.metas)
+            if labelvars_meta:
+                labelvars += [separator] + labelvars_meta
+
+            self.label_varmodel[:] = labelvars
+
+            self.class_density_cb.setEnabled(domain.has_discrete_class)
+            self.openContext(data)
 
     def handleNewSignals(self):
         """Reimplemented."""
@@ -558,37 +678,46 @@ class OWFreeViz(widget.OWWidget):
             anchors = numpy.random.random((X.shape[1], 2)) * 2 - 1
 
         EX = numpy.dot(X, anchors)
-        if self.data.domain.class_var.is_discrete:
-            colgen = colorpalette.ColorPaletteGenerator(
-                len(self.data.domain.class_var.values))
-            colors = numpy.array(colgen[Y], dtype=object)
-        else:
-            colors = linproj.plotutils.continuous_colors(Y)
-            colors = numpy.array([QtGui.QBrush(QtGui.QColor(*c))
-                                   for c in colors])
+        radius = numpy.max(numpy.linalg.norm(EX, axis=1))
 
-        rad = numpy.max(numpy.linalg.norm(EX, axis=1))
+        colorvar = self._color_var()
+        shapevar = self._shape_var()
+        sizevar = self._size_var()
+        labelvar = self._label_var()
+
+        if colorvar is not None:
+            colors = plotutils.color_data(self.data, colorvar)[valid]
+        else:
+            colors = numpy.array([[192, 192, 192]])
+            colors = numpy.tile(colors, (X.shape[0], 1))
+
+        pendata = plotutils.pen_data(colors * 0.8)
+        colors = numpy.hstack(
+            [colors, numpy.full((colors.shape[0], 1), float(self.opacity))])
+        brushdata = plotutils.brush_data(colors)
+
+        shapedata = plotutils.shape_data(self.data, shapevar)[valid]
+        sizedata = size_data(
+            self.data, sizevar, pointsize=self.point_size)[valid]
+        if labelvar is not None:
+            labeldata = plotutils.column_data(self.data, labelvar, valid)
+            labeldata = [labelvar.str_val(val) for val in labeldata]
+        else:
+            labeldata = None
 
         item = linproj.ScatterPlotItem(
-            x=EX[:, 0] / rad,
-            y=EX[:, 1] / rad,
-            brush=colors,
-            pen=QtGui.QPen(Qt.NoPen),
+            x=EX[:, 0] / radius,
+            y=EX[:, 1] / radius,
+            brush=brushdata,
+            pen=pendata,
+            symbols=shapedata,
+            size=sizedata,
             data=numpy.flatnonzero(valid),
             antialias=True,
         )
 
         self.plot.addItem(item)
         self.plot.setRange(QtCore.QRectF(-1.05, -1.05, 2.1, 2.1))
-
-        if self.data.domain.class_var.is_discrete:
-            for i, name in enumerate(self.data.domain.class_var.values):
-                color = colgen[i]
-                self.legend.addItem(
-                    linproj.ScatterPlotItem(pen=color, brush=color, size=10),
-                    name,
-                )
-            self.legend.show()
 
         # minimum visible anchor radius
         minradius = self.min_anchor_radius / 100 + 1e-5
@@ -620,11 +749,161 @@ class OWFreeViz(widget.OWWidget):
             mainitem=item,
             axisitems=axisitems,
             hidecircle=hidecircle,
-            brushdata=colors,
+            basecolors=colors,
+            brushdata=brushdata,
+            pendata=pendata,
+            shapedata=shapedata,
+            sizedata=sizedata,
+            labeldata=labeldata,
+            labelitems=[],
+            densityimage=None,
             X=X,
             Y=Y,
             selectionmask=numpy.zeros_like(valid, dtype=bool)
         )
+        self._update_legend()
+        self._update_labels()
+        self._update_density()
+
+    def _color_var(self):
+        if self.color_var != "":
+            return self.data.domain[self.color_var]
+        else:
+            return None
+
+    def _update_color(self):
+        if self.plotdata is None:
+            return
+
+        colorvar = self._color_var()
+        validmask = self.plotdata.validmask
+        selectionmask = self.plotdata.selectionmask
+        if colorvar is not None:
+            colors = plotutils.color_data(self.data, colorvar)[validmask]
+        else:
+            colors = numpy.array([[192, 192, 192]])
+            colors = numpy.tile(colors, (self.plotdata.X.shape[0], 1))
+
+        selectedmask = selectionmask[validmask]
+        pointstyle = numpy.where(
+            selectedmask, plotutils.Selected, plotutils.NoFlags)
+
+        pendata = plotutils.pen_data(colors * 0.8, pointstyle)
+        colors = numpy.hstack(
+            [colors, numpy.full((colors.shape[0], 1), float(self.opacity))])
+        brushdata = plotutils.brush_data(colors)
+
+        self.plotdata.pendata = pendata
+        self.plotdata.brushdata = brushdata
+        self.plotdata.mainitem.setPen(pendata)
+        self.plotdata.mainitem.setBrush(brushdata)
+
+        self._update_legend()
+
+    def _shape_var(self):
+        if self.shape_var != "":
+            return self.data.domain[self.shape_var]
+        else:
+            return None
+
+    def _update_shape(self):
+        if self.plotdata is None:
+            return
+        shapevar = self._shape_var()
+        validmask = self.plotdata.validmask
+        shapedata = plotutils.shape_data(self.data, shapevar)
+        shapedata = shapedata[validmask]
+        self.plotdata.shapedata = shapedata
+        self.plotdata.mainitem.setSymbol(shapedata)
+        self._update_legend()
+
+    def _size_var(self):
+        if self.size_var != "":
+            return self.data.domain[self.size_var]
+        else:
+            return None
+
+    def _update_size(self):
+        if self.plotdata is None:
+            return
+        sizevar = self._size_var()
+        validmask = self.plotdata.validmask
+
+        sizedata = size_data(
+            self.data, sizevar, pointsize=self.point_size)[validmask]
+        self.plotdata.sizedata = sizedata
+        self.plotdata.mainitem.setSize(sizedata)
+
+    def _label_var(self):
+        if self.label_var != "":
+            return self.data.domain[self.label_var]
+        else:
+            return None
+
+    def _update_labels(self):
+        if self.plotdata is None:
+            return
+        labelvar = self._label_var()
+
+        if labelvar is not None:
+            labeldata = plotutils.column_data(
+                self.data, labelvar, self.plotdata.validmask)
+            labeldata = [labelvar.str_val(val) for val in labeldata]
+        else:
+            labeldata = None
+
+        if self.plotdata.labelitems:
+            for item in self.plotdata.labelitems:
+                item.setParentItem(None)
+                self.plot.removeItem(item)
+            self.plotdata.labelitems = []
+
+        if labeldata is not None:
+            coords = self.plotdata.embedding_coords
+            coords = coords / numpy.max(numpy.linalg.norm(coords, axis=1))
+            for (x, y), text in zip(coords, labeldata):
+                item = pg.TextItem(text, anchor=(0.5, 0), color=0.0)
+                item.setPos(x, y)
+                self.plot.addItem(item)
+                self.plotdata.labelitems.append(item)
+
+    def _update_legend(self):
+        self.legend.clear()
+        if self.plotdata is None:
+            return
+
+        legend_data = plotutils.legend_data(
+            self._color_var(), self._shape_var())
+        self.legend.clear()
+        self.legend.setVisible(bool(legend_data))
+
+        for color, symbol, name in legend_data:
+            self.legend.addItem(
+                linproj.ScatterPlotItem(
+                    pen=color, brush=color, symbol=symbol, size=10),
+                name)
+
+    def _update_density(self):
+        if self.plotdata is None:
+            return
+
+        if self.plotdata.densityimage is not None:
+            self.plot.removeItem(self.plotdata.densityimage)
+            self.plotdata.densityimage = None
+
+        if self.data.domain.has_discrete_class and self.class_density:
+            coords = self.plotdata.embedding_coords
+            radius = numpy.linalg.norm(coords, axis=1).max()
+            coords = coords / radius
+            xmin = ymin = -1.05
+            xmax = ymax = 1.05
+            xdata, ydata = coords.T
+            colors = plotutils.color_data(
+                self.data, self.data.domain.class_var)[self.plotdata.validmask]
+            imgitem = classdensity.class_density_image(
+                xmin, xmax, ymin, ymax, 256, xdata, ydata, colors)
+            self.plot.addItem(imgitem)
+            self.plotdata.densityimage = imgitem
 
     def _start(self):
         """
@@ -696,27 +975,24 @@ class OWFreeViz(widget.OWWidget):
 
         item = self.plotdata.mainitem
         coords = self.plotdata.embedding_coords
-        rad = numpy.max(numpy.linalg.norm(coords, axis=1))
-
-        selection = self.plotdata.selectionmask[self.plotdata.validmask]
-        selection = numpy.flatnonzero(selection)
-        brushdata = self.plotdata.brushdata
-        if selection.size:
-            pendata = numpy.full(len(brushdata), QtGui.QPen(Qt.NoPen),
-                                 dtype=object)
-            pendata[selection] = pg.mkPen((150, 150, 150), width=3)
-
-        else:
-            pendata = None
-        item.setData(x=coords[:, 0] / rad, y=coords[:, 1] / rad,
-                     brush=brushdata,
-                     pen=pendata,
+        radius = numpy.max(numpy.linalg.norm(coords, axis=1))
+        coords = coords / radius
+        item.setData(x=coords[:, 0], y=coords[:, 1],
+                     brush=self.plotdata.brushdata,
+                     pen=self.plotdata.pendata,
+                     size=self.plotdata.sizedata,
+                     symbol=self.plotdata.shapedata,
                      data=numpy.flatnonzero(self.plotdata.validmask)
                      )
+
         for anchor, item in zip(self.plotdata.anchors,
                                 self.plotdata.axisitems):
             item.setLine(QtCore.QLineF(0, 0, *anchor))
 
+        for (x, y), item in zip(coords, self.plotdata.labelitems):
+            item.setPos(x, y)
+
+        self._update_density()
         self.__update_anchor_visibility()
 
     def __update_anchor_visibility(self):
@@ -725,7 +1001,8 @@ class OWFreeViz(widget.OWWidget):
             return
 
         minradius = self.min_anchor_radius / 100 + 1e-5
-        for anchor, item in zip(self.plotdata.anchors, self.plotdata.axisitems):
+        for anchor, item in zip(self.plotdata.anchors,
+                                self.plotdata.axisitems):
             item.setVisible(numpy.linalg.norm(anchor) > minradius)
         self.plotdata.hidecircle.setRect(
             QtCore.QRectF(-minradius, -minradius,
@@ -794,8 +1071,7 @@ class OWFreeViz(widget.OWWidget):
         else:
             current[indices] = True
         self.plotdata.selectionmask = current
-        self.__update_xy()
-
+        self._update_color()
         self.commit()
 
     def commit(self):
@@ -853,6 +1129,22 @@ class OWFreeViz(widget.OWWidget):
         return QtCore.QSize(900, 700)
 
 
+def size_data(table, var, pointsize=3):
+    if var is None:
+        return numpy.full(len(table), pointsize, dtype=float)
+    else:
+        size_data, _ = table.get_column_view(var)
+        cmin, cmax = numpy.nanmin(size_data), numpy.nanmax(size_data)
+        if cmax - cmin > 0:
+            size_data = (size_data - cmin) / (cmax - cmin)
+        else:
+            size_data = numpy.zeros(len(table))
+
+        size_data = size_data * pointsize + 3
+        size_data[numpy.isnan(size_data)] = 1
+        return size_data
+
+
 def main(argv=sys.argv):
     app = QtGui.QApplication(list(argv))
     argv = app.argv()
@@ -869,6 +1161,7 @@ def main(argv=sys.argv):
     app.exec_()
     w.set_data(None)
     w.handleNewSignals()
+    w.saveSettings()
     return 0
 
 if __name__ == "__main__":
