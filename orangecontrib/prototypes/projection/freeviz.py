@@ -309,9 +309,6 @@ def freeviz(X, y, weights=None, center=True, scale=True, dim=2, p=1,
         if maxr >= 0.001:
             Anew /= maxr
 
-        if dim == 2:
-            Anew = _rotate(Anew)
-
         change = numpy.linalg.norm(Anew - A, axis=1)
         if allclose(change, 0, atol=atol):
             break
@@ -319,6 +316,9 @@ def freeviz(X, y, weights=None, center=True, scale=True, dim=2, p=1,
         A = Anew
         embeddings = numpy.dot(X, A)
         step_i = step_i + 1
+
+    if dim == 2:
+        A = _rotate(A)
 
     return embeddings, A, center, scale
 
