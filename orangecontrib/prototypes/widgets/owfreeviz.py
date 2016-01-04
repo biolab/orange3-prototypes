@@ -101,8 +101,7 @@ class AsyncUpdateLoop(QObject):
     def __schedule_next(self):
         if not self.__next_pending:
             self.__next_pending = True
-            QCoreApplication.postEvent(
-                self, QEvent(AsyncUpdateLoop.Next), - (2 ** 31 - 1))
+            QtCore.QTimer.singleShot(10, self.__on_timeout)
 
     def __next(self):
         if self.__coroutine is not None:
@@ -122,19 +121,25 @@ class AsyncUpdateLoop(QObject):
                 self.yielded.emit(rval)
                 self.__schedule_next()
 
+    @Slot()
+    def __on_timeout(self):
+        assert self.__next_pending
+        self.__next_pending = False
+        if not self.__in_next:
+            self.__in_next = True
+            try:
+                self.__next()
+            finally:
+                self.__in_next = False
+        else:
+            # warn
+            self.__schedule_next()
+
     def customEvent(self, event):
         if event.type() == AsyncUpdateLoop.Next:
-            assert self.__next_pending
-            self.__next_pending = False
-            if not self.__in_next:
-                self.__in_next = True
-                try:
-                    self.__next()
-                finally:
-                    self.__in_next = False
-            else:
-                # warn
-                self.__schedule_next()
+            self.__on_timeout()
+        else:
+            super().customEvent(event)
 
 
 class PlotToolBox(QtCore.QObject):
