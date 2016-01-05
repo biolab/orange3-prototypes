@@ -1,6 +1,6 @@
 import sys
 import enum
-
+from xml.sax.saxutils import escape
 from types import SimpleNamespace as namespace
 
 import pkg_resources
@@ -560,6 +560,7 @@ class OWFreeViz(widget.OWWidget):
         self.plot.plotItem.hideAxis("left")
         self.plot.plotItem.hideButtons()
         self.plot.setAspectLocked(True)
+        self.plot.scene().installEventFilter(self)
 
         self.legend = linproj.LegendItem()
         self.legend.setParentItem(self.plot.getViewBox())
@@ -1157,7 +1158,84 @@ class OWFreeViz(widget.OWWidget):
         self.send("Components", components)
 
     def sizeHint(self):
+        # reimplemented
         return QtCore.QSize(900, 700)
+
+    def eventFilter(self, recv, event):
+        # reimplemented
+        if event.type() == QtCore.QEvent.GraphicsSceneHelp and \
+                recv is self.plot.scene():
+            return self._tooltip(event)
+        else:
+            return super().eventFilter(recv, event)
+
+    def _tooltip(self, event):
+        # Handle a help event for the plot's scene
+        if self.plotdata is None:
+            return False
+
+        item = self.plotdata.mainitem
+        pos = item.mapFromScene(event.scenePos())
+        points = item.pointsAt(pos)
+        indices = [spot.data() for spot in points]
+        if not indices:
+            return False
+
+        tooltip = format_tooltip(self.data, columns=..., rows=indices)
+        QtGui.QToolTip.showText(event.screenPos(), tooltip, widget=self.plot)
+        return True
+
+
+def format_tooltip(table, columns, rows, maxattrs=5, maxrows=5):
+    domain = table.domain
+
+    if columns is ...:
+        columns = domain.variables + domain.metas
+    else:
+        columns = [domain[col] for col in columns]
+
+    def role(domain, var):
+        if var in domain.attributes:
+            return 0
+        elif var in domain.class_vars:
+            return 1
+        elif var in domain.metas:
+            return 2
+        else:
+            raise ValueError
+
+    attrs, class_vars, metas = [], [], []
+    for var in columns:
+        [attrs, class_vars, metas][role(domain, var)].append(var)
+
+    tooltip_lines = []
+    for row_idx in rows[:maxrows]:
+        row = table[row_idx]
+        lines = ["Attributes:"]
+        lines.extend('   {} = {}'.format(attr.name, row[attr])
+                     for attr in attrs[:maxattrs])
+
+        if len(attrs) > maxattrs:
+            lines.append("   ... and {} others".format(len(attrs) - maxattrs))
+
+        if class_vars:
+            lines.append("Class:")
+            lines.extend("   {} = {}".format(var.name, row[var])
+                         for var in class_vars)
+
+        if metas:
+            lines.append("Metas:")
+            lines.extend("   {} = {}".format(var.name, row[var])
+                         for var in metas)
+
+        tooltip_lines.append("\n".join(lines))
+
+    if len(rows) > maxrows:
+        tooltip_lines.append("... {} more".format(len(rows) - maxrows))
+    text = "\n------------------\n".join(tooltip_lines)
+    text = ('<span style="white-space:pre">{}</span>'
+            .format(escape(text)))
+    return text
 
 
 def size_data(table, var, pointsize=3):
