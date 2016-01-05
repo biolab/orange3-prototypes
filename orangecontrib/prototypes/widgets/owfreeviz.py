@@ -385,6 +385,14 @@ class OWFreeViz(widget.OWWidget):
         ("Every 100 steps", 100),
         ("None", -1),
     ]
+    JitterAmount = [
+        ("None", 0),
+        ("0.1%", 0.1),
+        ("0.5%", 0.5),
+        ("1%", 1.0),
+        ("2%", 2.0)
+    ]
+
     #: Output coordinate embedding domain role
     NoCoords, Attribute, Meta = 0, 1, 2
 
@@ -495,6 +503,12 @@ class OWFreeViz(widget.OWWidget):
         label_cb.setModel(self.label_varmodel)
         form.addRow("Label", label_cb)
 
+        form.addRow(
+            "Jitter",
+            gui.comboBox(box, self, "jitter",
+                         items=[text for text, _ in self.JitterAmount],
+                         callback=self._update_xy)
+        )
         self.class_density_cb = gui.checkBox(
             box, self, "class_density", "", callback=self._update_density)
         form.addRow("Class density", self.class_density_cb)
@@ -503,7 +517,7 @@ class OWFreeViz(widget.OWWidget):
         rslider = gui.hSlider(
             box, self, "min_anchor_radius", minValue=0, maxValue=100,
             step=5, label="Hide radius", createLabel=False, ticks=True,
-            callback=self.__update_anchor_visibility)
+            callback=self._update_anchor_visibility)
         rslider.setTickInterval(0)
         rslider.setPageStep(10)
 
@@ -685,6 +699,10 @@ class OWFreeViz(widget.OWWidget):
         EX = numpy.dot(X, anchors)
         radius = numpy.max(numpy.linalg.norm(EX, axis=1))
 
+        jittervec = numpy.random.RandomState(4).rand(*EX.shape) * 2 - 1
+        jittervec *= 0.01
+        _, jitterfactor = self.JitterAmount[self.jitter]
+
         colorvar = self._color_var()
         shapevar = self._shape_var()
         sizevar = self._size_var()
@@ -710,9 +728,10 @@ class OWFreeViz(widget.OWWidget):
         else:
             labeldata = None
 
+        coords = (EX / radius) + jittervec * jitterfactor
         item = linproj.ScatterPlotItem(
-            x=EX[:, 0] / radius,
-            y=EX[:, 1] / radius,
+            x=coords[:, 0],
+            y=coords[:, 1],
             brush=brushdata,
             pen=pendata,
             symbols=shapedata,
@@ -750,6 +769,7 @@ class OWFreeViz(widget.OWWidget):
         self.plotdata = namespace(
             validmask=valid,
             embedding_coords=EX,
+            jittervec=jittervec,
             anchors=anchors,
             mainitem=item,
             axisitems=axisitems,
@@ -973,7 +993,7 @@ class OWFreeViz(widget.OWWidget):
             if self.data is not None:
                 self._start()
 
-    def __update_xy(self):
+    def _update_xy(self):
         # Update the plotted embedding coordinates
         if self.plotdata is None:
             return
@@ -982,6 +1002,10 @@ class OWFreeViz(widget.OWWidget):
         coords = self.plotdata.embedding_coords
         radius = numpy.max(numpy.linalg.norm(coords, axis=1))
         coords = coords / radius
+        if self.jitter > 0:
+            _, factor = self.JitterAmount[self.jitter]
+            coords = coords + self.plotdata.jittervec * factor
+
         item.setData(x=coords[:, 0], y=coords[:, 1],
                      brush=self.plotdata.brushdata,
                      pen=self.plotdata.pendata,
@@ -997,10 +1021,7 @@ class OWFreeViz(widget.OWWidget):
         for (x, y), item in zip(coords, self.plotdata.labelitems):
             item.setPos(x, y)
 
-        self._update_density()
-        self.__update_anchor_visibility()
-
-    def __update_anchor_visibility(self):
+    def _update_anchor_visibility(self):
         # Update the anchor/axes visibility
         if self.plotdata is None:
             return
@@ -1015,12 +1036,17 @@ class OWFreeViz(widget.OWWidget):
 
     def __set_projection(self, res):
         # Set/update the projection matrix and coordinate embeddings
-        assert self.plotdata is not None, "__set_projection called out of turn"
-        self.progressBarAdvance(100. / self.maxiter, processEvents=False)
+        assert self.plotdata is not None, "__set_projection call unexpected"
+        _, increment = self.ReplotIntervals[self.replot_interval]
+        increment = self.maxiter if increment == -1 else increment
+        self.progressBarAdvance(
+            increment * 100. / self.maxiter, processEvents=False)
         embedding_coords, projection = res
         self.plotdata.embedding_coords = embedding_coords
         self.plotdata.anchors = projection
-        self.__update_xy()
+        self._update_xy()
+        self._update_anchor_visibility()
+        self._update_density()
 
     def __freeviz_finished(self):
         # Projection optimization has finished
