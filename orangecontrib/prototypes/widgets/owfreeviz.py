@@ -1,4 +1,6 @@
 import sys
+import enum
+from xml.sax.saxutils import escape
 from types import SimpleNamespace as namespace
 
 import pkg_resources
@@ -12,10 +14,14 @@ from PyQt4.QtCore import pyqtSignal as Signal, pyqtSlot as Slot
 import pyqtgraph as pg
 
 import Orange.data
+import Orange.projection
 
 from Orange.widgets import widget, gui, settings
-from Orange.widgets.utils import colorpalette
+from Orange.widgets.utils import colorpalette, itemmodels, classdensity
 from Orange.widgets.visualize import owlinearprojection as linproj
+from Orange.widgets.unsupervised.owmds import mdsplotutils as plotutils
+
+from ..projection.freeviz import freeviz
 
 
 class AsyncUpdateLoop(QObject):
@@ -95,8 +101,7 @@ class AsyncUpdateLoop(QObject):
     def __schedule_next(self):
         if not self.__next_pending:
             self.__next_pending = True
-            QCoreApplication.postEvent(
-                self, QEvent(AsyncUpdateLoop.Next), - (2 ** 31 - 1))
+            QtCore.QTimer.singleShot(10, self.__on_timeout)
 
     def __next(self):
         if self.__coroutine is not None:
@@ -116,21 +121,25 @@ class AsyncUpdateLoop(QObject):
                 self.yielded.emit(rval)
                 self.__schedule_next()
 
+    @Slot()
+    def __on_timeout(self):
+        assert self.__next_pending
+        self.__next_pending = False
+        if not self.__in_next:
+            self.__in_next = True
+            try:
+                self.__next()
+            finally:
+                self.__in_next = False
+        else:
+            # warn
+            self.__schedule_next()
+
     def customEvent(self, event):
         if event.type() == AsyncUpdateLoop.Next:
-            assert self.__next_pending
-            self.__next_pending = False
-            if not self.__in_next:
-                self.__in_next = True
-                try:
-                    self.__next()
-                finally:
-                    self.__in_next = False
-            else:
-                # warn
-                self.__schedule_next()
-
-import enum
+            self.__on_timeout()
+        else:
+            super().customEvent(event)
 
 
 class PlotToolBox(QtCore.QObject):
@@ -341,6 +350,13 @@ class AxisItem(pg.GraphicsObject):
         self._arrow.setRotation(180 - angle)
 
 
+def make_pen(color, width=1.0, style=Qt.SolidLine, cap=Qt.SquareCap,
+             join=Qt.BevelJoin, cosmetic=True):
+    pen = QtGui.QPen(color, width, style=style, cap=cap, join=join)
+    pen.setCosmetic(cosmetic)
+    return pen
+
+
 class OWFreeViz(widget.OWWidget):
     name = "FreeViz"
     description = "FreeViz Visualization"
@@ -350,6 +366,7 @@ class OWFreeViz(widget.OWWidget):
                ("Selected Data", Orange.data.Table),
                ("Components", Orange.data.Table)]
 
+    settingsHandler = settings.DomainContextHandler()
     #: Initialization type
     Circular, Random = 0, 1
     #: Force law
@@ -368,6 +385,14 @@ class OWFreeViz(widget.OWWidget):
         ("Every 100 steps", 100),
         ("None", -1),
     ]
+    JitterAmount = [
+        ("None", 0),
+        ("0.1%", 0.1),
+        ("0.5%", 0.5),
+        ("1%", 1.0),
+        ("2%", 2.0)
+    ]
+
     #: Output coordinate embedding domain role
     NoCoords, Attribute, Meta = 0, 1, 2
 
@@ -378,6 +403,16 @@ class OWFreeViz(widget.OWWidget):
     min_anchor_radius = settings.Setting(0)
     embedding_domain_role = settings.Setting(Meta)
     autocommit = settings.Setting(True)
+
+    color_var = settings.ContextSetting("", exclude_metas=False)
+    shape_var = settings.ContextSetting("", exclude_metas=False)
+    size_var = settings.ContextSetting("", exclude_metas=False)
+    label_var = settings.ContextSetting("", exclude_metas=False)
+
+    opacity = settings.Setting(255)
+    point_size = settings.Setting(5)
+    jitter = settings.Setting(0)
+    class_density = settings.Setting(False)
 
     def __init__(self):
         super().__init__()
@@ -419,11 +454,72 @@ class OWFreeViz(widget.OWWidget):
         self.start_button = gui.button(
             box, self, "Optimize", self._toogle_start)
 
+        self.color_varmodel = itemmodels.VariableListModel(parent=self)
+        self.shape_varmodel = itemmodels.VariableListModel(parent=self)
+        self.size_varmodel = itemmodels.VariableListModel(parent=self)
+        self.label_varmodel = itemmodels.VariableListModel(parent=self)
+
+        box = gui.widgetBox(self.controlArea, "Plot")
+        form = QtGui.QFormLayout(
+            formAlignment=Qt.AlignLeft,
+            labelAlignment=Qt.AlignLeft,
+            fieldGrowthPolicy=QtGui.QFormLayout.AllNonFixedFieldsGrow,
+            spacing=8,
+        )
+        box.layout().addLayout(form)
+        color_cb = gui.comboBox(
+            box, self, "color_var", sendSelectedValue=True,
+            emptyString="(Same color)", contentsLength=10,
+            callback=self._update_color)
+
+        color_cb.setModel(self.color_varmodel)
+        form.addRow("Color", color_cb)
+        opacity_slider = gui.hSlider(
+            box, self, "opacity", minValue=50, maxValue=255, ticks=True,
+            createLabel=False, callback=self._update_color)
+        opacity_slider.setTickInterval(0)
+        opacity_slider.setPageStep(10)
+        form.addRow("Opacity", opacity_slider)
+
+        shape_cb = gui.comboBox(
+            box, self, "shape_var", contentsLength=10, sendSelectedValue=True,
+            emptyString="(Same shape)", callback=self._update_shape)
+        shape_cb.setModel(self.shape_varmodel)
+        form.addRow("Shape", shape_cb)
+
+        size_cb = gui.comboBox(
+            box, self, "size_var", contentsLength=10, sendSelectedValue=True,
+            emptyString="(Same size)", callback=self._update_size)
+        size_cb.setModel(self.size_varmodel)
+        form.addRow("Size", size_cb)
+        size_slider = gui.hSlider(
+            box, self, "point_size", minValue=3, maxValue=20, ticks=True,
+            createLabel=False, callback=self._update_size)
+        form.addRow(None, size_slider)
+
+        label_cb = gui.comboBox(
+            box, self, "label_var", contentsLength=10, sendSelectedValue=True,
+            emptyString="(No labels)", callback=self._update_labels)
+        label_cb.setModel(self.label_varmodel)
+        form.addRow("Label", label_cb)
+
+        form.addRow(
+            "Jitter",
+            gui.comboBox(box, self, "jitter",
+                         items=[text for text, _ in self.JitterAmount],
+                         callback=self._update_xy)
+        )
+        self.class_density_cb = gui.checkBox(
+            box, self, "class_density", "", callback=self._update_density)
+        form.addRow("Class density", self.class_density_cb)
+
         box = gui.widgetBox(self.controlArea, "Hide anchors")
-        gui.hSlider(box, self, "min_anchor_radius", minValue=0, maxValue=100,
-                    step=5, ticks=10,
-                    label="Hide radius", createLabel=False,
-                    callback=self.__update_anchor_visibility)
+        rslider = gui.hSlider(
+            box, self, "min_anchor_radius", minValue=0, maxValue=100,
+            step=5, label="Hide radius", createLabel=False, ticks=True,
+            callback=self._update_anchor_visibility)
+        rslider.setTickInterval(0)
+        rslider.setPageStep(10)
 
         box = gui.widgetBox(self.controlArea, "Zoom/Select")
         hlayout = QtGui.QHBoxLayout()
@@ -452,7 +548,7 @@ class OWFreeViz(widget.OWWidget):
 
         box = gui.widgetBox(self.controlArea, "Output")
         gui.comboBox(box, self, "embedding_domain_role",
-                     items=["Origninal features only",
+                     items=["Original features only",
                             "Coordinates as features",
                             "Coordinates as meta attributes"])
         gui.auto_commit(box, self, "autocommit", "Commit", box=False,
@@ -464,6 +560,7 @@ class OWFreeViz(widget.OWWidget):
         self.plot.plotItem.hideAxis("left")
         self.plot.plotItem.hideButtons()
         self.plot.setAspectLocked(True)
+        self.plot.scene().installEventFilter(self)
 
         self.legend = linproj.LegendItem()
         self.legend.setParentItem(self.plot.getViewBox())
@@ -488,25 +585,74 @@ class OWFreeViz(widget.OWWidget):
         Clear/reset the widget state
         """
         self.data = None
-        self.projection = None
         self._clear_plot()
         self._loop.cancel()
+
+        self.color_varmodel[:] = ["(Same color)"]
+        self.shape_varmodel[:] = ["(Same shape)"]
+        self.size_varmodel[:] = ["(Same size)"]
+        self.label_varmodel[:] = ["(No labels)"]
+        self.color_var = self.shape_var = self.size_var = self.label_var = ""
 
     def set_data(self, data):
         """
         Set the input dataset.
         """
+        self.closeContext()
         self.clear()
         error_msg = ""
         if data is not None:
-            if data.domain.class_var is None or \
-                    not data.domain.class_var.is_discrete or \
+            if data.domain.class_var is None:
+                error_msg = "Need a class variable"
+                data = None
+            elif data.domain.class_var.is_discrete and \
                     len(data.domain.class_var.values) < 2:
-                error_msg = "Needs discrete class variable"
+                error_msg = "Needs discrete class variable with at" \
+                            " lest 2 values"
                 data = None
 
         self.data = data
         self.error(0, error_msg)
+        if data is not None:
+            separator = itemmodels.VariableListModel.Separator
+            domain = data.domain
+            colorvars = ["(Same color)"] + list(domain)
+            colorvars_meta = [var for var in domain.metas
+                              if var.is_primitive()]
+            if colorvars_meta:
+                colorvars += [separator] + colorvars_meta
+            self.color_varmodel[:] = colorvars
+            self.color_var = domain.class_var.name
+
+            def is_discrete(var): return var.is_discrete
+            def is_continuous(var): return var.is_continuous
+            def is_string(var): return var.is_string
+            def filter_(func, iterable): return list(filter(func, iterable))
+            maxsymbols = len(linproj.ScatterPlotItem.Symbols) - 1
+            def can_be_shape(var):
+                return is_discrete(var) and len(var.values) < maxsymbols
+
+            shapevars = ["(Same shape)"] + filter_(can_be_shape, domain)
+            shapevars_meta = filter_(can_be_shape, domain.metas)
+            if shapevars_meta:
+                shapevars += [separator] + shapevars_meta
+            self.shape_varmodel[:] = shapevars
+
+            sizevars = ["(Same size)"] + filter_(is_continuous, domain)
+            sizevars_meta = filter_(is_continuous, domain.metas)
+            if sizevars_meta:
+                sizevars += [separator] + sizevars_meta
+            self.size_varmodel[:] = sizevars
+
+            labelvars = ["(No labels)"]
+            labelvars_meta = filter_(is_string, domain.metas)
+            if labelvars_meta:
+                labelvars += [separator] + labelvars_meta
+
+            self.label_varmodel[:] = labelvars
+
+            self.class_density_cb.setEnabled(domain.has_discrete_class)
+            self.openContext(data)
 
     def handleNewSignals(self):
         """Reimplemented."""
@@ -540,6 +686,8 @@ class OWFreeViz(widget.OWWidget):
         X = X[valid, :]
         Y = Y[valid]
 
+        if self.data.domain.class_var.is_discrete:
+            Y = Y.astype(int)
         X = (X - numpy.mean(X, axis=0))
         span = numpy.ptp(X, axis=0)
         X[:, span > 0] /= span[span > 0].reshape(1, -1)
@@ -550,18 +698,45 @@ class OWFreeViz(widget.OWWidget):
             anchors = numpy.random.random((X.shape[1], 2)) * 2 - 1
 
         EX = numpy.dot(X, anchors)
+        radius = numpy.max(numpy.linalg.norm(EX, axis=1))
 
-        colgen = colorpalette.ColorPaletteGenerator(
-            len(self.data.domain.class_var.values))
-        colors = numpy.array(colgen[Y], dtype=object)
+        jittervec = numpy.random.RandomState(4).rand(*EX.shape) * 2 - 1
+        jittervec *= 0.01
+        _, jitterfactor = self.JitterAmount[self.jitter]
 
-        rad = numpy.max(numpy.linalg.norm(EX, axis=1))
+        colorvar = self._color_var()
+        shapevar = self._shape_var()
+        sizevar = self._size_var()
+        labelvar = self._label_var()
 
+        if colorvar is not None:
+            colors = plotutils.color_data(self.data, colorvar)[valid]
+        else:
+            colors = numpy.array([[192, 192, 192]])
+            colors = numpy.tile(colors, (X.shape[0], 1))
+
+        pendata = plotutils.pen_data(colors * 0.8)
+        colors = numpy.hstack(
+            [colors, numpy.full((colors.shape[0], 1), float(self.opacity))])
+        brushdata = plotutils.brush_data(colors)
+
+        shapedata = plotutils.shape_data(self.data, shapevar)[valid]
+        sizedata = size_data(
+            self.data, sizevar, pointsize=self.point_size)[valid]
+        if labelvar is not None:
+            labeldata = plotutils.column_data(self.data, labelvar, valid)
+            labeldata = [labelvar.str_val(val) for val in labeldata]
+        else:
+            labeldata = None
+
+        coords = (EX / radius) + jittervec * jitterfactor
         item = linproj.ScatterPlotItem(
-            x=EX[:, 0] / rad,
-            y=EX[:, 1] / rad,
-            brush=colors,
-            pen=QtGui.QPen(Qt.NoPen),
+            x=coords[:, 0],
+            y=coords[:, 1],
+            brush=brushdata,
+            pen=pendata,
+            symbols=shapedata,
+            size=sizedata,
             data=numpy.flatnonzero(valid),
             antialias=True,
         )
@@ -569,16 +744,8 @@ class OWFreeViz(widget.OWWidget):
         self.plot.addItem(item)
         self.plot.setRange(QtCore.QRectF(-1.05, -1.05, 2.1, 2.1))
 
-        for i, name in enumerate(self.data.domain.class_var.values):
-            color = colgen[i]
-            self.legend.addItem(
-                linproj.ScatterPlotItem(pen=color, brush=color, size=10),
-                name,
-            )
-        self.legend.show()
-
         # minimum visible anchor radius
-        minradius = self.min_anchor_radius / 100
+        minradius = self.min_anchor_radius / 100 + 1e-5
         axisitems = []
         for anchor, var in zip(anchors, self.data.domain.attributes):
             axitem = AxisItem(
@@ -603,15 +770,166 @@ class OWFreeViz(widget.OWWidget):
         self.plotdata = namespace(
             validmask=valid,
             embedding_coords=EX,
+            jittervec=jittervec,
             anchors=anchors,
             mainitem=item,
             axisitems=axisitems,
             hidecircle=hidecircle,
-            brushdata=colors,
+            basecolors=colors,
+            brushdata=brushdata,
+            pendata=pendata,
+            shapedata=shapedata,
+            sizedata=sizedata,
+            labeldata=labeldata,
+            labelitems=[],
+            densityimage=None,
             X=X,
             Y=Y,
             selectionmask=numpy.zeros_like(valid, dtype=bool)
         )
+        self._update_legend()
+        self._update_labels()
+        self._update_density()
+
+    def _color_var(self):
+        if self.color_var != "":
+            return self.data.domain[self.color_var]
+        else:
+            return None
+
+    def _update_color(self):
+        if self.plotdata is None:
+            return
+
+        colorvar = self._color_var()
+        validmask = self.plotdata.validmask
+        selectionmask = self.plotdata.selectionmask
+        if colorvar is not None:
+            colors = plotutils.color_data(self.data, colorvar)[validmask]
+        else:
+            colors = numpy.array([[192, 192, 192]])
+            colors = numpy.tile(colors, (self.plotdata.X.shape[0], 1))
+
+        selectedmask = selectionmask[validmask]
+        pointstyle = numpy.where(
+            selectedmask, plotutils.Selected, plotutils.NoFlags)
+
+        pendata = plotutils.pen_data(colors * 0.8, pointstyle)
+        colors = numpy.hstack(
+            [colors, numpy.full((colors.shape[0], 1), float(self.opacity))])
+        brushdata = plotutils.brush_data(colors)
+
+        self.plotdata.pendata = pendata
+        self.plotdata.brushdata = brushdata
+        self.plotdata.mainitem.setPen(pendata)
+        self.plotdata.mainitem.setBrush(brushdata)
+
+        self._update_legend()
+
+    def _shape_var(self):
+        if self.shape_var != "":
+            return self.data.domain[self.shape_var]
+        else:
+            return None
+
+    def _update_shape(self):
+        if self.plotdata is None:
+            return
+        shapevar = self._shape_var()
+        validmask = self.plotdata.validmask
+        shapedata = plotutils.shape_data(self.data, shapevar)
+        shapedata = shapedata[validmask]
+        self.plotdata.shapedata = shapedata
+        self.plotdata.mainitem.setSymbol(shapedata)
+        self._update_legend()
+
+    def _size_var(self):
+        if self.size_var != "":
+            return self.data.domain[self.size_var]
+        else:
+            return None
+
+    def _update_size(self):
+        if self.plotdata is None:
+            return
+        sizevar = self._size_var()
+        validmask = self.plotdata.validmask
+
+        sizedata = size_data(
+            self.data, sizevar, pointsize=self.point_size)[validmask]
+        self.plotdata.sizedata = sizedata
+        self.plotdata.mainitem.setSize(sizedata)
+
+    def _label_var(self):
+        if self.label_var != "":
+            return self.data.domain[self.label_var]
+        else:
+            return None
+
+    def _update_labels(self):
+        if self.plotdata is None:
+            return
+        labelvar = self._label_var()
+
+        if labelvar is not None:
+            labeldata = plotutils.column_data(
+                self.data, labelvar, self.plotdata.validmask)
+            labeldata = [labelvar.str_val(val) for val in labeldata]
+        else:
+            labeldata = None
+
+        if self.plotdata.labelitems:
+            for item in self.plotdata.labelitems:
+                item.setParentItem(None)
+                self.plot.removeItem(item)
+            self.plotdata.labelitems = []
+
+        if labeldata is not None:
+            coords = self.plotdata.embedding_coords
+            coords = coords / numpy.max(numpy.linalg.norm(coords, axis=1))
+            for (x, y), text in zip(coords, labeldata):
+                item = pg.TextItem(text, anchor=(0.5, 0), color=0.0)
+                item.setPos(x, y)
+                self.plot.addItem(item)
+                self.plotdata.labelitems.append(item)
+
+    def _update_legend(self):
+        self.legend.clear()
+        if self.plotdata is None:
+            return
+
+        legend_data = plotutils.legend_data(
+            self._color_var(), self._shape_var())
+        self.legend.clear()
+        self.legend.setVisible(bool(legend_data))
+
+        for color, symbol, name in legend_data:
+            self.legend.addItem(
+                linproj.ScatterPlotItem(
+                    pen=color, brush=color, symbol=symbol, size=10),
+                name)
+
+    def _update_density(self):
+        if self.plotdata is None:
+            return
+
+        if self.plotdata.densityimage is not None:
+            self.plot.removeItem(self.plotdata.densityimage)
+            self.plotdata.densityimage = None
+
+        if self.data.domain.has_discrete_class and self.class_density:
+            coords = self.plotdata.embedding_coords
+            radius = numpy.linalg.norm(coords, axis=1).max()
+            coords = coords / radius
+            xmin = ymin = -1.05
+            xmax = ymax = 1.05
+            xdata, ydata = coords.T
+            colors = plotutils.color_data(
+                self.data, self.data.domain.class_var)[self.plotdata.validmask]
+            imgitem = classdensity.class_density_image(
+                xmin, xmax, ymin, ymax, 256, xdata, ydata, colors)
+            self.plot.addItem(imgitem)
+            self.plotdata.densityimage = imgitem
 
     def _start(self):
         """
@@ -628,10 +946,11 @@ class OWFreeViz(widget.OWWidget):
             done = False
             anchors = initial
             while not done:
-                res = freeviz(X, Y, initial=anchors, p=p,
+                res = freeviz(X, Y, scale=False, center=False,
+                              initial=anchors, p=p,
                               maxiter=min(itersteps, maxiter))
-                EX, anchors_new = res
-                yield res
+                EX, anchors_new = res[:2]
+                yield res[:2]
 
                 if numpy.all(numpy.isclose(anchors, anchors_new,
                                            rtol=1e-5, atol=1e-4)):
@@ -675,43 +994,42 @@ class OWFreeViz(widget.OWWidget):
             if self.data is not None:
                 self._start()
 
-    def __update_xy(self):
+    def _update_xy(self):
         # Update the plotted embedding coordinates
         if self.plotdata is None:
             return
 
         item = self.plotdata.mainitem
         coords = self.plotdata.embedding_coords
-        rad = numpy.max(numpy.linalg.norm(coords, axis=1))
+        radius = numpy.max(numpy.linalg.norm(coords, axis=1))
+        coords = coords / radius
+        if self.jitter > 0:
+            _, factor = self.JitterAmount[self.jitter]
+            coords = coords + self.plotdata.jittervec * factor
 
-        selection = self.plotdata.selectionmask[self.plotdata.validmask]
-        selection = numpy.flatnonzero(selection)
-        brushdata = self.plotdata.brushdata
-        if selection.size:
-            pendata = numpy.full(len(brushdata), QtGui.QPen(Qt.NoPen),
-                                 dtype=object)
-            pendata[selection] = pg.mkPen((150, 150, 150), width=3)
-
-        else:
-            pendata = None
-        item.setData(x=coords[:, 0] / rad, y=coords[:, 1] / rad,
-                     brush=brushdata,
-                     pen=pendata,
+        item.setData(x=coords[:, 0], y=coords[:, 1],
+                     brush=self.plotdata.brushdata,
+                     pen=self.plotdata.pendata,
+                     size=self.plotdata.sizedata,
+                     symbol=self.plotdata.shapedata,
                      data=numpy.flatnonzero(self.plotdata.validmask)
                      )
+
         for anchor, item in zip(self.plotdata.anchors,
                                 self.plotdata.axisitems):
             item.setLine(QtCore.QLineF(0, 0, *anchor))
 
-        self.__update_anchor_visibility()
+        for (x, y), item in zip(coords, self.plotdata.labelitems):
+            item.setPos(x, y)
 
-    def __update_anchor_visibility(self):
+    def _update_anchor_visibility(self):
         # Update the anchor/axes visibility
         if self.plotdata is None:
             return
 
-        minradius = self.min_anchor_radius / 100
-        for anchor, item in zip(self.plotdata.anchors, self.plotdata.axisitems):
+        minradius = self.min_anchor_radius / 100 + 1e-5
+        for anchor, item in zip(self.plotdata.anchors,
+                                self.plotdata.axisitems):
             item.setVisible(numpy.linalg.norm(anchor) > minradius)
         self.plotdata.hidecircle.setRect(
             QtCore.QRectF(-minradius, -minradius,
@@ -719,12 +1037,17 @@ class OWFreeViz(widget.OWWidget):
 
     def __set_projection(self, res):
         # Set/update the projection matrix and coordinate embeddings
-        assert self.plotdata is not None, "__set_projection called out of turn"
-        self.progressBarAdvance(100. / self.maxiter, processEvents=False)
+        assert self.plotdata is not None, "__set_projection call unexpected"
+        _, increment = self.ReplotIntervals[self.replot_interval]
+        increment = self.maxiter if increment == -1 else increment
+        self.progressBarAdvance(
+            increment * 100. / self.maxiter, processEvents=False)
         embedding_coords, projection = res
         self.plotdata.embedding_coords = embedding_coords
         self.plotdata.anchors = projection
-        self.__update_xy()
+        self._update_xy()
+        self._update_anchor_visibility()
+        self._update_density()
 
     def __freeviz_finished(self):
         # Projection optimization has finished
@@ -780,8 +1103,7 @@ class OWFreeViz(widget.OWWidget):
         else:
             current[indices] = True
         self.plotdata.selectionmask = current
-        self.__update_xy()
-
+        self._update_color()
         self.commit()
 
     def commit(self):
@@ -825,7 +1147,7 @@ class OWFreeViz(widget.OWWidget):
                 self.data.domain.attributes,
                 metas=[Orange.data.StringVariable(name='component')])
 
-            metas = numpy.array([["Component_1"], ["Component_2"]])
+            metas = numpy.array([["FreeViz 1"], ["FreeViz 2"]])
             components = Orange.data.Table(
                 compdomain, self.plotdata.anchors.T,
                 metas=metas)
@@ -836,206 +1158,100 @@ class OWFreeViz(widget.OWWidget):
         self.send("Components", components)
 
     def sizeHint(self):
+        # reimplemented
         return QtCore.QSize(900, 700)
 
+    def eventFilter(self, recv, event):
+        # reimplemented
+        if event.type() == QtCore.QEvent.GraphicsSceneHelp and \
+                recv is self.plot.scene():
+            return self._tooltip(event)
+        else:
+            return super().eventFilter(recv, event)
 
-import numpy
-import scipy.spatial
+    def _tooltip(self, event):
+        # Handle a help event for the plot's scene
+        if self.plotdata is None:
+            return False
+
+        item = self.plotdata.mainitem
+        pos = item.mapFromScene(event.scenePos())
+        points = item.pointsAt(pos)
+        indices = [spot.data() for spot in points]
+        if not indices:
+            return False
+
+        tooltip = format_tooltip(self.data, columns=..., rows=indices)
+        QtGui.QToolTip.showText(event.screenPos(), tooltip, widget=self.plot)
+        return True
 
 
-def freeviz_gradient(X, y, embeddings, p=1, weights=None):
-    """
-    Return the gradient for the FreeViz [1]_ projection.
+def format_tooltip(table, columns, rows, maxattrs=5, maxrows=5):
+    domain = table.domain
 
-    Parameters
-    ----------
-    X : (N, P) ndarray
-        The data instance coordinates
-    y : (N, 1) ndarray
-        The instance target/class values
-    embeddings : (N, dim) ndarray
-        The current FreeViz point embeddings.
-    p : number
-        The 'power' of the force (p == 1 is [inverse] linear,  p == 2 is
-        [inverse] squared, ...)
-    weights : (N, ) ndarray, optional
-        Optional vector of sample weights.
-
-    Returns
-    -------
-    G : (P, dim) ndarray
-        The projection gradient.
-
-    .. [1] Janez Demsar, Gregor Leban, Blaz Zupan
-           FreeViz - An Intelligent Visualization Approach for Class-Labeled
-           Multidimensional Data Sets, Proceedings of IDAMAP 2005, Edinburgh.
-    """
-    X = numpy.asarray(X)
-    y = numpy.asarray(y)
-    embeddings = numpy.asarray(embeddings)
-
-    if weights is not None:
-        weights = numpy.asarray(weights)
-        if weights.ndim != 1:
-            raise ValueError("weights.ndim != 1 ({})".format(weights.ndim))
-
-    N, P = X.shape
-    _, dim = embeddings.shape
-
-    if not N == embeddings.shape[0]:
-        raise ValueError("X and embeddings must have the same length ({}!={})"
-                         .format(X.shape[0] != embeddings.shape[0]))
-
-    if weights is not None and X.shape[0] != weights.shape[0]:
-        raise ValueError("X.shape[0] != weights.shape[0] ({}!={})"
-                         .format(X.shape[0], weights.shape[0]))
-
-    # All pairwise distances between point embeddings
-    D = scipy.spatial.distance.pdist(embeddings, "euclidean")
-    D = scipy.spatial.distance.squareform(D, checks=False)
-    # All pairwise vector differences between embeddings
-    DeltaP = embeddings[:, numpy.newaxis, :] - embeddings[numpy.newaxis, :, :]
-    assert DeltaP.shape == (N, N, dim)
-    assert numpy.all(numpy.isclose(DeltaP[0, 1], embeddings[0] - embeddings[1]))
-    assert numpy.all(numpy.isclose(DeltaP[1, 0], -DeltaP[0, 1]))
-    # D = numpy.linalg.norm(DeltaP, axis=2)
-
-    nonzero_mask = D >= numpy.finfo(float).eps * 100
-    # Normalize to unit direction vectors
-    DeltaP /= numpy.where(nonzero_mask, D, 1)[:, :, numpy.newaxis]
-
-    # Handle attractive force
-    if p == 1:
-        F = -D
+    if columns is ...:
+        columns = domain.variables + domain.metas
     else:
-        F = -(D ** p)
+        columns = [domain[col] for col in columns]
 
-    mask = numpy.c_[y] != numpy.r_[y]
-    mask &= nonzero_mask
-
-    # Handle repulsive force
-    if p == 1:
-        F[mask] = 1. / D[mask]
-    else:
-        F[mask] = 1. / (D[mask] ** p)
-
-    if weights is not None:
-        # Multiply in the pairwise weights
-        F *= weights.reshape((1, N))
-        F *= weights.reshape((N, 1))
-
-    # multiply unit direction vectors with the force magnitude
-    F = DeltaP * F[:, :, numpy.newaxis]
-    assert F.shape == (N, N, dim)
-    # sum all the forces acting on a particle
-    F = numpy.sum(F, axis=0)
-    assert F.shape == (N, dim)
-    # Transfer forces to the 'anchors'
-    # (P, dim) array of gradients
-    G = X.T.dot(F)
-    assert G.shape == (P, dim)
-    return G
-
-
-def _rotate(A, ):
-    # Rotate (2D) projection A so the first anchor is aligned with
-    # vector (1, 0)
-    phi = numpy.arctan2(A[0, 1], A[0, 0])
-    R = [[numpy.cos(-phi), numpy.sin(-phi)],
-         [-numpy.sin(-phi), numpy.cos(-phi)]]
-    return numpy.dot(A, R)
-
-
-def freeviz(X, y, weights=None, dim=2, p=1, initial=None, maxiter=500,
-            lambda_=0.1, atol=1e-5):
-    """
-    FreeViz
-
-    Compute a linear lower dimensional projection to optimize separation
-    between classes ([1]_).
-
-    Parameters
-    ----------
-    X : (N, P) ndarray
-        The input data instances
-    y : (N, ) ndarray
-        The instance class labels
-    weights : (N, ) ndarray, optional
-        Instance weights
-    dim : int
-        The dimension of the projected points
-    p : number
-        The force 'power', e.g. if p=1 the attractive/repulsive forces
-        follow linear/inverse linear law, for p=2 the forces follow
-        square/inverse square law, ...
-    initial : (P, dim) ndarray, optional
-        Initial projection matrix
-    maxiter : int
-        Maximum number of iterations.
-
-    Returns
-    -------
-    embeddings : (N, dim) ndarray
-        The point projections (`= X.dot(P)`)
-    P : (P, dim)
-        The projection matrix.
-
-    .. [1] Janez Demsar, Gregor Leban, Blaz Zupan
-           FreeViz - An Intelligent Visualization Approach for Class-Labeled
-           Multidimensional Data Sets, Proceedings of IDAMAP 2005, Edinburgh.
-    """
-    X = numpy.asarray(X)
-    y = numpy.asarray(y)
-    N, P = X.shape
-    _N, = y.shape
-    if N != _N:
-        raise ValueError("X and y must have the same length")
-
-    if weights is not None:
-        weights = numpy.asarray(weights)
-
-    if initial is not None:
-        initial = numpy.asarray(initial)
-        if initial.ndim != 2 or initial.shape != (P, dim):
+    def role(domain, var):
+        if var in domain.attributes:
+            return 0
+        elif var in domain.class_vars:
+            return 1
+        elif var in domain.metas:
+            return 2
+        else:
             raise ValueError
+
+    attrs, class_vars, metas = [], [], []
+    for var in columns:
+        [attrs, class_vars, metas][role(domain, var)].append(var)
+
+    tooltip_lines = []
+    for row_idx in rows[:maxrows]:
+        row = table[row_idx]
+        lines = ["Attributes:"]
+        lines.extend('   {} = {}'.format(attr.name, row[attr])
+                     for attr in attrs[:maxattrs])
+
+        if len(attrs) > maxattrs:
+            lines.append("   ... and {} others".format(len(attrs) - maxattrs))
+
+        if class_vars:
+            lines.append("Class:")
+            lines.extend("   {} = {}".format(var.name, row[var])
+                         for var in class_vars)
+
+        if metas:
+            lines.append("Metas:")
+            lines.extend("   {} = {}".format(var.name, row[var])
+                         for var in metas)
+
+        tooltip_lines.append("\n".join(lines))
+
+    if len(rows) > maxrows:
+        tooltip_lines.append("... {} more".format(len(rows) - maxrows))
+    text = "\n------------------\n".join(tooltip_lines)
+    text = ('<span style="white-space:pre">{}</span>'
+            .format(escape(text)))
+    return text
+
+
+def size_data(table, var, pointsize=3):
+    if var is None:
+        return numpy.full(len(table), pointsize, dtype=float)
     else:
-        initial = numpy.random.random((P, dim)) * 2 - 1
+        size_data, _ = table.get_column_view(var)
+        cmin, cmax = numpy.nanmin(size_data), numpy.nanmax(size_data)
+        if cmax - cmin > 0:
+            size_data = (size_data - cmin) / (cmax - cmin)
+        else:
+            size_data = numpy.zeros(len(table))
 
-    A = initial
-    embeddings = numpy.dot(X, A)
-
-    step_i = 0
-    while step_i < maxiter:
-        G = freeviz_gradient(X, y, embeddings, p=p, weights=weights)
-
-        # Scale the changes (the largest anchor move is lambda * radius)
-        maxg = numpy.max(numpy.linalg.norm(G, axis=1))
-        maxr = numpy.max(numpy.linalg.norm(A, axis=1))
-
-        step = lambda_ * maxr / maxg
-        Anew = A - step * G
-
-        # Center anchors (?? This does not seem right; it changes the
-        # projection axes direction somewhat arbitrarily)
-        Anew = Anew - numpy.mean(Anew, axis=0)
-
-        # Scale (so that the largest radius is 1)
-        maxr = numpy.max(numpy.linalg.norm(Anew, axis=1))
-        if maxr >= 0.001:
-            Anew /= maxr
-
-        if dim == 2:
-            Anew = _rotate(Anew)
-
-        change = numpy.linalg.norm(Anew - A, axis=1)
-        if numpy.all(numpy.isclose(change, 0, atol=atol)):
-            break
-
-        A = Anew
-        embeddings = numpy.dot(X, A)
-        step_i = step_i + 1
-
-    return embeddings, A
+        size_data = size_data * pointsize + 3
+        size_data[numpy.isnan(size_data)] = 1
+        return size_data
 
 
 def main(argv=sys.argv):
@@ -1054,6 +1270,7 @@ def main(argv=sys.argv):
     app.exec_()
     w.set_data(None)
     w.handleNewSignals()
+    w.saveSettings()
     return 0
 
 if __name__ == "__main__":
