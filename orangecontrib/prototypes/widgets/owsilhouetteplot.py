@@ -495,10 +495,19 @@ class SilhouettePlot(QtGui.QGraphicsWidget):
         ax.setRange(smin, smax)
         self.layout().addItem(ax, len(self.__groups) + 1, 2)
 
+    def __updateTextSizeConstraint(self):
+        # set/update fixed height constraint on the text annotation items so
+        # it matches the silhouette's height
+        for silitem, textitem in zip(self.__plotItems(), self.__textItems()):
+            height = silitem.effectiveSizeHint(Qt.PreferredSize).height()
+            textitem.setMaximumHeight(height)
+            textitem.setMinimumHeight(height)
+
     def event(self, event):
         # Reimplemented
         if event.type() == QEvent.LayoutRequest and \
                 self.parentLayoutItem() is None:
+            self.__updateTextSizeConstraint()
             self.resize(self.effectiveSizeHint(Qt.PreferredSize))
         return super().event(event)
 
@@ -957,8 +966,8 @@ class TextListWidget(QtGui.QGraphicsWidget):
 
 
 def main(argv=sys.argv):
-    app = QtGui.QApplication(list(sys.argv))
-    argv = app.argv()
+    app = QtGui.QApplication(list(argv))
+    argv = app.arguments()
     if len(argv) > 1:
         filename = argv[1]
     else:
