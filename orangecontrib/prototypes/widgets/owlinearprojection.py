@@ -248,7 +248,7 @@ class OWLinearProjection(widget.OWWidget):
 
     ReplotRequest = QEvent.registerEventType()
 
-    want_graph = True
+    graph_name = "viewbox"
 
     def __init__(self):
         super().__init__()
@@ -497,7 +497,6 @@ class OWLinearProjection(widget.OWWidget):
         toollayout.addWidget(button(actions.zoomtofit))
         toollayout.addStretch()
         toolbox.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum)
-        self.graphButton.clicked.connect(self.save_graph)
 
     def sizeHint(self):
         return QSize(800, 500)
@@ -1065,13 +1064,6 @@ class OWLinearProjection(widget.OWWidget):
                 subset = self.data[indices]
 
         self.send("Selected Data", subset)
-
-    def save_graph(self):
-        from Orange.widgets.data.owsave import OWSave
-
-        save_img = OWSave(data=self.viewbox,
-                          file_formats=FileFormat.img_writers)
-        save_img.exec_()
 
 
 class PlotTool(QObject):
