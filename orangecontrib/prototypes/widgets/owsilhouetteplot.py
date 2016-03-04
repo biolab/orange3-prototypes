@@ -108,21 +108,33 @@ class OWSilhouettePlot(widget.OWWidget):
         self.closeContext()
         self.clear()
         error_msg = ""
+        warning_msg = ""
+        candidatevars = []
         if data is not None:
             candidatevars = [v for v in data.domain.variables + data.domain.metas
                              if v.is_discrete and len(v.values) >= 2]
             if not candidatevars:
                 error_msg = "Input does not have any suitable cluster labels."
                 data = None
-            else:
-                self.cluster_var_model[:] = candidatevars
-                if data.domain.class_var in candidatevars:
-                    self.cluster_var_idx = candidatevars.index(data.domain.class_var)
-                else:
-                    self.cluster_var_idx = 0
+
+        if data is not None:
+            ncont = sum(v.is_continuous for v in data.domain.attributes)
+            ndiscrete = len(data.domain.attributes) - ncont
+            if ncont == 0:
+                data = None
+                error_msg = "No continuous columns"
+            elif ncont < len(data.domain.attributes):
+                warning_msg = "{0} discrete columns will not be used for " \
+                              "distance computation".format(ndiscrete)
 
         self.data = data
         if data is not None:
+            self.cluster_var_model[:] = candidatevars
+            if data.domain.class_var in candidatevars:
+                self.cluster_var_idx = candidatevars.index(data.domain.class_var)
+            else:
+                self.cluster_var_idx = 0
+
             annotvars = [var for var in data.domain.metas if var.is_string]
             self.annotation_var_model[:] = ["None"] + annotvars
             self.annotation_var_idx = 1 if len(annotvars) else 0
@@ -130,6 +142,7 @@ class OWSilhouettePlot(widget.OWWidget):
             self.openContext(Orange.data.Domain(candidatevars))
 
         self.error(0, error_msg)
+        self.warning(0, warning_msg)
 
     def handleNewSignals(self):
         if self._effective_data is not None:
