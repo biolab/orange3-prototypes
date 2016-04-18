@@ -44,7 +44,7 @@ class OWPythagorasTree(OWWidget):
         # Different methods to calculate the size of squares
         self.SIZE_CALCULATION = [
             ('Normal', lambda x: x),
-            ('Sqrt', lambda x: sqrt(x)),
+            ('Square root', lambda x: sqrt(x)),
             ('Logarithmic', lambda x: log(x * self.size_log_scale)),
         ]
 
@@ -74,15 +74,21 @@ class OWPythagorasTree(OWWidget):
             box_display, self, 'target_class_index', label='Target class',
             orientation='horizontal', items=[], contentsLength=8,
             callback=self.update_colors)
-        gui.comboBox(
+        self.size_calc_combo = gui.comboBox(
             box_display, self, 'size_calc_idx', label='Size',
             orientation='horizontal',
             items=list(zip(*self.SIZE_CALCULATION))[0], contentsLength=8,
-            callback=self.invalidate_tree)
-        self.log_scale_slider = gui.hSlider(
-            box_display, self, 'size_log_scale', label='Log scale',
+            callback=self.update_size_calc)
+        # the log slider needs its own box to be able to be completely hidden
+        self.log_scale_box = gui.widgetBox(box_display)
+        gui.hSlider(
+            self.log_scale_box, self, 'size_log_scale', label='Log scale',
             minValue=1, maxValue=100, ticks=False,
             callback=self.invalidate_tree)
+        # the log scale slider should only be visible if the calc method is log
+        if self.SIZE_CALCULATION[self.size_calc_idx][0] != 'Logarithmic':
+            self.log_scale_box.setEnabled(False)
+            self.log_scale_box.setVisible(False)
 
         # Stretch to fit the rest of the unsused area
         gui.rubber(self.controlArea)
@@ -136,6 +142,16 @@ class OWPythagorasTree(OWWidget):
         """When the colors of the nodes need to be updated."""
         for square in self._get_scene_squares():
             square.setBrush(self._get_node_color(square.tree_node))
+
+    def update_size_calc(self):
+        """On calc method combo box changed."""
+        if self.SIZE_CALCULATION[self.size_calc_idx][0] == 'Logarithmic':
+            self.log_scale_box.setEnabled(True)
+            self.log_scale_box.setVisible(True)
+        else:
+            self.log_scale_box.setEnabled(False)
+            self.log_scale_box.setVisible(False)
+        self.invalidate_tree()
 
     def clear(self):
         """Clear all relevant data from the widget."""
@@ -323,11 +339,14 @@ class OWPythagorasTree(OWWidget):
 class ZoomableGraphicsView(QtGui.QGraphicsView):
     def __init__(self, *args, **kwargs):
         self.zoom = 1
+        self._size_was_reset = False
         super().__init__(*args, **kwargs)
 
     def resizeEvent(self, ev):
         super().resizeEvent(ev)
+        # if not self._size_was_reset:
         if self.zoom == 1:
+            self._size_was_reset = True
             self.fitInView(self.scene().itemsBoundingRect(),
                            Qt.KeepAspectRatio)
 
@@ -341,6 +360,7 @@ class ZoomableGraphicsView(QtGui.QGraphicsView):
     def reset_zoom(self):
         """Reset the zoom to the initial size."""
         self.zoom = 1
+        self._size_was_reset = False
         k = 0.0028 * (self.zoom ** 2) + 0.2583 * self.zoom + 1.1389
         self.setTransform(QtGui.QTransform().scale(k / 2, k / 2))
 
