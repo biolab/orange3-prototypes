@@ -67,10 +67,6 @@ class OWPythagorasTree(OWWidget):
 
         # Display controls area
         box_display = gui.widgetBox(self.controlArea, 'Display')
-        gui.hSlider(
-            box_display, self, 'zoom', label='Zoom',
-            minValue=1, maxValue=50, ticks=False,
-            callback=self._update_zoom_slider)
         self.depth_slider = gui.hSlider(
             box_display, self, 'depth_limit', label='Depth', ticks=False,
             callback=self.update_depth)
@@ -102,7 +98,7 @@ class OWPythagorasTree(OWWidget):
 
         # GUI - MAIN AREA
         self.scene = QtGui.QGraphicsScene(self)
-        self.view = ZoomableGraphicsView(self.scene, self.mainArea)
+        self.view = TreeGraphicsView(self.scene, self.mainArea)
         self.view.setRenderHint(QtGui.QPainter.Antialiasing)
 
         self.mainArea.layout().addWidget(self.view)
@@ -130,7 +126,6 @@ class OWPythagorasTree(OWWidget):
         self._clear_scene()
         self._get_tree_adapter(self.model)
         self._draw_tree(self._calculate_tree())
-
         self._update_main_area()
 
     def update_depth(self):
@@ -154,13 +149,11 @@ class OWPythagorasTree(OWWidget):
         self._clear_target_class_combo()
         self._clear_depth_slider()
 
-    def showEvent(self, ev):
-        # self.view.fitInView(self.scene.sceneRect(), Qt.KeepAspectRatio)
-        pass
-
     def _update_main_area(self):
-        # self.view.fitInView(self.scene.sceneRect(), Qt.KeepAspectRatio)
-        self.mainArea.update()
+        # refresh the scene rect, cuts away the excess whitespace
+        self.scene.setSceneRect(self.scene.itemsBoundingRect())
+        # fits the scene into the viewport
+        self.view.fitInView(self.scene.sceneRect(), Qt.KeepAspectRatio)
 
     def _update_info_box(self):
         self.info.setText(
@@ -172,11 +165,6 @@ class OWPythagorasTree(OWWidget):
 
     def _clear_info_box(self):
         self.info.setText('No tree')
-
-    def _update_zoom_slider(self):
-        k = 0.0028 * (self.zoom ** 2) + 0.2583 * self.zoom + 1.1389
-        self.view.setTransform(QtGui.QTransform().scale(k / 2, k / 2))
-        self.scene.update()
 
     def _update_depth_slider(self):
         self.depth_slider.setEnabled(True)
@@ -317,6 +305,7 @@ class OWPythagorasTree(OWWidget):
         self.frontier.clear()
         self.drawn_nodes.clear()
         self.square_objects.clear()
+        self.view.reset_zoom()
 
     def onDeleteWidget(self):
         """When deleting the widget."""
@@ -336,14 +325,34 @@ class ZoomableGraphicsView(QtGui.QGraphicsView):
         self.zoom = 1
         super().__init__(*args, **kwargs)
 
+    def resizeEvent(self, ev):
+        super().resizeEvent(ev)
+        if self.zoom == 1:
+            self.fitInView(self.scene().itemsBoundingRect(),
+                           Qt.KeepAspectRatio)
+
     def wheelEvent(self, ev):
-        center_before = self.mapToScene(ev.pos())
-        if ev.delta() > 0:
-            self.zoom += 1
-        else:
-            self.zoom -= 1
+        self.zoom += np.sign(ev.delta()) * 1
+        k = 0.0028 * (self.zoom ** 2) + 0.2583 * self.zoom + 1.1389
+        self.setTransformationAnchor(self.AnchorUnderMouse)
+        self.setTransform(QtGui.QTransform().scale(k / 2, k / 2))
+        ev.accept()
+
+    def reset_zoom(self):
+        """Reset the zoom to the initial size."""
+        self.zoom = 1
         k = 0.0028 * (self.zoom ** 2) + 0.2583 * self.zoom + 1.1389
         self.setTransform(QtGui.QTransform().scale(k / 2, k / 2))
+
+
+class PannableGraphicsView(QtGui.QGraphicsView):
+    def __init__(self, *args, **kwargs):
+        self.panning = False
+        super().__init__(*args, **kwargs)
+
+
+class TreeGraphicsView(PannableGraphicsView, ZoomableGraphicsView):
+    pass
 
 
 class SquareGraphicsItem(QtGui.QGraphicsRectItem):
