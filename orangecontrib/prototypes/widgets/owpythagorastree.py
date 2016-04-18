@@ -69,7 +69,8 @@ class OWPythagorasTree(OWWidget):
         box_display = gui.widgetBox(self.controlArea, 'Display')
         gui.hSlider(
             box_display, self, 'zoom', label='Zoom',
-            minValue=1, ticks=False, callback=None)
+            minValue=1, maxValue=50, ticks=False,
+            callback=self._update_zoom_slider)
         self.depth_slider = gui.hSlider(
             box_display, self, 'depth_limit', label='Depth', ticks=False,
             callback=self.update_depth)
@@ -82,7 +83,7 @@ class OWPythagorasTree(OWWidget):
             orientation='horizontal',
             items=list(zip(*self.SIZE_CALCULATION))[0], contentsLength=8,
             callback=self.invalidate_tree)
-        gui.hSlider(
+        self.log_scale_slider = gui.hSlider(
             box_display, self, 'size_log_scale', label='Log scale',
             minValue=1, maxValue=100, ticks=False,
             callback=self.invalidate_tree)
@@ -94,19 +95,14 @@ class OWPythagorasTree(OWWidget):
         gui.auto_commit(
             self.controlArea, self, value='auto_commit',
             label='Send selected instances', auto_label='Auto send is on')
+        self.inline_graph_report()
+
+        self.controlArea.setSizePolicy(
+            QtGui.QSizePolicy.Preferred, QtGui.QSizePolicy.Expanding)
 
         # GUI - MAIN AREA
         self.scene = QtGui.QGraphicsScene(self)
-        self.view = QtGui.QGraphicsView(self.scene, self.mainArea)
-
-        # Flip y axis for sane drawing
-        matrix = QtGui.QMatrix()
-        matrix.scale(1, -1)
-        self.view.setMatrix(matrix)
-
-        # self.view.setAlignment(Qt.AlignBottom | Qt.AlignHCenter)
-        self.view.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.view.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.view = ZoomableGraphicsView(self.scene, self.mainArea)
         self.view.setRenderHint(QtGui.QPainter.Antialiasing)
 
         self.mainArea.layout().addWidget(self.view)
@@ -115,18 +111,27 @@ class OWPythagorasTree(OWWidget):
         """When a different tree is given."""
         self.clear()
         self.model = model
+
         if model is not None:
+            self._get_tree_adapter(self.model)
+            self._calculate_tree()
+
             self.domain = model.domain
-            self.invalidate_tree()
+
             self._update_info_box()
             self._update_target_class_combo()
             self._update_depth_slider()
+
+            self._draw_tree(self.tree)
+            self._update_main_area()
 
     def invalidate_tree(self):
         """When the tree needs to be recalculated."""
         self._clear_scene()
         self._get_tree_adapter(self.model)
         self._draw_tree(self._calculate_tree())
+
+        self._update_main_area()
 
     def update_depth(self):
         """This method should be called when the depth changes"""
@@ -143,7 +148,19 @@ class OWPythagorasTree(OWWidget):
         self.model = None
         self.tree_adapter = None
         self.tree = None
+
         self._clear_scene()
+        self._clear_info_box()
+        self._clear_target_class_combo()
+        self._clear_depth_slider()
+
+    def showEvent(self, ev):
+        # self.view.fitInView(self.scene.sceneRect(), Qt.KeepAspectRatio)
+        pass
+
+    def _update_main_area(self):
+        # self.view.fitInView(self.scene.sceneRect(), Qt.KeepAspectRatio)
+        self.mainArea.update()
 
     def _update_info_box(self):
         self.info.setText(
@@ -153,8 +170,34 @@ class OWPythagorasTree(OWWidget):
             )
         )
 
+    def _clear_info_box(self):
+        self.info.setText('No tree')
+
+    def _update_zoom_slider(self):
+        k = 0.0028 * (self.zoom ** 2) + 0.2583 * self.zoom + 1.1389
+        self.view.setTransform(QtGui.QTransform().scale(k / 2, k / 2))
+        self.scene.update()
+
     def _update_depth_slider(self):
+        self.depth_slider.setEnabled(True)
         self.depth_slider.setMaximum(self.tree_adapter.max_depth)
+        self.depth_limit = self.tree_adapter.max_depth
+        self.depth_slider.setValue(self.depth_limit)
+
+    def _clear_depth_slider(self):
+        self.depth_slider.setEnabled(False)
+        self.depth_slider.setMaximum(0)
+
+    def _update_target_class_combo(self):
+        self._clear_target_class_combo()
+        values = [c.title() for c in self.domain.class_vars[0].values]
+        self.target_class_combo.addItems(values)
+
+    def _clear_target_class_combo(self):
+        self.target_class_combo.clear()
+        self.target_class_combo.addItem('None')
+        self.target_class_index = 0
+        self.target_class_combo.setCurrentIndex(self.target_class_index)
 
     def _get_tree_adapter(self, model):
         self.tree_adapter = SklTreeAdapter(
@@ -162,22 +205,11 @@ class OWPythagorasTree(OWWidget):
             adjust_weight=self.SIZE_CALCULATION[self.size_calc_idx][1],
         )
 
-    def _update_target_class_combo(self):
-        self.target_class_combo.clear()
-        self.target_class_combo.addItem('None')
-        values = [c.title() for c in self.domain.class_vars[0].values]
-        self.target_class_combo.addItems(values)
-        # make sure we don't attempt to assign an index gt than the number of
-        # classes
-        if self.target_class_index >= len(values):
-            self.target_class_index = 0
-        self.target_class_combo.setCurrentIndex(self.target_class_index)
-
     def _calculate_tree(self):
         # Actually calculate the tree squares
         tree_builder = PythagorasTree()
         self.tree = tree_builder.pythagoras_tree(
-            self.tree_adapter, 0, Square(Point(0, 0), 200, pi / 2)
+            self.tree_adapter, 0, Square(Point(0, 0), 200, -pi / 2)
         )
         return self.tree
 
@@ -217,6 +249,9 @@ class OWPythagorasTree(OWWidget):
         -------
 
         """
+        # TODO figure out why this has to be here and fix it.
+        if self.tree is None:
+            return
         # if this is the first time drawing the tree begin with root
         if not self.drawn_nodes:
             self.frontier.appendleft((0, root))
@@ -294,6 +329,21 @@ class OWPythagorasTree(OWWidget):
 
     def send_report(self):
         pass
+
+
+class ZoomableGraphicsView(QtGui.QGraphicsView):
+    def __init__(self, *args, **kwargs):
+        self.zoom = 1
+        super().__init__(*args, **kwargs)
+
+    def wheelEvent(self, ev):
+        center_before = self.mapToScene(ev.pos())
+        if ev.delta() > 0:
+            self.zoom += 1
+        else:
+            self.zoom -= 1
+        k = 0.0028 * (self.zoom ** 2) + 0.2583 * self.zoom + 1.1389
+        self.setTransform(QtGui.QTransform().scale(k / 2, k / 2))
 
 
 class SquareGraphicsItem(QtGui.QGraphicsRectItem):
@@ -586,7 +636,7 @@ class SklTreeAdapter:
 
         """
         return self._adjust_weight(self.num_samples(node)) / \
-               self._adjusted_child_weight(self.parent(node))
+            self._adjusted_child_weight(self.parent(node))
 
     @lru_cache()
     def _adjusted_child_weight(self, node):
