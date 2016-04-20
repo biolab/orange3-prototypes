@@ -670,7 +670,38 @@ class PythagorasTree:
         )
 
 
-class SklTreeAdapter:
+class TreeAdapter:
+    def weight(self, node):
+        raise NotImplemented()
+
+    def num_samples(self, node):
+        raise NotImplemented()
+
+    def parent(self, node):
+        raise NotImplemented()
+
+    def has_children(self, node):
+        raise NotImplemented()
+
+    def is_leaf(self, node):
+        return not self.has_children(node)
+
+    def get_distribution(self, node):
+        raise NotImplemented()
+
+    def get_impurity(self, node):
+        raise NotImplemented()
+
+    @property
+    def max_depth(self):
+        raise NotImplemented()
+
+    @property
+    def num_nodes(self):
+        raise NotImplemented()
+
+
+class SklTreeAdapter(TreeAdapter):
     """SklTreeAdapter Class.
 
     An abstraction on top of the scikit learn classification tree.
