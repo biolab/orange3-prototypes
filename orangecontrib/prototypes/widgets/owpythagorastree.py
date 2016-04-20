@@ -7,11 +7,8 @@ import numpy as np
 from PyQt4 import QtGui, QtCore
 from PyQt4.QtCore import Qt
 
-import Orange
-from Orange.classification.tree import TreeClassifier
 from Orange.data.table import Table
 from Orange.widgets import gui, settings
-from Orange.widgets.utils.colorpalette import DefaultRGBColors
 from Orange.widgets.widget import OWWidget
 
 # Please note that all angles are in radians
@@ -20,14 +17,13 @@ Point = namedtuple('Point', ['x', 'y'])
 
 
 class OWPythagorasTree(OWWidget):
-    name = 'Pythagoras Tree'
-    description = 'Generalized Pythagoras Tree for visualizing trees.'
+    # name = 'Pythagoras Tree'
+    # description = 'Generalized Pythagoras Tree for visualizing trees.'
     priority = 100
 
     # Enable the save as feature
     graph_name = True
 
-    inputs = [('Classification Tree', TreeClassifier, 'set_tree')]
     outputs = [('Selected Data', Table)]
 
     # Settings
@@ -53,12 +49,11 @@ class OWPythagorasTree(OWWidget):
         self.model = None
         self.tree_adapter = None
         self.tree = None
+        self.color_palette = None
 
         self.square_objects = {}
         self.drawn_nodes = deque()
         self.frontier = deque()
-
-        self.color_palette = [QtGui.QColor(*c) for c in DefaultRGBColors]
 
         # CONTROL AREA
         # Tree info area
@@ -119,6 +114,7 @@ class OWPythagorasTree(OWWidget):
             self._calculate_tree()
 
             self.domain = model.domain
+            self.color_palette = self._get_color_palette()
 
             self._update_info_box()
             self._update_target_class_combo()
@@ -197,21 +193,43 @@ class OWPythagorasTree(OWWidget):
         self.depth_slider.setValue(self.depth_limit)
 
     def _update_target_class_combo(self):
-        self._clear_target_class_combo()
-        values = [c.title() for c in self.domain.class_vars[0].values]
-        self.target_class_combo.addItems(values)
+        """Method that sets the appropriate options for the target combo box.
+
+        Different trees need different target classes, so you've got to
+        implement them here. E.g. classification trees need the classes as
+        targets whereas regression trees want impurity and number of samples.
+
+        Returns
+        -------
+        void
+
+        """
+        raise NotImplemented()
 
     def _clear_target_class_combo(self):
         self.target_class_combo.clear()
-        self.target_class_combo.addItem('None')
         self.target_class_index = 0
         self.target_class_combo.setCurrentIndex(self.target_class_index)
 
     def _get_tree_adapter(self, model):
-        self.tree_adapter = SklTreeAdapter(
-            model.skl_model.tree_,
-            adjust_weight=self.SIZE_CALCULATION[self.size_calc_idx][1],
-        )
+            self.tree_adapter = SklTreeAdapter(
+                model.skl_model.tree_,
+                adjust_weight=self.SIZE_CALCULATION[self.size_calc_idx][1],
+            )
+
+    def _get_color_palette(self):
+        """Different trees require different color palettes.
+
+        You must implement the method so that it returns a list of QColor
+        objects. This list will directly be used in the _get_node_color method.
+
+        Returns
+        -------
+        Iterable[QtGui.QColor]
+            A list of QColors that will later be used to determine node colors.
+
+        """
+        raise NotImplemented()
 
     def _calculate_tree(self):
         # Actually calculate the tree squares
@@ -301,20 +319,23 @@ class OWPythagorasTree(OWWidget):
                 self.scene.addItem(self.square_objects[node.label])
 
     def _get_node_color(self, tree_node):
-        # this is taken almost directly from the existing classification tree
-        # viewer
-        colors = self.color_palette
-        distribution = self.tree_adapter.get_distribution(tree_node.label)[0]
-        total = self.tree_adapter.num_samples(tree_node.label)
+        """Get the color of a given node in a tree.
 
-        if self.target_class_index:
-            p = distribution[self.target_class_index - 1] / total
-            color = colors[self.target_class_index - 1].light(200 - 100 * p)
-        else:
-            modus = np.argmax(distribution)
-            p = distribution[modus] / (total or 1)
-            color = colors[int(modus)].light(400 - 300 * p)
-        return color
+        Since different trees need different colorings, you must implement the
+        the method to calculate the color for any given node.
+
+        Parameters
+        ----------
+        tree_node : TreeNode
+            The tree node instance for which to calculate the color.
+
+        Returns
+        -------
+        QtGui.QColor
+            The color of a given node
+
+        """
+        raise NotImplemented()
 
     def _get_scene_squares(self):
         return filter(lambda i: isinstance(i, SquareGraphicsItem),
@@ -758,32 +779,3 @@ class SklTreeAdapter:
     @property
     def num_nodes(self):
         return self._tree.node_count
-
-
-def main():
-    import sys
-    from Orange.classification.tree import TreeLearner
-
-    argv = sys.argv
-    if len(argv) > 1:
-        filename = argv[1]
-    else:
-        filename = "iris"
-
-    app = QtGui.QApplication(argv)
-    ow = OWPythagorasTree()
-    data = Orange.data.Table(filename)
-    clf = TreeLearner(max_depth=1000)(data)
-    clf.instances = data
-    ow.set_tree(clf)
-
-    ow.show()
-    ow.raise_()
-    ow.handleNewSignals()
-    app.exec_()
-
-    sys.exit(0)
-
-
-if __name__ == '__main__':
-    main()
