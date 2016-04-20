@@ -131,6 +131,7 @@ class OWPythagorasTree(OWWidget):
         """When the tree needs to be recalculated."""
         self._clear_scene()
         self._get_tree_adapter(self.model)
+        self._set_max_depth()
         self._draw_tree(self._calculate_tree())
         self._update_main_area()
 
@@ -185,12 +186,15 @@ class OWPythagorasTree(OWWidget):
     def _update_depth_slider(self):
         self.depth_slider.setEnabled(True)
         self.depth_slider.setMaximum(self.tree_adapter.max_depth)
-        self.depth_limit = self.tree_adapter.max_depth
-        self.depth_slider.setValue(self.depth_limit)
+        self._set_max_depth()
 
     def _clear_depth_slider(self):
         self.depth_slider.setEnabled(False)
         self.depth_slider.setMaximum(0)
+
+    def _set_max_depth(self):
+        self.depth_limit = self.tree_adapter.max_depth
+        self.depth_slider.setValue(self.depth_limit)
 
     def _update_target_class_combo(self):
         self._clear_target_class_combo()
@@ -339,6 +343,9 @@ class OWPythagorasTree(OWWidget):
 class ZoomableGraphicsView(QtGui.QGraphicsView):
     def __init__(self, *args, **kwargs):
         self.zoom = 1
+        # zoomout limit prevents the zoom factor to become negative, which
+        # results in the canvas being flipped over the x axis
+        self._zoomout_limit_reached = False
         self._size_was_reset = False
         super().__init__(*args, **kwargs)
 
@@ -351,11 +358,31 @@ class ZoomableGraphicsView(QtGui.QGraphicsView):
                            Qt.KeepAspectRatio)
 
     def wheelEvent(self, ev):
+        if self._zooming_in(ev):
+            self._reset_zoomout_limit()
+        if self._zoomout_limit_reached and self._zooming_out(ev):
+            ev.accept()
+            return
+
         self.zoom += np.sign(ev.delta()) * 1
         k = 0.0028 * (self.zoom ** 2) + 0.2583 * self.zoom + 1.1389
-        self.setTransformationAnchor(self.AnchorUnderMouse)
-        self.setTransform(QtGui.QTransform().scale(k / 2, k / 2))
+        if k <= 0:
+            self._zoomout_limit_reached = True
+            self.zoom += 1
+        else:
+            self.setTransformationAnchor(self.AnchorUnderMouse)
+            self.setTransform(QtGui.QTransform().scale(k / 2, k / 2))
         ev.accept()
+
+    @staticmethod
+    def _zooming_out(ev):
+        return ev.delta() < 0
+
+    def _zooming_in(self, ev):
+        return not self._zooming_out(ev)
+
+    def _reset_zoomout_limit(self):
+        self._zoomout_limit_reached = False
 
     def reset_zoom(self):
         """Reset the zoom to the initial size."""
