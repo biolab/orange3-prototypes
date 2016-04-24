@@ -4,6 +4,7 @@ import Orange
 import numpy as np
 from Orange.data.table import Table
 from Orange.widgets import gui, settings
+from Orange.widgets.utils.colorpalette import DefaultRGBColors
 from Orange.widgets.widget import OWWidget
 from PyQt4 import QtGui
 from PyQt4.QtCore import Qt
@@ -183,7 +184,7 @@ class OWPythagorasTree(OWWidget):
         self.depth_slider.setValue(self.depth_limit)
 
     def _update_target_class_combo(self):
-        raise NotImplemented()
+        return []
 
     def _clear_target_class_combo(self):
         self.target_class_combo.clear()
@@ -191,13 +192,13 @@ class OWPythagorasTree(OWWidget):
         self.target_class_combo.setCurrentIndex(self.target_class_index)
 
     def _get_color_palette(self):
-        raise NotImplemented()
+        return [QtGui.QColor(*c) for c in DefaultRGBColors]
 
     def _get_node_color(self, tree_node):
-        raise NotImplemented()
+        return self.color_palette[0]
 
     def _get_tree_adapter(self, model):
-        raise NotImplemented()
+        return model
 
     def _update_main_area(self):
         # refresh the scene rect, cuts away the excess whitespace

@@ -164,7 +164,7 @@ class PythagorasTreeViewer(QtGui.QGraphicsWidget):
         """Actually calculate the tree squares"""
         tree_builder = PythagorasTree()
         return tree_builder.pythagoras_tree(
-            tree_adapter, 0, Square(Point(0, 0), 200, -pi / 2)
+            tree_adapter, tree_adapter.root, Square(Point(0, 0), 200, -pi / 2)
         )
 
     def _draw_tree(self, root):
@@ -359,7 +359,7 @@ class PythagorasTree:
 
         """
         # make sure to clear out any old slopes if we are drawing a new tree
-        if node == 0:
+        if node == tree.root:
             self._slopes.clear()
 
         children = tuple(
@@ -520,7 +520,7 @@ class TreeAdapter:
 
         Parameters
         ----------
-        node : int
+        node : object
             The label of the node.
 
         Returns
@@ -532,36 +532,145 @@ class TreeAdapter:
         raise NotImplemented()
 
     def num_samples(self, node):
+        """Get the number of samples that a given node contains.
+
+        Parameters
+        ----------
+        node : object
+            A unique identifier of a node.
+
+        Returns
+        -------
+        int
+
+        """
         raise NotImplemented()
 
     def parent(self, node):
+        """Get the parent of a given node. Return -1 if the node is the root.
+
+        Parameters
+        ----------
+        node : object
+
+        Returns
+        -------
+        object
+
+        """
         raise NotImplemented()
 
     def has_children(self, node):
+        """Check if the given node has any children.
+
+        Parameters
+        ----------
+        node : object
+
+        Returns
+        -------
+        bool
+
+        """
         raise NotImplemented()
 
     def is_leaf(self, node):
+        """Check if the given node is a leaf node.
+
+        Parameters
+        ----------
+        node : object
+
+        Returns
+        -------
+        object
+
+        """
         return not self.has_children(node)
 
     def children(self, node):
+        """Get all the children of a given node.
+
+        Parameters
+        ----------
+        node : object
+
+        Returns
+        -------
+        Iterable[object]
+            A iterable object containing the labels of the child nodes.
+
+        """
         raise NotImplemented()
 
     def get_distribution(self, node):
+        """Get the distribution of types for a given node.
+
+        This may be the number of nodes that belong to each different classe in
+        a node.
+
+        Parameters
+        ----------
+        node : object
+
+        Returns
+        -------
+        Iterable[int, ...]
+            The return type is an iterable with as many fields as there are
+            different classes in the given node. The values of the fields are
+            the number of nodes that belong to a given class inside the node.
+
+        """
         raise NotImplemented()
 
     def get_impurity(self, node):
+        """Get the impurity of a given node.
+
+        Parameters
+        ----------
+        node : object
+
+        Returns
+        -------
+        object
+
+        """
         raise NotImplemented()
 
     @property
     def max_depth(self):
+        """Get the maximum depth that the tree reaches.
+
+        Returns
+        -------
+        int
+
+        """
         raise NotImplemented()
 
     @property
     def num_nodes(self):
+        """Get the total number of nodes that the tree contains.
+
+        This does not mean the number of samples inside the entire tree, just
+        the number of nodes.
+
+        Returns
+        -------
+        int
+
+        """
         raise NotImplemented()
 
     @property
     def root(self):
+        """Get the label of the root node.
+
+        Returns
+        -------
+        object
+
+        """
         raise NotImplemented()
 
 
