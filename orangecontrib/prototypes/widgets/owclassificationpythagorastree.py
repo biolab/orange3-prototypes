@@ -1,17 +1,21 @@
 import Orange
 import numpy as np
 from Orange.classification.tree import TreeClassifier
+from Orange.data.table import Table
 from Orange.widgets.utils.colorpalette import DefaultRGBColors
 from PyQt4 import QtGui
 
-from orangecontrib.prototypes.widgets.owpythagorastree \
-    import OWPythagorasTree
+from orangecontrib.prototypes.widgets.owpythagorastree import OWPythagorasTree
+from orangecontrib.prototypes.widgets.pythagorastreeviewer import \
+    SklTreeAdapter
 
 
 class OWClassificationPythagorasTree(OWPythagorasTree):
     name = 'Classification Pythagoras Tree'
     description = 'Generalized Pythagoras Tree for visualizing clasification' \
                   ' trees.'
+    priority = 100
+
     inputs = [('Classification Tree', TreeClassifier, 'set_tree')]
 
     def _update_target_class_combo(self):
@@ -38,6 +42,12 @@ class OWClassificationPythagorasTree(OWPythagorasTree):
             p = distribution[modus] / (total or 1)
             color = colors[int(modus)].light(400 - 300 * p)
         return color
+
+    def _get_tree_adapter(self, model):
+        return SklTreeAdapter(
+            model.skl_model.tree_,
+            adjust_weight=self.SIZE_CALCULATION[self.size_calc_idx][1],
+        )
 
 
 def main():

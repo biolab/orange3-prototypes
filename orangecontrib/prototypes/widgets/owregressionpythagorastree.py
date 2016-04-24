@@ -1,16 +1,20 @@
 import Orange
+from Orange.data.table import Table
 from Orange.regression.tree import TreeRegressor
 from Orange.widgets.utils.colorpalette import ContinuousPaletteGenerator
 from PyQt4 import QtGui
 
-from orangecontrib.prototypes.widgets.owpythagorastree \
-    import OWPythagorasTree
+from orangecontrib.prototypes.widgets.owpythagorastree import OWPythagorasTree
+from orangecontrib.prototypes.widgets.pythagorastreeviewer import \
+    SklTreeAdapter
 
 
 class OWRegressionPythagorasTree(OWPythagorasTree):
     name = 'Regression Pythagoras Tree'
     description = 'Generalized Pythagoras Tree for visualizing regression' \
                   ' trees.'
+    priority = 100
+
     inputs = [('Regression Tree', TreeRegressor, 'set_tree')]
 
     def _update_target_class_combo(self):
@@ -22,11 +26,11 @@ class OWRegressionPythagorasTree(OWPythagorasTree):
         return ContinuousPaletteGenerator(*self.domain.class_var.colors)
 
     def _get_node_color(self, tree_node):
-        # this is taken almost directly from the existing classification tree
+        # this is taken almost directly from the existing regression tree
         # viewer
         colors = self.color_palette
-        total_samples = self.tree_adapter.num_samples(self.tree.label)
-        max_impurity = self.tree_adapter.get_impurity(self.tree.label)
+        total_samples = self.tree_adapter.num_samples(self.tree_adapter.root)
+        max_impurity = self.tree_adapter.get_impurity(self.tree_adapter.root)
 
         li = [0.5,
               self.tree_adapter.num_samples(tree_node.label) / total_samples,
@@ -35,6 +39,12 @@ class OWRegressionPythagorasTree(OWPythagorasTree):
         return QtGui.QBrush(colors[self.target_class_index].light(
             180 - li[self.target_class_index] * 150
         ))
+
+    def _get_tree_adapter(self, model):
+        return SklTreeAdapter(
+            model.skl_model.tree_,
+            adjust_weight=self.SIZE_CALCULATION[self.size_calc_idx][1],
+        )
 
 
 def main():
