@@ -241,7 +241,7 @@ class PythagorasTreeViewer(QtGui.QGraphicsWidget):
     def _get_tooltip(self, node):
         rules = self._tree_adapter.rules(node.label)
         return ' AND\n'.join('%s %s %s' % (n, s, v) for n, s, v in rules) \
-            if node != self._tree_adapter.root else 'Root'
+            if node.label != self._tree_adapter.root else 'Root'
 
     def _depth_was_decreased(self):
         if not self._drawn_nodes:
@@ -296,10 +296,7 @@ class SquareGraphicsItem(QtGui.QGraphicsRectItem):
 
         self.setBrush(kwargs.get('brush', QtGui.QColor('#297A1F')))
         self.setPen(kwargs.get('pen', QtGui.QPen(QtGui.QColor('#000'))))
-        self.set_tooltip(kwargs.get('tooltip', 'Tooltip'))
-
-    def set_tooltip(self, text):
-        self.setToolTip(text)
+        self.setToolTip(kwargs.get('tooltip', 'Tooltip'))
 
     def _get_rect_attributes(self):
         """Get the rectangle attributes requrired to draw item.
