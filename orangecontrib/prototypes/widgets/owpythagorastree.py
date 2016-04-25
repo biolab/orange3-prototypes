@@ -13,14 +13,11 @@ from orangecontrib.prototypes.widgets.pythagorastreeviewer import \
 
 
 class OWPythagorasTree(OWWidget):
-    name = 'Pythagoras Tree'
-    description = 'Generalized Pythagoras Tree for visualizing trees.'
-    priority = 100
+    # name = 'Pythagoras Tree'
+    # description = 'Generalized Pythagoras Tree for visualizing trees.'
+    # priority = 100
 
-    # Enable the save as feature
-    graph_name = True
-
-    inputs = [('Tree', TreeAdapter, 'set_tree')]
+    # inputs = [('Tree', TreeAdapter, 'set_tree')]
     outputs = [('Selected Data', Table)]
 
     # Settings
@@ -197,28 +194,7 @@ class OWPythagorasTree(OWWidget):
         return model
 
     def _get_tooltip(self, node):
-        distribution = self.tree_adapter.get_distribution(node.label)[0]
-        total = self.tree_adapter.num_samples(node.label)
-        if self.target_class_index:
-            samples = distribution[self.target_class_index - 1]
-            text = ''
-        else:
-            modus = np.argmax(distribution)
-            samples = distribution[modus]
-            text = self.tree_adapter.domain.class_vars[0].values[modus]
-        ratio = samples / np.sum(distribution)
-
-        rules = self.tree_adapter.rules(node.label)
-        rules = ' AND<br>'.join(
-            '%s %s %s' % (n, s, v) for n, s, v in rules) \
-
-        splitting_attr = self.tree_adapter.attribute(node.label)
-
-        return text \
-            + '<br>{:2.3f}%, {}/{}'.format(ratio * 100, int(samples), total) \
-            + '<br><br>Split by ' + splitting_attr.name \
-            + '<hr>' \
-            + rules
+        raise NotImplemented()
 
     def _update_main_area(self):
         # refresh the scene rect, cuts away the excess whitespace

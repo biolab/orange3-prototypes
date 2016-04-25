@@ -16,6 +16,9 @@ class OWClassificationPythagorasTree(OWPythagorasTree):
                   ' trees.'
     priority = 100
 
+    # Enable the save as feature
+    graph_name = True
+
     inputs = [('Classification Tree', TreeClassifier, 'set_tree')]
 
     def _update_target_class_combo(self):
@@ -43,6 +46,33 @@ class OWClassificationPythagorasTree(OWPythagorasTree):
             p = distribution[modus] / (total or 1)
             color = colors[int(modus)].light(400 - 300 * p)
         return color
+
+    def _get_tooltip(self, node):
+        distribution = self.tree_adapter.get_distribution(node.label)[0]
+        total = self.tree_adapter.num_samples(node.label)
+        if self.target_class_index:
+            samples = distribution[self.target_class_index - 1]
+            text = ''
+        else:
+            modus = np.argmax(distribution)
+            samples = distribution[modus]
+            text = self.tree_adapter.domain.class_vars[0].values[modus]
+        ratio = samples / np.sum(distribution)
+
+        rules = self.tree_adapter.rules(node.label)
+        rules = ' AND<br>'.join(
+            '%s %s %s' % (n, s, v) for n, s, v in rules) \
+
+        splitting_attr = self.tree_adapter.attribute(node.label)
+
+        return '<p>' \
+            +text \
+            + '<br>{}/{} samples ({:2.3f}%)'.format(
+                int(samples), total, ratio * 100) \
+            + '<br><br>Split by ' + splitting_attr.name \
+            + '<hr>' \
+            + rules \
+            + '</p>'
 
     def _get_tree_adapter(self, model):
         return SklTreeAdapter(

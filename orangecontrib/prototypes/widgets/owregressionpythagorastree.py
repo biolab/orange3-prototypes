@@ -15,6 +15,9 @@ class OWRegressionPythagorasTree(OWPythagorasTree):
                   ' trees.'
     priority = 100
 
+    # Enable the save as feature
+    graph_name = True
+
     inputs = [('Regression Tree', TreeRegressor, 'set_tree')]
 
     def _update_target_class_combo(self):
@@ -40,6 +43,26 @@ class OWRegressionPythagorasTree(OWPythagorasTree):
         return QtGui.QBrush(colors[self.target_class_index].light(
             180 - li[self.target_class_index] * 150
         ))
+
+    def _get_tooltip(self, node):
+        total = self.tree_adapter.num_samples(self.tree_adapter.root)
+        samples = self.tree_adapter.num_samples(node.label)
+        ratio = samples / total
+        impurity = self.tree_adapter.get_impurity(node.label)
+
+        rules = self.tree_adapter.rules(node.label)
+        rules = ' AND<br>'.join(
+            '%s %s %s' % (n, s, v) for n, s, v in rules) \
+
+        splitting_attr = self.tree_adapter.attribute(node.label)
+
+        return '<p>Impurity: {:2.3f}%'.format(impurity) \
+            + '<br>{}/{} samples ({:2.3f}%)'.format(
+                int(samples), total, ratio * 100) \
+            + '<br><br>Split by ' + splitting_attr.name \
+            + '<hr>' \
+            + rules \
+            + '</p>'
 
     def _get_tree_adapter(self, model):
         return SklTreeAdapter(
