@@ -1,6 +1,5 @@
 from math import sqrt, log
 
-import Orange
 import numpy as np
 from Orange.data.table import Table
 from Orange.widgets import gui, settings
@@ -34,8 +33,6 @@ class OWPythagorasTree(OWWidget):
     def __init__(self):
         super().__init__()
         # Instance variables
-        # The domain is needed to identify target classes
-        self.domain = None
         # The raw skltree model that was passed to the input
         self.model = None
         # The tree adapter instance which is passed from the outside
@@ -113,7 +110,6 @@ class OWPythagorasTree(OWWidget):
         self.model = model
 
         if model is not None:
-            self.domain = model.domain
             self.tree_adapter = self._get_tree_adapter(self.model)
             self.color_palette = self._get_color_palette()
             self.ptree.set_tree(self.tree_adapter)
@@ -149,7 +145,6 @@ class OWPythagorasTree(OWWidget):
 
     def clear(self):
         """Clear all relevant data from the widget."""
-        self.domain = None
         self.model = None
         self.tree_adapter = None
 

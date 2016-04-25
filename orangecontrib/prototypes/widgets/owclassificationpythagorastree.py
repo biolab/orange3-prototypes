@@ -21,7 +21,8 @@ class OWClassificationPythagorasTree(OWPythagorasTree):
     def _update_target_class_combo(self):
         self._clear_target_class_combo()
         self.target_class_combo.addItem('None')
-        values = [c.title() for c in self.domain.class_vars[0].values]
+        values = [c.title() for c in
+                  self.tree_adapter.domain.class_vars[0].values]
         self.target_class_combo.addItems(values)
 
     def _get_color_palette(self):
@@ -45,7 +46,7 @@ class OWClassificationPythagorasTree(OWPythagorasTree):
 
     def _get_tree_adapter(self, model):
         return SklTreeAdapter(
-            model.skl_model.tree_,
+            model,
             adjust_weight=self.SIZE_CALCULATION[self.size_calc_idx][1],
         )
 

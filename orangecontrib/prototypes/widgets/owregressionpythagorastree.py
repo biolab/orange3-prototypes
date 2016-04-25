@@ -23,7 +23,8 @@ class OWRegressionPythagorasTree(OWPythagorasTree):
         self.target_class_combo.addItems(values)
 
     def _get_color_palette(self):
-        return ContinuousPaletteGenerator(*self.domain.class_var.colors)
+        return ContinuousPaletteGenerator(
+            *self.tree_adapter.domain.class_var.colors)
 
     def _get_node_color(self, tree_node):
         # this is taken almost directly from the existing regression tree
@@ -42,7 +43,7 @@ class OWRegressionPythagorasTree(OWPythagorasTree):
 
     def _get_tree_adapter(self, model):
         return SklTreeAdapter(
-            model.skl_model.tree_,
+            model,
             adjust_weight=self.SIZE_CALCULATION[self.size_calc_idx][1],
         )
 

@@ -24,6 +24,7 @@ from collections import namedtuple, defaultdict, deque
 from functools import lru_cache
 from math import pi, sqrt, cos, sin, degrees
 
+from Orange.preprocess.transformation import Indicator
 from PyQt4 import QtCore, QtGui
 
 # Please note that all angles are in radians
@@ -58,6 +59,7 @@ class PythagorasTreeViewer(QtGui.QGraphicsWidget):
         Any valid tree adapter instance.
 
     """
+
     def __init__(self, parent=None, adapter=None, depth_limit=0):
         super().__init__(parent)
 
@@ -232,8 +234,14 @@ class PythagorasTreeViewer(QtGui.QGraphicsWidget):
                 self._square_objects[node.label] = SquareGraphicsItem(
                     node,
                     parent=self._item_group,
-                    brush=QtGui.QBrush(self._calc_node_color(node))
+                    brush=QtGui.QBrush(self._calc_node_color(node)),
+                    tooltip=self._get_tooltip(node)
                 )
+
+    def _get_tooltip(self, node):
+        rules = self._tree_adapter.rules(node.label)
+        return ' AND\n'.join('%s %s %s' % (n, s, v) for n, s, v in rules) \
+            if node != self._tree_adapter.root else 'Root'
 
     def _depth_was_decreased(self):
         if not self._drawn_nodes:
@@ -288,6 +296,10 @@ class SquareGraphicsItem(QtGui.QGraphicsRectItem):
 
         self.setBrush(kwargs.get('brush', QtGui.QColor('#297A1F')))
         self.setPen(kwargs.get('pen', QtGui.QPen(QtGui.QColor('#000'))))
+        self.set_tooltip(kwargs.get('tooltip', 'Tooltip'))
+
+    def set_tooltip(self, text):
+        self.setToolTip(text)
 
     def _get_rect_attributes(self):
         """Get the rectangle attributes requrired to draw item.
@@ -637,6 +649,22 @@ class TreeAdapter:
         """
         raise NotImplemented()
 
+    def rules(self, node):
+        """Get a list of rules that define the given node.
+
+        Parameters
+        ----------
+        node : object
+
+        Returns
+        -------
+        Iterable
+            A list of tuples in format (attr, relation, value) e.g
+            (width, =, 5).
+
+        """
+        pass
+
     @property
     def max_depth(self):
         """Get the maximum depth that the tree reaches.
@@ -673,6 +701,19 @@ class TreeAdapter:
         """
         raise NotImplemented()
 
+    @property
+    def domain(self):
+        """Get the domain of the given tree.
+
+        The domain contains information about the classes what the tree
+        represents.
+
+        Returns
+        -------
+
+        """
+        raise NotImplemented()
+
 
 class SklTreeAdapter(TreeAdapter):
     """SklTreeAdapter Class.
@@ -690,8 +731,9 @@ class SklTreeAdapter(TreeAdapter):
 
     """
 
-    def __init__(self, tree, adjust_weight=lambda x: x):
-        self._tree = tree
+    def __init__(self, model, adjust_weight=lambda x: x):
+        self._tree = model.skl_model.tree_
+        self._domain = model.domain
         self._adjust_weight = adjust_weight
 
         # clear memoized functions
@@ -772,3 +814,39 @@ class SklTreeAdapter(TreeAdapter):
     @property
     def root(self):
         return 0
+
+    @property
+    def domain(self):
+        return self._domain
+
+    def rules(self, node):
+        """
+        See Also
+        --------
+        Ported directly from the classification tree graph widget located in
+        orange3/Orange/widgets/classify/owclassificationtreegraph.py::rulew
+        """
+        if node != self.root:
+            parent_attr = self.domain.attributes[self.splitting_attribute(
+                self.parent(node))]
+            parent_attr_cv = parent_attr.compute_value
+            is_left_child = self._tree.children_left[self.parent(node)] == node
+            pr = self.rules(self.parent(node))
+            if isinstance(parent_attr_cv, Indicator) and \
+                    hasattr(parent_attr_cv.variable, "values"):
+                values = parent_attr_cv.variable.values
+                attr_name = parent_attr_cv.variable.name
+                sign = ["=", "≠"][is_left_child * (len(values) != 2)]
+                value = values[abs(parent_attr_cv.value -
+                                   is_left_child * (len(values) == 2))]
+            else:
+                attr_name = parent_attr.name
+                sign = [">", "≤"][is_left_child]
+                value = "%.3f" % self._tree.threshold[self.parent(node)]
+            pr.append((attr_name, sign, value))
+            return pr
+        else:
+            return []
+
+    def splitting_attribute(self, node):
+        return self._tree.feature[node]
