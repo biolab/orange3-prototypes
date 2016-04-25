@@ -9,7 +9,7 @@ from PyQt4 import QtGui
 from PyQt4.QtCore import Qt
 
 from orangecontrib.prototypes.widgets.pythagorastreeviewer import \
-    PythagorasTreeViewer, TreeAdapter
+    PythagorasTreeViewer, TreeAdapter, SquareGraphicsItem
 
 
 class OWPythagorasTree(OWWidget):
@@ -25,13 +25,14 @@ class OWPythagorasTree(OWWidget):
     target_class_index = settings.ContextSetting(0)
     size_calc_idx = settings.Setting(0)
     size_log_scale = settings.Setting(2)
-    auto_commit = settings.Setting(True)
 
     def __init__(self):
         super().__init__()
         # Instance variables
         # The raw skltree model that was passed to the input
         self.model = None
+        self.dataset = None
+        self.clf_dataset = None
         # The tree adapter instance which is passed from the outside
         self.tree_adapter = None
 
@@ -78,9 +79,6 @@ class OWPythagorasTree(OWWidget):
         gui.rubber(self.controlArea)
 
         # Bottom options
-        gui.auto_commit(
-            self.controlArea, self, value='auto_commit',
-            label='Send selected instances', auto_label='Auto send is on')
         self.inline_graph_report()
 
         self.controlArea.setSizePolicy(
@@ -91,6 +89,7 @@ class OWPythagorasTree(OWWidget):
         # the widget to the scene causes errors and a segfault on close due to
         # the way Qt deallocates memory and deletes objects.
         self.scene = QtGui.QGraphicsScene(self)
+        self.scene.selectionChanged.connect(self.commit)
         self.view = TreeGraphicsView(self.scene)
         self.view.setRenderHint(QtGui.QPainter.Antialiasing, True)
         self.mainArea.layout().addWidget(self.view)
@@ -111,6 +110,15 @@ class OWPythagorasTree(OWWidget):
             self.tree_adapter = self._get_tree_adapter(self.model)
             self.color_palette = self._get_color_palette()
             self.ptree.set_tree(self.tree_adapter)
+
+            self.dataset = model.instances
+            # this bit is important for the regression classifier
+            if self.dataset is not None and \
+                    self.dataset.domain != model.domain:
+                self.clf_dataset = Table.from_table(
+                    self.model.domain, self.dataset)
+            else:
+                self.clf_dataset = self.dataset
 
             self._update_info_box()
             self._update_target_class_combo()
@@ -144,6 +152,8 @@ class OWPythagorasTree(OWWidget):
     def clear(self):
         """Clear all relevant data from the widget."""
         self.model = None
+        self.dataset = None
+        self.clf_dataset = None
         self.tree_adapter = None
 
         self.ptree.clear()
@@ -209,7 +219,30 @@ class OWPythagorasTree(OWWidget):
 
     def commit(self):
         """Commit the selected data to output."""
-        pass
+        if self.dataset is None:
+            self.send('Selected Data', None)
+            return
+        # this is taken almost directly from the owclassificationtreegraph.py
+        ta = self.tree_adapter
+        items = filter(lambda x: isinstance(x, SquareGraphicsItem),
+                       self.scene.selectedItems())
+
+        selected_leaves = [ta.leaves(item.tree_node.label) for item in items]
+        if selected_leaves:
+            selected_leaves = np.unique(np.hstack(selected_leaves))
+
+        all_leaves = ta.leaves(ta.root)
+
+        if len(selected_leaves) > 0:
+            indices = np.searchsorted(all_leaves, selected_leaves, side='left')
+            leaf_samples = ta.get_samples_in_node(self.clf_dataset.X)
+            leaf_samples = [leaf_samples[i] for i in indices]
+            indices = np.hstack(leaf_samples)
+        else:
+            indices = []
+
+        data = self.dataset[indices] if len(indices) else None
+        self.send('Selected Data', data)
 
     def send_report(self):
         pass

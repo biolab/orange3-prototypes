@@ -24,6 +24,7 @@ from collections import namedtuple, defaultdict, deque
 from functools import lru_cache
 from math import pi, sqrt, cos, sin, degrees
 
+import numpy as np
 from Orange.preprocess.transformation import Indicator
 from PyQt4 import QtCore, QtGui
 
@@ -317,6 +318,23 @@ class SquareGraphicsItem(QtGui.QGraphicsRectItem):
         x = self.center.x() - self.length / 2
         y = self.center.y() - self.length / 2
         return QtCore.QRectF(x, y, height, width)
+
+    def paint(self, painter, option, widget=None):
+        # Override the default selected appearance
+        if self.isSelected():
+            option.state ^= QtGui.QStyle.State_Selected
+            rect = self.rect()
+            # this must render before overlay due to order in which it's drawn
+            super().paint(painter, option, widget)
+            painter.save()
+            pen = QtGui.QPen(QtGui.QColor(75, 134, 204, 200))
+            pen.setWidth(2)
+            painter.setPen(pen)
+            painter.setBrush(QtGui.QBrush(QtGui.QColor(75, 134, 204, 100)))
+            painter.drawRect(rect.adjusted(1, 1, -1, -1))
+            painter.restore()
+        else:
+            super().paint(painter, option, widget)
 
 
 class TreeNode:
@@ -698,6 +716,20 @@ class TreeAdapter:
         """
         return node == self.root
 
+    def leaves(self, node):
+        """Get all the leavse that belong to the subtree of a given node.
+
+        Parameters
+        ----------
+        node
+
+        Returns
+        -------
+
+        """
+        raise NotImplemented()
+
+
     @property
     def max_depth(self):
         """Get the maximum depth that the tree reaches.
@@ -886,3 +918,53 @@ class SklTreeAdapter(TreeAdapter):
 
     def splitting_attribute(self, node):
         return self._tree.feature[node]
+
+    def leaves(self, node):
+        start, stop = self._subnode_range(node)
+        if start == stop:
+            # leaf
+            return np.array([node], dtype=int)
+        else:
+            isleaf = self._tree.children_left[start: stop] == -1
+            assert np.flatnonzero(isleaf).size > 0
+            return start + np.flatnonzero(isleaf)
+
+    def _subnode_range(self, node):
+        """Get the range of indices where there are subnodes of the given node.
+        Taken from the classificationtreegraph.py"""
+        right = left = node
+        if self._tree.children_left[left] == -1:
+            assert self._tree.children_right[node] == -1
+            return node, node
+        else:
+            left = self._tree.children_left[left]
+            # run down to the right most node
+            while self._tree.children_right[right] != -1:
+                right = self._tree.children_right[right]
+
+            return left, right + 1
+
+    def get_samples_in_node(self, X):
+        # TODO figure out and document.
+
+        def assign(node_id, indices):
+            if self._tree.children_left[node_id] == -1:
+                return [indices]
+            else:
+                feature_idx = self._tree.feature[node_id]
+                thresh = self._tree.threshold[node_id]
+
+                column = X[indices, feature_idx]
+                leftmask = column <= thresh
+                leftind = assign(self._tree.children_left[node_id],
+                                 indices[leftmask])
+                rightind = assign(self._tree.children_right[node_id],
+                                  indices[~leftmask])
+                return list.__iadd__(leftind, rightind)
+
+        N, _ = X.shape
+
+        items = np.arange(N, dtype=int)
+        leaf_indices = assign(0, items)
+        return leaf_indices
+
