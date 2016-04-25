@@ -100,6 +100,7 @@ class OWPythagorasTree(OWWidget):
 
         self.ptree = PythagorasTreeViewer()
         self.ptree.set_node_color_func(self._get_node_color)
+        self.ptree.set_tooltip_func(self._get_tooltip)
         self.scene.addItem(self.ptree)
 
         self.resize(800, 500)
@@ -123,7 +124,7 @@ class OWPythagorasTree(OWWidget):
         self.ptree.set_depth_limit(self.depth_limit)
 
     def update_colors(self):
-        self.ptree.update_colors()
+        self.ptree.target_class_has_changed()
 
     def update_size_calc(self):
         """On calc method combo box changed."""
@@ -194,6 +195,30 @@ class OWPythagorasTree(OWWidget):
 
     def _get_tree_adapter(self, model):
         return model
+
+    def _get_tooltip(self, node):
+        distribution = self.tree_adapter.get_distribution(node.label)[0]
+        total = self.tree_adapter.num_samples(node.label)
+        if self.target_class_index:
+            samples = distribution[self.target_class_index - 1]
+            text = ''
+        else:
+            modus = np.argmax(distribution)
+            samples = distribution[modus]
+            text = self.tree_adapter.domain.class_vars[0].values[modus]
+        ratio = samples / np.sum(distribution)
+
+        rules = self.tree_adapter.rules(node.label)
+        rules = ' AND<br>'.join(
+            '%s %s %s' % (n, s, v) for n, s, v in rules) \
+
+        splitting_attr = self.tree_adapter.attribute(node.label)
+
+        return text \
+            + '<br>{:2.3f}%, {}/{}'.format(ratio * 100, int(samples), total) \
+            + '<br><br>Split by ' + splitting_attr.name \
+            + '<hr>' \
+            + rules
 
     def _update_main_area(self):
         # refresh the scene rect, cuts away the excess whitespace

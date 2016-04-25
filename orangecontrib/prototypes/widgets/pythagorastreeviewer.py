@@ -73,8 +73,9 @@ class PythagorasTreeViewer(QtGui.QGraphicsWidget):
         self._depth_limit = depth_limit
         # Provide a nice green default in case no color function is provided
         self._calc_node_color = lambda _: QtGui.QColor('#297A1F')
+        self._get_tooltip = lambda _: 'Tooltip'
 
-        self._square_objects = {}
+        self._square_objects = { }
         self._drawn_nodes = deque()
         self._frontier = deque()
 
@@ -141,7 +142,14 @@ class PythagorasTreeViewer(QtGui.QGraphicsWidget):
         """
         self._calc_node_color = func
 
-    def update_colors(self):
+    def set_tooltip_func(self, func):
+        self._get_tooltip = func
+
+    def target_class_has_changed(self):
+        self._update_node_colors()
+        self._update_node_tooltips()
+
+    def _update_node_colors(self):
         """Update all the node colors.
 
         Should be called when the color method is changed and the nodes need to
@@ -153,6 +161,11 @@ class PythagorasTreeViewer(QtGui.QGraphicsWidget):
         """
         for square in self._get_scene_squares():
             square.setBrush(self._calc_node_color(square.tree_node))
+
+    def _update_node_tooltips(self):
+        """Update all the tooltips for the squares."""
+        for square in self._get_scene_squares():
+            square.setToolTip(self._get_tooltip(square.tree_node))
 
     def clear(self):
         """Clear the widget state."""
@@ -238,11 +251,6 @@ class PythagorasTreeViewer(QtGui.QGraphicsWidget):
                     tooltip=self._get_tooltip(node)
                 )
 
-    def _get_tooltip(self, node):
-        rules = self._tree_adapter.rules(node.label)
-        return ' AND\n'.join('%s %s %s' % (n, s, v) for n, s, v in rules) \
-            if node.label != self._tree_adapter.root else 'Root'
-
     def _depth_was_decreased(self):
         if not self._drawn_nodes:
             return False
@@ -297,6 +305,7 @@ class SquareGraphicsItem(QtGui.QGraphicsRectItem):
         self.setBrush(kwargs.get('brush', QtGui.QColor('#297A1F')))
         self.setPen(kwargs.get('pen', QtGui.QPen(QtGui.QColor('#000'))))
         self.setToolTip(kwargs.get('tooltip', 'Tooltip'))
+        self.setFlag(QtGui.QGraphicsItem.ItemIsSelectable, True)
 
     def _get_rect_attributes(self):
         """Get the rectangle attributes requrired to draw item.
@@ -522,6 +531,7 @@ class TreeAdapter:
     it that is the opposite of has_children.
 
     """
+
     def weight(self, node):
         """Get the weight of the given node.
 
@@ -660,7 +670,33 @@ class TreeAdapter:
             (width, =, 5).
 
         """
-        pass
+        raise NotImplemented()
+
+    def attribute(self, node):
+        """Get the attribute that splits the given tree.
+
+        Parameters
+        ----------
+        node
+
+        Returns
+        -------
+
+        """
+        raise NotImplemented()
+
+    def is_root(self, node):
+        """Check if a given node is the root node.
+
+        Parameters
+        ----------
+        node
+
+        Returns
+        -------
+
+        """
+        return node == self.root
 
     @property
     def max_depth(self):
@@ -741,7 +777,7 @@ class SklTreeAdapter(TreeAdapter):
     @lru_cache()
     def weight(self, node):
         return self._adjust_weight(self.num_samples(node)) / \
-            self._adjusted_child_weight(self.parent(node))
+               self._adjusted_child_weight(self.parent(node))
 
     @lru_cache()
     def _adjusted_child_weight(self, node):
@@ -830,7 +866,7 @@ class SklTreeAdapter(TreeAdapter):
             is_left_child = self._tree.children_left[self.parent(node)] == node
             pr = self.rules(self.parent(node))
             if isinstance(parent_attr_cv, Indicator) and \
-                    hasattr(parent_attr_cv.variable, "values"):
+                hasattr(parent_attr_cv.variable, "values"):
                 values = parent_attr_cv.variable.values
                 attr_name = parent_attr_cv.variable.name
                 sign = ["=", "≠"][is_left_child * (len(values) != 2)]
@@ -844,6 +880,9 @@ class SklTreeAdapter(TreeAdapter):
             return pr
         else:
             return []
+
+    def attribute(self, node):
+        return self.domain.attributes[self.splitting_attribute(node)]
 
     def splitting_attribute(self, node):
         return self._tree.feature[node]
