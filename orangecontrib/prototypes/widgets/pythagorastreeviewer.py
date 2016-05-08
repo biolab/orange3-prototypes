@@ -155,6 +155,9 @@ class PythagorasTreeViewer(QtGui.QGraphicsWidget):
         self._update_node_colors()
         self._update_node_tooltips()
 
+    def tooltip_has_changed(self):
+        self._update_node_tooltips()
+
     def _update_node_colors(self):
         """Update all the node colors.
 

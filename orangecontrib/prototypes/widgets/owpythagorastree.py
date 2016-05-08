@@ -25,6 +25,7 @@ class OWPythagorasTree(OWWidget):
     target_class_index = settings.ContextSetting(0)
     size_calc_idx = settings.Setting(0)
     size_log_scale = settings.Setting(2)
+    tooltips_enabled = settings.Setting(True)
 
     def __init__(self):
         super().__init__()
@@ -75,6 +76,10 @@ class OWPythagorasTree(OWWidget):
             self.log_scale_box.setEnabled(False)
             self.log_scale_box.setVisible(False)
 
+        gui.checkBox(
+            box_display, self, 'tooltips_enabled', label='Enable tooltips',
+            callback=self._update_tooltip_enabled)
+
         # Stretch to fit the rest of the unsused area
         gui.rubber(self.controlArea)
 
@@ -96,7 +101,10 @@ class OWPythagorasTree(OWWidget):
 
         self.ptree = PythagorasTreeViewer()
         self.ptree.set_node_color_func(self._get_node_color)
-        self.ptree.set_tooltip_func(self._get_tooltip)
+        if self.tooltips_enabled:
+            self.ptree.set_tooltip_func(self._get_tooltip)
+        else:
+            self.ptree.set_tooltip_func(lambda _: None)
         self.scene.addItem(self.ptree)
 
         self.resize(800, 500)
@@ -195,6 +203,13 @@ class OWPythagorasTree(OWWidget):
         self.target_class_combo.clear()
         self.target_class_index = 0
         self.target_class_combo.setCurrentIndex(self.target_class_index)
+
+    def _update_tooltip_enabled(self):
+        if self.tooltips_enabled:
+            self.ptree.set_tooltip_func(self._get_tooltip)
+        else:
+            self.ptree.set_tooltip_func(lambda _: None)
+        self.ptree.tooltip_has_changed()
 
     def _get_color_palette(self):
         return [QtGui.QColor(*c) for c in DefaultRGBColors]
