@@ -63,10 +63,13 @@ class PythagorasTreeViewer(QtGui.QGraphicsWidget):
         scene.
     adapter : TreeAdapter, optional
         Any valid tree adapter instance.
+    interacitive : bool, optional,
+        Specify whether the widget should have an interactive display. This
+        means special hover effects, selectable boxes. Default is true.
 
     """
 
-    def __init__(self, parent=None, adapter=None, depth_limit=0):
+    def __init__(self, parent=None, adapter=None, depth_limit=0, **kwargs):
         super().__init__(parent)
 
         # Instance variables
@@ -80,6 +83,7 @@ class PythagorasTreeViewer(QtGui.QGraphicsWidget):
         # Provide a nice green default in case no color function is provided
         self._calc_node_color = lambda _: QtGui.QColor('#297A1F')
         self._get_tooltip = lambda _: 'Tooltip'
+        self._interactive = kwargs.get('interactive', True)
 
         self._square_objects = {}
         self._drawn_nodes = deque()
@@ -253,7 +257,9 @@ class PythagorasTreeViewer(QtGui.QGraphicsWidget):
             if node.label in self._square_objects:
                 self._square_objects[node.label].show()
             else:
-                self._square_objects[node.label] = SquareGraphicsItem(
+                square_obj = InteractiveSquareGraphicsItem \
+                    if self._interactive else SquareGraphicsItem
+                self._square_objects[node.label] = square_obj(
                     node,
                     parent=self._item_group,
                     brush=QtGui.QBrush(self._calc_node_color(node)),
@@ -287,7 +293,8 @@ class PythagorasTreeViewer(QtGui.QGraphicsWidget):
 class SquareGraphicsItem(QtGui.QGraphicsRectItem):
     """Square Graphics Item.
 
-    Square component to draw as components for the Pythagoras tree.
+    Square component to draw as components for the non-interactive Pythagoras
+    tree.
 
     Parameters
     ----------
@@ -316,7 +323,6 @@ class SquareGraphicsItem(QtGui.QGraphicsRectItem):
         self.setBrush(kwargs.get('brush', QtGui.QColor('#297A1F')))
         self.setPen(kwargs.get('pen', QtGui.QPen(QtGui.QColor('#000'))))
         self.setToolTip(kwargs.get('tooltip', 'Tooltip'))
-        self.setFlag(QtGui.QGraphicsItem.ItemIsSelectable, True)
 
         self.setAcceptHoverEvents(True)
         self.setZValue(kwargs.get('zvalue', 0))
@@ -364,9 +370,38 @@ class SquareGraphicsItem(QtGui.QGraphicsRectItem):
         else:
             super().paint(painter, option, widget)
 
+
+class InteractiveSquareGraphicsItem(SquareGraphicsItem):
+    timer = QtCore.QTimer()
+
+    """Interactive square graphics items.
+
+    This is different from the base square graphics item so that it is
+    selectable, and it can handle and react to hover events (highlight and
+    focus own branch).
+
+    Parameters
+    ----------
+    tree_node : TreeNode
+        The tree node the square represents.
+    brush : QColor, optional
+        The brush to be used as the backgound brush.
+    pen : QPen, optional
+        The pen to be used for the border.
+
+    """
+    def __init__(self, tree_node, parent=None, **kwargs):
+        super().__init__(tree_node, parent, **kwargs)
+        self.setFlag(QtGui.QGraphicsItem.ItemIsSelectable, True)
+
+        InteractiveSquareGraphicsItem.timer.setSingleShot(True)
+
     def hoverEnterEvent(self, ev):
+        InteractiveSquareGraphicsItem.timer.stop()
+
         def fnc(graphics_item):
             graphics_item.setZValue(graphics_item.zValue() + Z_STEP)
+            graphics_item.setOpacity(1.)
 
         def other_fnc(graphics_item):
             graphics_item.setOpacity(.1)
@@ -374,13 +409,17 @@ class SquareGraphicsItem(QtGui.QGraphicsRectItem):
         self._propagate_z_values(self, fnc, other_fnc)
 
     def hoverLeaveEvent(self, ev):
+
         def fnc(graphics_item):
             graphics_item.setZValue(graphics_item.zValue() - Z_STEP)
 
         def other_fnc(graphics_item):
             graphics_item.setOpacity(1.)
 
-        self._propagate_z_values(self, fnc, other_fnc)
+        InteractiveSquareGraphicsItem.timer.timeout.connect(
+            lambda: self._propagate_z_values(self, fnc, other_fnc)
+        )
+        InteractiveSquareGraphicsItem.timer.start(500)
 
     def _propagate_z_values(self, graphics_item, fnc, other_fnc):
         self._propagate_to_children(graphics_item, fnc)
@@ -390,18 +429,18 @@ class SquareGraphicsItem(QtGui.QGraphicsRectItem):
         # propagate function that handles graphics item to appropriate children
         fnc(graphics_item)
         for c in graphics_item.tree_node.children:
-            self._propagate_to_children(c.graphics_item, fnc, )
+            self._propagate_to_children(c.graphics_item, fnc)
 
     def _propagate_to_parents(self, graphics_item, fnc, other_fnc):
         # propagate function that handles graphics item to appropriate parents
         if graphics_item.tree_node.parent != -1:
             parent = graphics_item.tree_node.parent.graphics_item
-            # handle the parent node
-            fnc(parent)
             # handle the non relevant children nodes
             for c in parent.tree_node.children:
                 if c != graphics_item.tree_node:
                     self._propagate_to_children(c.graphics_item, other_fnc)
+            # handle the parent node
+            fnc(parent)
             # propagate up the tree
             self._propagate_to_parents(parent, fnc, other_fnc)
 
