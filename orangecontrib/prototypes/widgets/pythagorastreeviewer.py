@@ -29,6 +29,8 @@ from Orange.preprocess.transformation import Indicator
 from PyQt4 import QtCore, QtGui
 
 # Please note that all angles are in radians
+from PyQt4.QtCore import Qt
+
 Square = namedtuple('Square', ['center', 'length', 'angle'])
 Point = namedtuple('Point', ['x', 'y'])
 
@@ -76,7 +78,7 @@ class PythagorasTreeViewer(QtGui.QGraphicsWidget):
         self._calc_node_color = lambda _: QtGui.QColor('#297A1F')
         self._get_tooltip = lambda _: 'Tooltip'
 
-        self._square_objects = { }
+        self._square_objects = {}
         self._drawn_nodes = deque()
         self._frontier = deque()
 
@@ -787,7 +789,7 @@ class SklTreeAdapter(TreeAdapter):
 
     Parameters
     ----------
-    tree : sklearn.tree._tree.Tree
+    model : sklearn.tree._tree.Tree
         The raw sklearn classification tree.
     adjust_weight : function, optional
         If you want finer control over the weights of individual nodes you can
@@ -967,4 +969,3 @@ class SklTreeAdapter(TreeAdapter):
         items = np.arange(N, dtype=int)
         leaf_indices = assign(0, items)
         return leaf_indices
-

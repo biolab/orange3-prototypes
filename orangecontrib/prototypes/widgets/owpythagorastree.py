@@ -9,7 +9,7 @@ from PyQt4 import QtGui
 from PyQt4.QtCore import Qt
 
 from orangecontrib.prototypes.widgets.pythagorastreeviewer import \
-    PythagorasTreeViewer, TreeAdapter, SquareGraphicsItem
+    PythagorasTreeViewer, SquareGraphicsItem
 
 
 class OWPythagorasTree(OWWidget):
@@ -123,6 +123,8 @@ class OWPythagorasTree(OWWidget):
             self._update_info_box()
             self._update_target_class_combo()
             self._update_depth_slider()
+
+            self._update_main_area()
 
     def update_depth(self):
         """This method should be called when the depth changes"""
@@ -302,8 +304,16 @@ class ZoomableGraphicsView(QtGui.QGraphicsView):
 
 class PannableGraphicsView(QtGui.QGraphicsView):
     def __init__(self, *args, **kwargs):
-        self.panning = False
         super().__init__(*args, **kwargs)
+        self.setDragMode(QtGui.QGraphicsView.ScrollHandDrag)
+
+    def enterEvent(self, ev):
+        super().enterEvent(ev)
+        self.viewport().setCursor(Qt.ArrowCursor)
+
+    def mouseReleaseEvent(self, ev):
+        super().mouseReleaseEvent(ev)
+        self.viewport().setCursor(Qt.ArrowCursor)
 
 
 class TreeGraphicsView(PannableGraphicsView, ZoomableGraphicsView):
