@@ -31,6 +31,9 @@ from PyQt4 import QtCore, QtGui
 # Please note that all angles are in radians
 from PyQt4.QtCore import Qt
 
+# z index range, increase if needed
+Z_STEP = 5000000
+
 Square = namedtuple('Square', ['center', 'length', 'angle'])
 Point = namedtuple('Point', ['x', 'y'])
 
@@ -251,7 +254,8 @@ class PythagorasTreeViewer(QtGui.QGraphicsWidget):
                     node,
                     parent=self._item_group,
                     brush=QtGui.QBrush(self._calc_node_color(node)),
-                    tooltip=self._get_tooltip(node)
+                    tooltip=self._get_tooltip(node),
+                    zvalue=depth,
                 )
 
     def _depth_was_decreased(self):
@@ -295,6 +299,7 @@ class SquareGraphicsItem(QtGui.QGraphicsRectItem):
 
     def __init__(self, tree_node, parent=None, **kwargs):
         self.tree_node = tree_node
+        self.tree_node.graphics_item = self
 
         center, length, angle = tree_node.square
         self._center_point = center
@@ -309,6 +314,23 @@ class SquareGraphicsItem(QtGui.QGraphicsRectItem):
         self.setPen(kwargs.get('pen', QtGui.QPen(QtGui.QColor('#000'))))
         self.setToolTip(kwargs.get('tooltip', 'Tooltip'))
         self.setFlag(QtGui.QGraphicsItem.ItemIsSelectable, True)
+
+        self.setAcceptHoverEvents(True)
+        self.setZValue(kwargs.get('zvalue', 0))
+        self.z_step = Z_STEP
+
+        # calculate the correct z values based on the parent
+        if self.tree_node.parent != -1:
+            p = self.tree_node.parent
+            # override root z step
+            num_children = len(p.children)
+            own_index = [1 if c.label == self.tree_node.label else 0
+                         for c in p.children].index(1)
+
+            self.z_step = int(p.graphics_item.z_step / num_children)
+            base_z = p.graphics_item.zValue()
+
+            self.setZValue(base_z + own_index * self.z_step)
 
     def _get_rect_attributes(self):
         """Get the rectangle attributes requrired to draw item.
@@ -339,6 +361,47 @@ class SquareGraphicsItem(QtGui.QGraphicsRectItem):
         else:
             super().paint(painter, option, widget)
 
+    def hoverEnterEvent(self, ev):
+        def fnc(graphics_item):
+            graphics_item.setZValue(graphics_item.zValue() + Z_STEP)
+
+        def other_fnc(graphics_item):
+            graphics_item.setOpacity(.1)
+
+        self._propagate_z_values(self, fnc, other_fnc)
+
+    def hoverLeaveEvent(self, ev):
+        def fnc(graphics_item):
+            graphics_item.setZValue(graphics_item.zValue() - Z_STEP)
+
+        def other_fnc(graphics_item):
+            graphics_item.setOpacity(1.)
+
+        self._propagate_z_values(self, fnc, other_fnc)
+
+    def _propagate_z_values(self, graphics_item, fnc, other_fnc):
+        self._propagate_to_children(graphics_item, fnc)
+        self._propagate_to_parents(graphics_item, fnc, other_fnc)
+
+    def _propagate_to_children(self, graphics_item, fnc):
+        # propagate function that handles graphics item to appropriate children
+        fnc(graphics_item)
+        for c in graphics_item.tree_node.children:
+            self._propagate_to_children(c.graphics_item, fnc, )
+
+    def _propagate_to_parents(self, graphics_item, fnc, other_fnc):
+        # propagate function that handles graphics item to appropriate parents
+        if graphics_item.tree_node.parent != -1:
+            parent = graphics_item.tree_node.parent.graphics_item
+            # handle the parent node
+            fnc(parent)
+            # handle the non relevant children nodes
+            for c in parent.tree_node.children:
+                if c != graphics_item.tree_node:
+                    self._propagate_to_children(c.graphics_item, other_fnc)
+            # propagate up the tree
+            self._propagate_to_parents(parent, fnc, other_fnc)
+
 
 class TreeNode:
     """A node in the tree structure used to represent the tree adapter
@@ -361,6 +424,7 @@ class TreeNode:
         self.square = square
         self.parent = parent
         self.children = children
+        self.graphics_item = None
 
 
 class PythagorasTree:
@@ -405,7 +469,12 @@ class PythagorasTree:
             self._compute_child(tree, square, child)
             for child in tree.children(node)
         )
-        return TreeNode(node, square, tree.parent(node), children)
+        # make sure to pass a reference to parent to each child
+        obj = TreeNode(node, square, tree.parent(node), children)
+        # mutate the existing data stored in the created tree node
+        for c in children:
+            c.parent = obj
+        return obj
 
     def _compute_child(self, tree, parent_square, node):
         """Compute all the properties for a single child.
