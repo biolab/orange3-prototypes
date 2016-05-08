@@ -331,6 +331,7 @@ class SquareGraphicsItem(QtGui.QGraphicsRectItem):
             painter.save()
             pen = QtGui.QPen(QtGui.QColor(75, 134, 204, 200))
             pen.setWidth(2)
+            pen.setJoinStyle(Qt.MiterJoin)
             painter.setPen(pen)
             painter.setBrush(QtGui.QBrush(QtGui.QColor(75, 134, 204, 100)))
             painter.drawRect(rect.adjusted(1, 1, -1, -1))
