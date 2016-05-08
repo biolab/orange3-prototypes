@@ -419,7 +419,7 @@ class InteractiveSquareGraphicsItem(SquareGraphicsItem):
         InteractiveSquareGraphicsItem.timer.timeout.connect(
             lambda: self._propagate_z_values(self, fnc, other_fnc)
         )
-        InteractiveSquareGraphicsItem.timer.start(500)
+        InteractiveSquareGraphicsItem.timer.start(250)
 
     def _propagate_z_values(self, graphics_item, fnc, other_fnc):
         self._propagate_to_children(graphics_item, fnc)
