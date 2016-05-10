@@ -372,8 +372,6 @@ class SquareGraphicsItem(QtGui.QGraphicsRectItem):
 
 
 class InteractiveSquareGraphicsItem(SquareGraphicsItem):
-    timer = QtCore.QTimer()
-
     """Interactive square graphics items.
 
     This is different from the base square graphics item so that it is
@@ -390,6 +388,9 @@ class InteractiveSquareGraphicsItem(SquareGraphicsItem):
         The pen to be used for the border.
 
     """
+
+    timer = QtCore.QTimer()
+
     def __init__(self, tree_node, parent=None, **kwargs):
         super().__init__(tree_node, parent, **kwargs)
         self.setFlag(QtGui.QGraphicsItem.ItemIsSelectable, True)
@@ -663,6 +664,8 @@ class TreeAdapter:
     it that is the opposite of has_children.
 
     """
+
+    ROOT_PARENT_INDEX = -1
 
     def weight(self, node):
         """Get the weight of the given node.
@@ -959,7 +962,7 @@ class SklTreeAdapter(TreeAdapter):
                 return (children == node).nonzero()[0][0]
             except IndexError:
                 continue
-        return -1
+        return TreeAdapter.ROOT_PARENT_INDEX
 
     def has_children(self, node):
         return self._tree.children_left[node] != -1 \

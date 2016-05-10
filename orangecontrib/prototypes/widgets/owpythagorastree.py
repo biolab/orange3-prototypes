@@ -224,8 +224,10 @@ class OWPythagorasTree(OWWidget):
         raise NotImplemented()
 
     def _update_main_area(self):
-        # refresh the scene rect, cuts away the excess whitespace
-        self.scene.setSceneRect(self.scene.itemsBoundingRect())
+        # refresh the scene rect, cuts away the excess whitespace, and adds
+        # padding for panning.
+        self.scene.setSceneRect(self.scene.itemsBoundingRect()
+                                .adjusted(-300, -300, 300, 300))
         # fits the scene into the viewport
         self.view.fitInView(self.scene.sceneRect(), Qt.KeepAspectRatio)
 
