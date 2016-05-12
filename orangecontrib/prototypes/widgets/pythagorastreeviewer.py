@@ -398,24 +398,27 @@ class InteractiveSquareGraphicsItem(SquareGraphicsItem):
         super().__init__(tree_node, parent, **kwargs)
         self.setFlag(QtGui.QGraphicsItem.ItemIsSelectable, True)
 
+        self.initial_zvalue = self.zValue()
+
         InteractiveSquareGraphicsItem.timer.setSingleShot(True)
 
     def hoverEnterEvent(self, ev):
         InteractiveSquareGraphicsItem.timer.stop()
 
         def fnc(graphics_item):
-            graphics_item.setZValue(graphics_item.zValue() + Z_STEP)
+            graphics_item.setZValue(Z_STEP)
             graphics_item.setOpacity(1.)
 
         def other_fnc(graphics_item):
             graphics_item.setOpacity(.1)
+            graphics_item.setZValue(self.initial_zvalue)
 
         self._propagate_z_values(self, fnc, other_fnc)
 
     def hoverLeaveEvent(self, ev):
 
         def fnc(graphics_item):
-            graphics_item.setZValue(graphics_item.zValue() - Z_STEP)
+            graphics_item.setZValue(self.initial_zvalue)
 
         def other_fnc(graphics_item):
             graphics_item.setOpacity(1.)
@@ -423,6 +426,7 @@ class InteractiveSquareGraphicsItem(SquareGraphicsItem):
         InteractiveSquareGraphicsItem.timer.timeout.connect(
             lambda: self._propagate_z_values(self, fnc, other_fnc)
         )
+
         InteractiveSquareGraphicsItem.timer.start(250)
 
     def _propagate_z_values(self, graphics_item, fnc, other_fnc):
