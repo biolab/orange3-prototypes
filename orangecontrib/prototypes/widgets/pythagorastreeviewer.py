@@ -50,6 +50,9 @@ class PythagorasTreeViewer(QtGui.QGraphicsWidget):
     >>> tree_view = PythagorasTreeViewer(parent=scene, adapter=tree_adapter)
 
     Pass tree later through method.
+    >>> tree_adapter = TreeAdapter()
+    >>> scene = QtGui.QGraphicsScene()
+    This is where the magic happens
     >>> tree_view = PythagorasTreeViewer(parent=scene)
     >>> tree_view.set_tree(tree_adapter)
 
@@ -455,8 +458,9 @@ class TreeNode:
         The label of the tree node, can be looked up in the original tree.
     square : Square
         The square the represents the tree node.
-    parent : TreeNode
-        The parent of the current node.
+    parent : TreeNode or object
+        The parent of the current node. In the case of root, an object
+        containing the root label of the tree adapter should be passed.
     children : tuple of TreeNode, optional
         All the children that belong to this node.
 
@@ -846,7 +850,6 @@ class TreeAdapter:
         """
         raise NotImplemented()
 
-
     @property
     def max_depth(self):
         """Get the maximum depth that the tree reaches.
@@ -904,7 +907,7 @@ class SklTreeAdapter(TreeAdapter):
 
     Parameters
     ----------
-    model : sklearn.tree._tree.Tree
+    model : Orange.base.SklModel
         The raw sklearn classification tree.
     adjust_weight : function, optional
         If you want finer control over the weights of individual nodes you can
@@ -1015,7 +1018,7 @@ class SklTreeAdapter(TreeAdapter):
             is_left_child = self._tree.children_left[self.parent(node)] == node
             pr = self.rules(self.parent(node))
             if isinstance(parent_attr_cv, Indicator) and \
-                hasattr(parent_attr_cv.variable, "values"):
+                    hasattr(parent_attr_cv.variable, "values"):
                 values = parent_attr_cv.variable.values
                 attr_name = parent_attr_cv.variable.name
                 sign = ["=", "≠"][is_left_child * (len(values) != 2)]
