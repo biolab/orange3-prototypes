@@ -83,9 +83,6 @@ class OWPythagorasTree(OWWidget):
         # Stretch to fit the rest of the unsused area
         gui.rubber(self.controlArea)
 
-        # Bottom options
-        self.inline_graph_report()
-
         self.controlArea.setSizePolicy(
             QtGui.QSizePolicy.Preferred, QtGui.QSizePolicy.Expanding)
 
