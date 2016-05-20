@@ -361,7 +361,8 @@ class OWFreeViz(widget.OWWidget):
     name = "FreeViz"
     description = "FreeViz Visualization"
     icon = "icons/LinearProjection.svg"
-    inputs = [("Data", Orange.data.Table, "set_data")]
+    inputs = [("Data", Orange.data.Table, "set_data"),
+              ("Data Subset", Orange.data.Table, "set_data_subset")]
     outputs = [("Data", Orange.data.Table, widget.Default),
                ("Selected Data", Orange.data.Table),
                ("Components", Orange.data.Table)]
@@ -418,6 +419,7 @@ class OWFreeViz(widget.OWWidget):
         super().__init__()
 
         self.data = None
+        self.data_subset = None
         self.plotdata = None
 
         box = gui.widgetBox(self.controlArea, "Optimization", spacing=10)
@@ -654,11 +656,32 @@ class OWFreeViz(widget.OWWidget):
             self.class_density_cb.setEnabled(domain.has_discrete_class)
             self.openContext(data)
 
+    def set_data_subset(self, data):
+        """Set the input subset data set."""
+        self.data_subset = data
+        if self.plotdata is not None:
+            self.plotdata.subsetmask = None
+
     def handleNewSignals(self):
         """Reimplemented."""
-        if self.data is not None:
+        didupdate = False
+        if self.data is not None and self.plotdata is None:
             self._setup()
             self._start()
+            didupdate = True
+
+        if self.data_subset is not None and self.plotdata is not None and \
+                self.plotdata.subsetmask is None:
+            # received a new subset data set; need to update the subset mask
+            # and brush fill
+            self.plotdata.subsetmask = numpy.in1d(
+                self.data.ids, self.data_subset.ids)
+            self._update_color()
+            didupdate = True
+
+        if self.plotdata is not None and not didupdate:
+            # the subset dataset was removed; need to update the brush fill
+            self._update_color()
 
     def _toogle_start(self):
         if self._loop.isRunning():
@@ -785,7 +808,8 @@ class OWFreeViz(widget.OWWidget):
             densityimage=None,
             X=X,
             Y=Y,
-            selectionmask=numpy.zeros_like(valid, dtype=bool)
+            selectionmask=numpy.zeros_like(valid, dtype=bool),
+            subsetmask=None
         )
         self._update_legend()
         self._update_labels()
@@ -817,7 +841,11 @@ class OWFreeViz(widget.OWWidget):
         pendata = plotutils.pen_data(colors * 0.8, pointstyle)
         colors = numpy.hstack(
             [colors, numpy.full((colors.shape[0], 1), float(self.opacity))])
-        brushdata = plotutils.brush_data(colors)
+
+        brushdata = plotutils.brush_data(colors, )
+        if self.plotdata.subsetmask is not None:
+            subsetmask = self.plotdata.subsetmask[validmask]
+            brushdata[~subsetmask] = QtGui.QBrush(Qt.NoBrush)
 
         self.plotdata.pendata = pendata
         self.plotdata.brushdata = brushdata
@@ -1262,12 +1290,15 @@ def main(argv=sys.argv):
     else:
         filename = "zoo"
     data = Orange.data.Table(filename)
+    subset = data[numpy.random.choice(len(data), 4)]
     w = OWFreeViz()
     w.show()
     w.raise_()
     w.set_data(data)
+    w.set_data_subset(subset)
     w.handleNewSignals()
     app.exec_()
+    w.set_data_subset(None)
     w.set_data(None)
     w.handleNewSignals()
     w.saveSettings()
