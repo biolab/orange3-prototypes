@@ -209,7 +209,12 @@ class OWPythagorasTree(OWWidget):
         self.ptree.tooltip_has_changed()
 
     def _get_color_palette(self):
-        return [QtGui.QColor(*c) for c in DefaultRGBColors]
+        if self.model.domain.class_var.is_discrete:
+            colors = [QtGui.QColor(*c)
+                      for c in self.model.domain.class_var.colors]
+        else:
+            colors = None
+        return colors
 
     def _get_node_color(self, tree_node):
         return self.color_palette[0]

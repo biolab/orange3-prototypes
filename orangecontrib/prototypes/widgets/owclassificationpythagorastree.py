@@ -28,9 +28,6 @@ class OWClassificationPythagorasTree(OWPythagorasTree):
                   self.tree_adapter.domain.class_vars[0].values]
         self.target_class_combo.addItems(values)
 
-    def _get_color_palette(self):
-        return [QtGui.QColor(*c) for c in DefaultRGBColors]
-
     def _get_node_color(self, tree_node):
         # this is taken almost directly from the existing classification tree
         # viewer
