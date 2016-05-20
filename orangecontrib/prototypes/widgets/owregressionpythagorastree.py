@@ -51,7 +51,7 @@ class OWRegressionPythagorasTree(OWPythagorasTree):
         impurity = self.tree_adapter.get_impurity(node.label)
 
         rules = self.tree_adapter.rules(node.label)
-        rules = ' AND<br>'.join(
+        rules = '<br>'.join(
             '%s %s %s' % (n, s, v) for n, s, v in rules) \
 
         splitting_attr = self.tree_adapter.attribute(node.label)
