@@ -275,16 +275,16 @@ class ZoomableGraphicsView(QtGui.QGraphicsView):
         # zoomout limit prevents the zoom factor to become negative, which
         # results in the canvas being flipped over the x axis
         self._zoomout_limit_reached = False
-        self._size_was_reset = False
+        self._initial_zoom = 1
         super().__init__(*args, **kwargs)
 
     def resizeEvent(self, ev):
         super().resizeEvent(ev)
-        # if not self._size_was_reset:
         if self.zoom == 1:
-            self._size_was_reset = True
             self.fitInView(self.scene().itemsBoundingRect(),
                            Qt.KeepAspectRatio)
+            self._initial_zoom = self.matrix().m11()
+            self.zoom = self._initial_zoom
 
     def wheelEvent(self, ev):
         if self._zooming_in(ev):
@@ -293,14 +293,13 @@ class ZoomableGraphicsView(QtGui.QGraphicsView):
             ev.accept()
             return
 
-        self.zoom += np.sign(ev.delta()) * 1
-        k = 0.0028 * (self.zoom ** 2) + 0.2583 * self.zoom + 1.1389
-        if k <= 0:
+        self.zoom += np.sign(ev.delta()) * 1 / 16
+        if self.zoom <= 0:
             self._zoomout_limit_reached = True
             self.zoom += 1
         else:
             self.setTransformationAnchor(self.AnchorUnderMouse)
-            self.setTransform(QtGui.QTransform().scale(k / 2, k / 2))
+            self.setTransform(QtGui.QTransform().scale(self.zoom, self.zoom))
         ev.accept()
 
     @staticmethod
@@ -315,10 +314,8 @@ class ZoomableGraphicsView(QtGui.QGraphicsView):
 
     def reset_zoom(self):
         """Reset the zoom to the initial size."""
-        self.zoom = 1
-        self._size_was_reset = False
-        k = 0.0028 * (self.zoom ** 2) + 0.2583 * self.zoom + 1.1389
-        self.setTransform(QtGui.QTransform().scale(k / 2, k / 2))
+        self.zoom = self._initial_zoom
+        self.setTransform(QtGui.QTransform().scale(self.zoom, self.zoom))
 
 
 class PannableGraphicsView(QtGui.QGraphicsView):
