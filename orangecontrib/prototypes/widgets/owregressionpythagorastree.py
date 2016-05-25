@@ -15,9 +15,6 @@ class OWRegressionPythagorasTree(OWPythagorasTree):
                   ' trees.'
     priority = 100
 
-    # Enable the save as feature
-    graph_name = True
-
     inputs = [('Regression Tree', TreeRegressor, 'set_tree')]
 
     def _update_target_class_combo(self):

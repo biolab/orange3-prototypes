@@ -16,9 +16,6 @@ class OWClassificationPythagorasTree(OWPythagorasTree):
                   ' trees.'
     priority = 100
 
-    # Enable the save as feature
-    graph_name = True
-
     inputs = [('Classification Tree', TreeClassifier, 'set_tree')]
 
     def _update_target_class_combo(self):

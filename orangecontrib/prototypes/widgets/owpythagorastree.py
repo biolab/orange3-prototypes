@@ -20,6 +20,9 @@ class OWPythagorasTree(OWWidget):
     # inputs = [('Tree', TreeAdapter, 'set_tree')]
     outputs = [('Selected Data', Table)]
 
+    # Enable the save as feature
+    graph_name = 'scene'
+
     # Settings
     depth_limit = settings.ContextSetting(10)
     target_class_index = settings.ContextSetting(0)
@@ -269,7 +272,7 @@ class OWPythagorasTree(OWWidget):
         self.send('Selected Data', data)
 
     def send_report(self):
-        pass
+        self.report_plot()
 
 
 class ZoomableGraphicsView(QtGui.QGraphicsView):
