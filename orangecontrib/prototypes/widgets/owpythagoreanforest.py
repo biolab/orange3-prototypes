@@ -45,9 +45,6 @@ class OWPythagoreanForest(OWWidget):
         # Stretch to fit the rest of the unsused area
         gui.rubber(self.controlArea)
 
-        # Bottom options
-        self.inline_graph_report()
-
         self.controlArea.setSizePolicy(
             QtGui.QSizePolicy.Preferred, QtGui.QSizePolicy.Expanding)
 
@@ -69,7 +66,7 @@ class OWPythagoreanForest(OWWidget):
             clf = TreeClassifier(tree)
             clf.domain = model.domain
             clf.instances = model.instances
-            self.send('Tree', clf)
+        self.send('Tree', clf if self.model is not None else None)
 
     def clear(self):
         """Clear all relevant data from the widget."""
@@ -107,6 +104,7 @@ def main():
     ow = OWPythagoreanForest()
     data = Orange.data.Table(filename)
     clf = RandomForestLearner()(data)
+    clf.instances = data
     ow.set_rf(clf)
 
     ow.show()
