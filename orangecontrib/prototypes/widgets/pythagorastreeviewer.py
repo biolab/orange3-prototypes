@@ -1,5 +1,5 @@
 """
-Pythagoras tree viewer for visualizing tree strucutres.
+Pythagoras tree viewer for visualizing tree structures.
 
 The pythagoras tree viewer widget is a widget that can be plugged into any
 existing widget given a tree adapter instance. It is simply a canvas that takes
@@ -476,6 +476,9 @@ class TreeNode:
         self.parent = parent
         self.children = children
         self.graphics_item = None
+
+    def __str__(self):
+        return '({}) -> [{}]'.format(self.parent, self.label)
 
 
 class PythagorasTree:
@@ -1049,27 +1052,64 @@ class SklTreeAdapter(TreeAdapter):
             # leaf
             return np.array([node], dtype=int)
         else:
-            isleaf = self._tree.children_left[start: stop] == -1
-            assert np.flatnonzero(isleaf).size > 0
-            return start + np.flatnonzero(isleaf)
+            is_leaf = self._tree.children_left[start:stop] == -1
+            assert np.flatnonzero(is_leaf).size > 0
+            return start + np.flatnonzero(is_leaf)
 
     def _subnode_range(self, node):
         """Get the range of indices where there are subnodes of the given node.
         Taken from the classificationtreegraph.py"""
+        def find_largest_idx(n):
+            """It is necessary to locate the node with the largest index in the
+            children in order to get a good range. This is necessary with trees
+            that are not right aligned, which can happen when visualising
+            random forest trees."""
+            if self._tree.children_left[n] == -1:
+                return n
+
+            l_node = find_largest_idx(self._tree.children_left[n])
+            r_node = find_largest_idx(self._tree.children_right[n])
+
+            return l_node if l_node > r_node else r_node
+
         right = left = node
         if self._tree.children_left[left] == -1:
             assert self._tree.children_right[node] == -1
             return node, node
         else:
             left = self._tree.children_left[left]
-            # run down to the right most node
-            while self._tree.children_right[right] != -1:
-                right = self._tree.children_right[right]
+            right = find_largest_idx(right)
 
             return left, right + 1
 
-    def get_samples_in_node(self, X):
-        # TODO figure out and document.
+    def get_samples_in_leaves(self, data):
+        """Get an array of instance indices that belong to each leaf.
+
+        For a given dataset X, separate the instances out into an array, so
+        they are grouped together based on what leaf they belong to.
+
+        Examples
+        --------
+        Given a tree with two leaf nodes ( A <- R -> B ) and the dataset X =
+        [ 10, 20, 30, 40, 50, 60 ], where 10, 20 and 40 belong to leaf A, and
+        the rest to leaf B, the following structure will be returned (where
+        array is the numpy array):
+        [array([ 0, 1, 3 ]), array([ 2, 4, 5 ])]
+
+        The first array represents the indices of the values that belong to the
+        first leaft, so calling X[ 0, 1, 3 ] = [ 10, 20, 40 ]
+
+        Parameters
+        ----------
+        data
+            A matrix containing the data instances.
+
+        Returns
+        -------
+        np.array
+            The indices of instances belonging to a given leaf.
+
+        """
 
         def assign(node_id, indices):
             if self._tree.children_left[node_id] == -1:
@@ -1078,7 +1118,7 @@ class SklTreeAdapter(TreeAdapter):
                 feature_idx = self._tree.feature[node_id]
                 thresh = self._tree.threshold[node_id]
 
-                column = X[indices, feature_idx]
+                column = data[indices, feature_idx]
                 leftmask = column <= thresh
                 leftind = assign(self._tree.children_left[node_id],
                                  indices[leftmask])
@@ -1086,8 +1126,8 @@ class SklTreeAdapter(TreeAdapter):
                                   indices[~leftmask])
                 return list.__iadd__(leftind, rightind)
 
-        N, _ = X.shape
+        n, _ = data.shape
 
-        items = np.arange(N, dtype=int)
+        items = np.arange(n, dtype=int)
         leaf_indices = assign(0, items)
         return leaf_indices

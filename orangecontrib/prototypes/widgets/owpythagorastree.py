@@ -249,14 +249,17 @@ class OWPythagorasTree(OWWidget):
                        self.scene.selectedItems())
 
         selected_leaves = [ta.leaves(item.tree_node.label) for item in items]
-        if selected_leaves:
+        if len(selected_leaves) > 0:
+            # get the leaves of the selected tree node
             selected_leaves = np.unique(np.hstack(selected_leaves))
 
         all_leaves = ta.leaves(ta.root)
 
         if len(selected_leaves) > 0:
             indices = np.searchsorted(all_leaves, selected_leaves, side='left')
-            leaf_samples = ta.get_samples_in_node(self.clf_dataset.X)
+            # all the leaf samples for each leaf
+            leaf_samples = ta.get_samples_in_leaves(self.clf_dataset.X)
+            # filter out the leaf samples array that are not selected
             leaf_samples = [leaf_samples[i] for i in indices]
             indices = np.hstack(leaf_samples)
         else:
