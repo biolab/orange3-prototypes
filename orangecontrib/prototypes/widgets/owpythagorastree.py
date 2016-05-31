@@ -3,7 +3,6 @@ from math import sqrt, log
 import numpy as np
 from Orange.data.table import Table
 from Orange.widgets import gui, settings
-from Orange.widgets.utils.colorpalette import DefaultRGBColors
 from Orange.widgets.widget import OWWidget
 from PyQt4 import QtGui
 from PyQt4.QtCore import Qt
@@ -117,6 +116,7 @@ class OWPythagorasTree(OWWidget):
         if model is not None:
             self.tree_adapter = self._get_tree_adapter(self.model)
             self.color_palette = self._get_color_palette()
+
             self.ptree.set_tree(self.tree_adapter)
 
             self.dataset = model.instances
@@ -219,7 +219,7 @@ class OWPythagorasTree(OWWidget):
             colors = None
         return colors
 
-    def _get_node_color(self, tree_node):
+    def _get_node_color(self, adapter, tree_node):
         return self.color_palette[0]
 
     def _get_tree_adapter(self, model):
@@ -233,8 +233,8 @@ class OWPythagorasTree(OWWidget):
         # padding for panning.
         self.scene.setSceneRect(self.scene.itemsBoundingRect()
                                 .adjusted(-150, -150, 150, 150))
-        # fits the scene into the viewport
-        self.view.fitInView(self.scene.sceneRect(), Qt.KeepAspectRatio)
+        # reset the zoom level
+        self.view.recalculate_and_fit()
 
     def onDeleteWidget(self):
         """When deleting the widget."""
@@ -278,6 +278,7 @@ class OWPythagorasTree(OWWidget):
 class ZoomableGraphicsView(QtGui.QGraphicsView):
     def __init__(self, *args, **kwargs):
         self.zoom = 1
+        self.scale_factor = 1 / 16
         # zoomout limit prevents the zoom factor to become negative, which
         # results in the canvas being flipped over the x axis
         self._zoomout_limit_reached = False
@@ -287,10 +288,7 @@ class ZoomableGraphicsView(QtGui.QGraphicsView):
     def resizeEvent(self, ev):
         super().resizeEvent(ev)
         if self.zoom == 1:
-            self.fitInView(self.scene().itemsBoundingRect(),
-                           Qt.KeepAspectRatio)
-            self._initial_zoom = self.matrix().m11()
-            self.zoom = self._initial_zoom
+            self.recalculate_and_fit()
 
     def wheelEvent(self, ev):
         if self._zooming_in(ev):
@@ -299,10 +297,10 @@ class ZoomableGraphicsView(QtGui.QGraphicsView):
             ev.accept()
             return
 
-        self.zoom += np.sign(ev.delta()) * 1 / 16
+        self.zoom += np.sign(ev.delta()) * self.scale_factor
         if self.zoom <= 0:
             self._zoomout_limit_reached = True
-            self.zoom += 1
+            self.zoom += self.scale_factor
         else:
             self.setTransformationAnchor(self.AnchorUnderMouse)
             self.setTransform(QtGui.QTransform().scale(self.zoom, self.zoom))
@@ -317,6 +315,11 @@ class ZoomableGraphicsView(QtGui.QGraphicsView):
 
     def _reset_zoomout_limit(self):
         self._zoomout_limit_reached = False
+
+    def recalculate_and_fit(self):
+        self.fitInView(self.scene().sceneRect(), Qt.KeepAspectRatio)
+        self._initial_zoom = self.matrix().m11()
+        self.zoom = self._initial_zoom
 
     def reset_zoom(self):
         """Reset the zoom to the initial size."""

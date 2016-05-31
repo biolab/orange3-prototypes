@@ -1,8 +1,6 @@
 import Orange
 import numpy as np
 from Orange.classification.tree import TreeClassifier
-from Orange.data.table import Table
-from Orange.widgets.utils.colorpalette import DefaultRGBColors
 from PyQt4 import QtGui
 
 from orangecontrib.prototypes.widgets.owpythagorastree import OWPythagorasTree
@@ -25,12 +23,12 @@ class OWClassificationPythagorasTree(OWPythagorasTree):
                   self.tree_adapter.domain.class_vars[0].values]
         self.target_class_combo.addItems(values)
 
-    def _get_node_color(self, tree_node):
+    def _get_node_color(self, adapter, tree_node):
         # this is taken almost directly from the existing classification tree
         # viewer
         colors = self.color_palette
-        distribution = self.tree_adapter.get_distribution(tree_node.label)[0]
-        total = self.tree_adapter.num_samples(tree_node.label)
+        distribution = adapter.get_distribution(tree_node.label)[0]
+        total = adapter.num_samples(tree_node.label)
 
         if self.target_class_index:
             p = distribution[self.target_class_index - 1] / total
@@ -71,7 +69,8 @@ class OWClassificationPythagorasTree(OWPythagorasTree):
 
     def _get_tree_adapter(self, model):
         return SklTreeAdapter(
-            model,
+            model.skl_model.tree_,
+            model.domain,
             adjust_weight=self.SIZE_CALCULATION[self.size_calc_idx][1],
         )
 

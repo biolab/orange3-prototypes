@@ -1,5 +1,4 @@
 import Orange
-from Orange.data.table import Table
 from Orange.regression.tree import TreeRegressor
 from Orange.widgets.utils.colorpalette import ContinuousPaletteGenerator
 from PyQt4 import QtGui
@@ -26,16 +25,16 @@ class OWRegressionPythagorasTree(OWPythagorasTree):
         return ContinuousPaletteGenerator(
             *self.tree_adapter.domain.class_var.colors)
 
-    def _get_node_color(self, tree_node):
+    def _get_node_color(self, adapter, tree_node):
         # this is taken almost directly from the existing regression tree
         # viewer
         colors = self.color_palette
-        total_samples = self.tree_adapter.num_samples(self.tree_adapter.root)
-        max_impurity = self.tree_adapter.get_impurity(self.tree_adapter.root)
+        total_samples = adapter.num_samples(adapter.root)
+        max_impurity = adapter.get_impurity(adapter.root)
 
         li = [0.5,
-              self.tree_adapter.num_samples(tree_node.label) / total_samples,
-              self.tree_adapter.get_impurity(tree_node.label) / max_impurity]
+              adapter.num_samples(tree_node.label) / total_samples,
+              adapter.get_impurity(tree_node.label) / max_impurity]
 
         return QtGui.QBrush(colors[self.target_class_index].light(
             180 - li[self.target_class_index] * 150
@@ -63,7 +62,8 @@ class OWRegressionPythagorasTree(OWPythagorasTree):
 
     def _get_tree_adapter(self, model):
         return SklTreeAdapter(
-            model,
+            model.skl_model.tree_,
+            model.domain,
             adjust_weight=self.SIZE_CALCULATION[self.size_calc_idx][1],
         )
 

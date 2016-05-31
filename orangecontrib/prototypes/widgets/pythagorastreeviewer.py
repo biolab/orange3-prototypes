@@ -84,8 +84,10 @@ class PythagorasTreeViewer(QtGui.QGraphicsWidget):
         # Necessary settings that need to be set from the outside
         self._depth_limit = depth_limit
         # Provide a nice green default in case no color function is provided
-        self._calc_node_color = lambda _: QtGui.QColor('#297A1F')
-        self._get_tooltip = lambda _: 'Tooltip'
+        self._calc_node_color = kwargs.get(
+            'node_color_func',
+            lambda *_: QtGui.QColor('#297A1F'))
+        self._get_tooltip = kwargs.get('tooltip_func', lambda _: 'Tooltip')
         self._interactive = kwargs.get('interactive', True)
 
         self._square_objects = {}
@@ -175,12 +177,13 @@ class PythagorasTreeViewer(QtGui.QGraphicsWidget):
         -------
 
         """
-        for square in self._get_scene_squares():
-            square.setBrush(self._calc_node_color(square.tree_node))
+        for square in self._squares():
+            square.setBrush(self._calc_node_color(self._tree_adapter,
+                                                  square.tree_node))
 
     def _update_node_tooltips(self):
         """Update all the tooltips for the squares."""
-        for square in self._get_scene_squares():
+        for square in self._squares():
             square.setToolTip(self._get_tooltip(square.tree_node))
 
     def clear(self):
@@ -265,7 +268,9 @@ class PythagorasTreeViewer(QtGui.QGraphicsWidget):
                 self._square_objects[node.label] = square_obj(
                     node,
                     parent=self._item_group,
-                    brush=QtGui.QBrush(self._calc_node_color(node)),
+                    brush=QtGui.QBrush(
+                        self._calc_node_color(self._tree_adapter, node)
+                    ),
                     tooltip=self._get_tooltip(node),
                     zvalue=depth,
                 )
@@ -280,14 +285,12 @@ class PythagorasTreeViewer(QtGui.QGraphicsWidget):
         # have been increased
         return depth > self._depth_limit
 
-    def _get_scene_squares(self):
-        return filter(lambda i: isinstance(i, SquareGraphicsItem),
-                      self.scene().items())
+    def _squares(self):
+        return [node.graphics_item for _, node in self._drawn_nodes]
 
     def _clear_scene(self):
-        for item in self._get_scene_squares():
-            if item.scene() is self.scene() and self.scene() is not None:
-                self.scene().removeItem(item)
+        for square in self._squares():
+            self.scene().removeItem(square)
         self._frontier.clear()
         self._drawn_nodes.clear()
         self._square_objects.clear()
@@ -914,8 +917,10 @@ class SklTreeAdapter(TreeAdapter):
 
     Parameters
     ----------
-    model : Orange.base.SklModel
+    tree : sklearn.tree
         The raw sklearn classification tree.
+    domain : Orange.base.domain
+        The Orange domain that comes with the model.
     adjust_weight : function, optional
         If you want finer control over the weights of individual nodes you can
         pass in a function that takes the existsing weight and modifies it.
@@ -923,9 +928,9 @@ class SklTreeAdapter(TreeAdapter):
 
     """
 
-    def __init__(self, model, adjust_weight=lambda x: x):
-        self._tree = model.skl_model.tree_
-        self._domain = model.domain
+    def __init__(self, tree, domain, adjust_weight=lambda x: x):
+        self._tree = tree
+        self._domain = domain
         self._adjust_weight = adjust_weight
 
         # clear memoized functions
