@@ -2,7 +2,7 @@
 
 from setuptools import setup, find_packages
 
-VERSION = '0.4.4'
+VERSION = '0.4.5'
 
 ENTRY_POINTS = {
     'orange3.addon': (
