@@ -33,7 +33,7 @@ if __name__ == '__main__':
             "orangecontrib.prototypes.widgets": ["icons/*.svg"],
         },
         install_requires=[
-            'Orange',
+            'Orange3',
         ],
         entry_points=ENTRY_POINTS,
         namespace_packages=['orangecontrib'],
