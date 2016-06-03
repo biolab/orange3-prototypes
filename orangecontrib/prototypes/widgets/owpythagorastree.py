@@ -12,11 +12,6 @@ from orangecontrib.prototypes.widgets.pythagorastreeviewer import \
 
 
 class OWPythagorasTree(OWWidget):
-    # name = 'Pythagoras Tree'
-    # description = 'Generalized Pythagoras Tree for visualizing trees.'
-    # priority = 100
-
-    # inputs = [('Tree', TreeAdapter, 'set_tree')]
     outputs = [('Selected Data', Table)]
 
     # Enable the save as feature
@@ -28,6 +23,7 @@ class OWPythagorasTree(OWWidget):
     size_calc_idx = settings.Setting(0)
     size_log_scale = settings.Setting(2)
     tooltips_enabled = settings.Setting(True)
+    show_legend = settings.Setting(False)
 
     def __init__(self):
         super().__init__()
@@ -50,11 +46,11 @@ class OWPythagorasTree(OWWidget):
 
         # CONTROL AREA
         # Tree info area
-        box_info = gui.widgetBox(self.controlArea, 'Tree')
-        self.info = gui.widgetLabel(box_info, label='No tree.')
+        box_info = gui.widgetBox(self.controlArea, 'Tree Info')
+        self.info = gui.widgetLabel(box_info, label='')
 
-        # Display controls area
-        box_display = gui.widgetBox(self.controlArea, 'Display')
+        # Display settings area
+        box_display = gui.widgetBox(self.controlArea, 'Display Settings')
         self.depth_slider = gui.hSlider(
             box_display, self, 'depth_limit', label='Depth', ticks=False,
             callback=self.update_depth)
@@ -67,20 +63,19 @@ class OWPythagorasTree(OWWidget):
             orientation='horizontal',
             items=list(zip(*self.SIZE_CALCULATION))[0], contentsLength=8,
             callback=self.update_size_calc)
-        # the log slider needs its own box to be able to be completely hidden
-        self.log_scale_box = gui.widgetBox(box_display)
-        gui.hSlider(
-            self.log_scale_box, self, 'size_log_scale', label='Log scale',
-            minValue=1, maxValue=100, ticks=False,
+        self.log_scale_box = gui.hSlider(
+            box_display, self, 'size_log_scale',
+            label='Log scale factor', minValue=1, maxValue=100, ticks=False,
             callback=self.invalidate_tree)
-        # the log scale slider should only be visible if the calc method is log
-        if self.SIZE_CALCULATION[self.size_calc_idx][0] != 'Logarithmic':
-            self.log_scale_box.setEnabled(False)
-            self.log_scale_box.setVisible(False)
 
+        # Plot properties area
+        box_plot = gui.widgetBox(self.controlArea, 'Plot Properties')
         gui.checkBox(
-            box_display, self, 'tooltips_enabled', label='Enable tooltips',
-            callback=self._update_tooltip_enabled)
+            box_plot, self, 'tooltips_enabled', label='Enable tooltips',
+            callback=self.update_tooltip_enabled)
+        gui.checkBox(
+            box_plot, self, 'show_legend', label='Show legend',
+            callback=self.update_show_legend)
 
         # Stretch to fit the rest of the unsused area
         gui.rubber(self.controlArea)
@@ -88,7 +83,7 @@ class OWPythagorasTree(OWWidget):
         self.controlArea.setSizePolicy(
             QtGui.QSizePolicy.Preferred, QtGui.QSizePolicy.Expanding)
 
-        # GUI - MAIN AREA
+        # MAIN AREA
         # The QGraphicsScene doesn't actually require a parent, but not linking
         # the widget to the scene causes errors and a segfault on close due to
         # the way Qt deallocates memory and deletes objects.
@@ -107,6 +102,8 @@ class OWPythagorasTree(OWWidget):
         self.scene.addItem(self.ptree)
 
         self.resize(800, 500)
+        # Clear the widget to correctly set the intial values
+        self.clear()
 
     def set_tree(self, model=None):
         """When a different tree is given."""
@@ -129,35 +126,10 @@ class OWPythagorasTree(OWWidget):
                 self.clf_dataset = self.dataset
 
             self._update_info_box()
-            self._update_target_class_combo()
             self._update_depth_slider()
+            self._update_target_class_combo()
 
             self._update_main_area()
-
-    def update_depth(self):
-        """This method should be called when the depth changes"""
-        self.ptree.set_depth_limit(self.depth_limit)
-
-    def update_colors(self):
-        self.ptree.target_class_has_changed()
-
-    def update_size_calc(self):
-        """On calc method combo box changed."""
-        if self.SIZE_CALCULATION[self.size_calc_idx][0] == 'Logarithmic':
-            self.log_scale_box.setEnabled(True)
-            self.log_scale_box.setVisible(True)
-        else:
-            self.log_scale_box.setEnabled(False)
-            self.log_scale_box.setVisible(False)
-        self.invalidate_tree()
-
-    def invalidate_tree(self):
-        """When the tree needs to be recalculated. E.g. change of size calc."""
-        self.tree_adapter = self._get_tree_adapter(self.model)
-
-        self.ptree.set_tree(self.tree_adapter)
-        self.ptree.set_depth_limit(self.depth_limit)
-        self._update_main_area()
 
     def clear(self):
         """Clear all relevant data from the widget."""
@@ -170,46 +142,80 @@ class OWPythagorasTree(OWWidget):
         self._clear_info_box()
         self._clear_target_class_combo()
         self._clear_depth_slider()
+        self._update_log_scale_slider()
 
+    # CONTROL AREA CALLBACKS
+    def update_depth(self):
+        """This method should be called when the depth changes"""
+        self.ptree.set_depth_limit(self.depth_limit)
+
+    def update_colors(self):
+        self.ptree.target_class_has_changed()
+
+    def update_size_calc(self):
+        self._update_log_scale_slider()
+        self.invalidate_tree()
+
+    def invalidate_tree(self):
+        """When the tree needs to be recalculated. E.g. change of size calc."""
+        if self.model is not None:
+            self.tree_adapter = self._get_tree_adapter(self.model)
+
+            self.ptree.set_tree(self.tree_adapter)
+            self.ptree.set_depth_limit(self.depth_limit)
+            self._update_main_area()
+
+    def update_tooltip_enabled(self):
+        if self.tooltips_enabled:
+            self.ptree.set_tooltip_func(self._get_tooltip)
+        else:
+            self.ptree.set_tooltip_func(lambda _: None)
+        self.ptree.tooltip_has_changed()
+
+    def update_show_legend(self):
+        pass
+
+    # MODEL CHANGED CONTROL ELEMENTS UPDATE METHODS
     def _update_info_box(self):
-        self.info.setText(
-            '{} nodes, {} depth'.format(
-                self.tree_adapter.num_nodes,
-                self.tree_adapter.max_depth
-            )
-        )
-
-    def _clear_info_box(self):
-        self.info.setText('No tree')
+        print(self.tree_adapter.max_depth)
+        self.info.setText('Nodes: {}\nDepth: {}'.format(
+            self.tree_adapter.num_nodes,
+            self.tree_adapter.max_depth
+        ))
 
     def _update_depth_slider(self):
         self.depth_slider.setEnabled(True)
         self.depth_slider.setMaximum(self.tree_adapter.max_depth)
         self._set_max_depth()
 
+    def _update_target_class_combo(self):
+        return []
+
+    def _update_log_scale_slider(self):
+        """On calc method combo box changed."""
+        if self.SIZE_CALCULATION[self.size_calc_idx][0] == 'Logarithmic':
+            self.log_scale_box.setEnabled(True)
+        else:
+            self.log_scale_box.setEnabled(False)
+
+    # MODEL REMOVED CONTROL ELEMENTS CLEAR METHODS
+    def _clear_info_box(self):
+        self.info.setText('No tree on input')
+
     def _clear_depth_slider(self):
         self.depth_slider.setEnabled(False)
         self.depth_slider.setMaximum(0)
-
-    def _set_max_depth(self):
-        """Set the depth to the max depth and update appropriate actors."""
-        self.depth_limit = self.tree_adapter.max_depth
-        self.depth_slider.setValue(self.depth_limit)
-
-    def _update_target_class_combo(self):
-        return []
 
     def _clear_target_class_combo(self):
         self.target_class_combo.clear()
         self.target_class_index = 0
         self.target_class_combo.setCurrentIndex(self.target_class_index)
 
-    def _update_tooltip_enabled(self):
-        if self.tooltips_enabled:
-            self.ptree.set_tooltip_func(self._get_tooltip)
-        else:
-            self.ptree.set_tooltip_func(lambda _: None)
-        self.ptree.tooltip_has_changed()
+    # HELPFUL METHODS
+    def _set_max_depth(self):
+        """Set the depth to the max depth and update appropriate actors."""
+        self.depth_limit = self.tree_adapter.max_depth
+        self.depth_slider.setValue(self.depth_limit)
 
     def _get_color_palette(self):
         if self.model.domain.class_var.is_discrete:
