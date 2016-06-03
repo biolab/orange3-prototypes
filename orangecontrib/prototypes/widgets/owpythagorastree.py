@@ -114,8 +114,6 @@ class OWPythagorasTree(OWWidget):
             self.tree_adapter = self._get_tree_adapter(self.model)
             self.color_palette = self._get_color_palette()
 
-            self.ptree.set_tree(self.tree_adapter)
-
             self.dataset = model.instances
             # this bit is important for the regression classifier
             if self.dataset is not None and \
@@ -124,6 +122,8 @@ class OWPythagorasTree(OWWidget):
                     self.model.domain, self.dataset)
             else:
                 self.clf_dataset = self.dataset
+
+            self.ptree.set_tree(self.tree_adapter)
 
             self._update_info_box()
             self._update_depth_slider()
@@ -252,28 +252,11 @@ class OWPythagorasTree(OWWidget):
             self.send('Selected Data', None)
             return
         # this is taken almost directly from the owclassificationtreegraph.py
-        ta = self.tree_adapter
         items = filter(lambda x: isinstance(x, SquareGraphicsItem),
                        self.scene.selectedItems())
 
-        selected_leaves = [ta.leaves(item.tree_node.label) for item in items]
-        if len(selected_leaves) > 0:
-            # get the leaves of the selected tree node
-            selected_leaves = np.unique(np.hstack(selected_leaves))
-
-        all_leaves = ta.leaves(ta.root)
-
-        if len(selected_leaves) > 0:
-            indices = np.searchsorted(all_leaves, selected_leaves, side='left')
-            # all the leaf samples for each leaf
-            leaf_samples = ta.get_samples_in_leaves(self.clf_dataset.X)
-            # filter out the leaf samples array that are not selected
-            leaf_samples = [leaf_samples[i] for i in indices]
-            indices = np.hstack(leaf_samples)
-        else:
-            indices = []
-
-        data = self.dataset[indices] if len(indices) else None
+        data = self.tree_adapter.get_instances_in_nodes(
+            self.clf_dataset, [item.tree_node for item in items])
         self.send('Selected Data', data)
 
     def send_report(self):
@@ -337,6 +320,7 @@ class ZoomableGraphicsView(QtGui.QGraphicsView):
     def reset_zoom(self):
         """Reset the zoom to the initial size."""
         self.zoom = self._initial_zoom
+        self._zoomout_limit_reached = False
         self.setTransform(QtGui.QTransform().scale(self.zoom, self.zoom))
 
 

@@ -860,6 +860,23 @@ class TreeAdapter:
         """
         raise NotImplemented()
 
+    def get_instances_in_nodes(self, dataset, nodes):
+        """Get all the instances belonging to a set of nodes for a given
+        dataset.
+
+        Parameters
+        ----------
+        dataset : Table
+            A Orange Table dataset.
+        nodes : iterable[TreeNode]
+            A list of tree nodes for which we want the instances.
+
+        Returns
+        -------
+
+        """
+        raise NotImplemented()
+
     @property
     def max_depth(self):
         """Get the maximum depth that the tree reaches.
@@ -937,6 +954,8 @@ class SklTreeAdapter(TreeAdapter):
         self.weight.cache_clear()
         self._adjusted_child_weight.cache_clear()
         self.parent.cache_clear()
+
+        self._all_leaves = None
 
     @lru_cache()
     def weight(self, node):
@@ -1051,6 +1070,7 @@ class SklTreeAdapter(TreeAdapter):
     def splitting_attribute(self, node):
         return self._tree.feature[node]
 
+    @lru_cache()
     def leaves(self, node):
         start, stop = self._subnode_range(node)
         if start == stop:
@@ -1131,8 +1151,36 @@ class SklTreeAdapter(TreeAdapter):
                                   indices[~leftmask])
                 return list.__iadd__(leftind, rightind)
 
+        # TODO this kind of cache can lead to all sorts of problems, but numpy
+        # arrays are unhashable, and this gives huge performance boosts
+        if self._all_leaves is not None:
+            return self._all_leaves
+
         n, _ = data.shape
 
         items = np.arange(n, dtype=int)
         leaf_indices = assign(0, items)
+        self._all_leaves = leaf_indices
         return leaf_indices
+
+    def get_instances_in_nodes(self, dataset, nodes):
+        if not isinstance(nodes, (list, tuple)):
+            nodes = [nodes]
+
+        node_leaves = [self.leaves(n.label) for n in nodes]
+        if len(node_leaves) > 0:
+            # get the leaves of the selected tree node
+            node_leaves = np.unique(np.hstack(node_leaves))
+
+            all_leaves = self.leaves(self.root)
+
+            indices = np.searchsorted(all_leaves, node_leaves, side='left')
+            # all the leaf samples for each leaf
+            leaf_samples = self.get_samples_in_leaves(dataset.X)
+            # filter out the leaf samples array that are not selected
+            leaf_samples = [leaf_samples[i] for i in indices]
+            indices = np.hstack(leaf_samples)
+        else:
+            indices = []
+
+        return dataset[indices] if len(indices) else None

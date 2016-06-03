@@ -1,3 +1,5 @@
+from functools import lru_cache
+
 import Orange
 from Orange.regression.tree import TreeRegressor
 from Orange.widgets.utils.colorpalette import ContinuousPaletteGenerator
@@ -6,6 +8,8 @@ from PyQt4 import QtGui
 from orangecontrib.prototypes.widgets.owpythagorastree import OWPythagorasTree
 from orangecontrib.prototypes.widgets.pythagorastreeviewer import \
     SklTreeAdapter
+
+import numpy as np
 
 
 class OWRegressionPythagorasTree(OWPythagorasTree):
@@ -16,29 +20,60 @@ class OWRegressionPythagorasTree(OWPythagorasTree):
 
     inputs = [('Regression Tree', TreeRegressor, 'set_tree')]
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.REGRESSION_COLOR_CALC = [
+            ('None', lambda _, __: QtGui.QColor(255, 255, 255)),
+            ('Instances in node', self._color_num_nodes),
+            ('Class mean', self._color_class_mean),
+            ('Standard deviation', self._color_stddev),
+        ]
+
     def _update_target_class_combo(self):
         self._clear_target_class_combo()
-        values = ['Default', 'Instances in node', 'Impurity']
-        self.target_class_combo.addItems(values)
+        self.target_class_combo.addItems(
+            list(zip(*self.REGRESSION_COLOR_CALC))[0])
+        self.target_class_combo.setCurrentIndex(self.target_class_index)
+
+    def _clear_target_class_combo(self):
+        # Since the target classes are just the different coloring methods,
+        # we can reuse the selected index when the tree changes, unlike with
+        # the classification tree.
+        self.target_class_combo.clear()
 
     def _get_color_palette(self):
         return ContinuousPaletteGenerator(
             *self.tree_adapter.domain.class_var.colors)
 
     def _get_node_color(self, adapter, tree_node):
-        # this is taken almost directly from the existing regression tree
-        # viewer
-        colors = self.color_palette
+        return self.REGRESSION_COLOR_CALC[self.target_class_index][1](
+            adapter, tree_node
+        )
+
+    def _color_num_nodes(self, adapter, tree_node):
+        # calculate node colors relative to the numbers of samples in the node
         total_samples = adapter.num_samples(adapter.root)
-        max_impurity = adapter.get_impurity(adapter.root)
+        num_samples = adapter.num_samples(tree_node.label)
+        return self.color_palette[num_samples / total_samples]
 
-        li = [0.5,
-              adapter.num_samples(tree_node.label) / total_samples,
-              adapter.get_impurity(tree_node.label) / max_impurity]
+    def _color_class_mean(self, adapter, tree_node):
+        # calculate node colors relative to the mean of the node samples
+        min_mean = np.min(self.clf_dataset.Y)
+        max_mean = np.max(self.clf_dataset.Y)
+        instances = adapter.get_instances_in_nodes(self.clf_dataset, tree_node)
+        mean = np.mean(instances.Y)
 
-        return QtGui.QBrush(colors[self.target_class_index].light(
-            180 - li[self.target_class_index] * 150
-        ))
+        return self.color_palette[(mean - min_mean) / (max_mean - min_mean)]
+
+    def _color_stddev(self, adapter, tree_node):
+        # calculate node colors relative to the standard deviation in the node
+        # samples
+        min_mean, max_mean = 0, np.std(self.clf_dataset.Y)
+        instances = adapter.get_instances_in_nodes(self.clf_dataset, tree_node)
+        std = np.std(instances.Y)
+
+        return self.color_palette[(std - min_mean) / (max_mean - min_mean)]
 
     def _get_tooltip(self, node):
         total = self.tree_adapter.num_samples(self.tree_adapter.root)
@@ -81,7 +116,7 @@ def main():
     app = QtGui.QApplication(argv)
     ow = OWRegressionPythagorasTree()
     data = Orange.data.Table(filename)
-    reg = TreeRegressionLearner(max_depth=5)(data)
+    reg = TreeRegressionLearner(max_depth=25)(data)
     reg.instances = data
     ow.set_tree(reg)
 
