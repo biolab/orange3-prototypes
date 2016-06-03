@@ -270,12 +270,15 @@ class ZoomableGraphicsView(QtGui.QGraphicsView):
         # zoomout limit prevents the zoom factor to become negative, which
         # results in the canvas being flipped over the x axis
         self._zoomout_limit_reached = False
-        self._initial_zoom = 1
+        # Does the view need to recalculate the initial scale factor
+        self._needs_to_recalculate_initial = True
+        self._initial_zoom = -1
         super().__init__(*args, **kwargs)
 
     def resizeEvent(self, ev):
         super().resizeEvent(ev)
-        if self.zoom == 1:
+        self._needs_to_recalculate_initial = True
+        if self.zoom == -1:
             self.recalculate_and_fit()
 
     def wheelEvent(self, ev):
@@ -322,6 +325,8 @@ class ZoomableGraphicsView(QtGui.QGraphicsView):
         self.zoom = self._initial_zoom
         self._zoomout_limit_reached = False
         self.setTransform(QtGui.QTransform().scale(self.zoom, self.zoom))
+        if self._needs_to_recalculate_initial:
+            self.recalculate_and_fit()
 
 
 class PannableGraphicsView(QtGui.QGraphicsView):
