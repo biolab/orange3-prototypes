@@ -177,7 +177,6 @@ class OWPythagorasTree(OWWidget):
 
     # MODEL CHANGED CONTROL ELEMENTS UPDATE METHODS
     def _update_info_box(self):
-        print(self.tree_adapter.max_depth)
         self.info.setText('Nodes: {}\nDepth: {}'.format(
             self.tree_adapter.num_nodes,
             self.tree_adapter.max_depth
@@ -311,6 +310,14 @@ class ZoomableGraphicsView(QtGui.QGraphicsView):
             self.setTransformationAnchor(self.AnchorUnderMouse)
             self.setTransform(QtGui.QTransform().scale(self.zoom, self.zoom))
         ev.accept()
+
+    def mousePressEvent(self, ev):
+        # right click resets the zoom factor
+        if ev.button() == Qt.RightButton:
+            self.reset_zoom()
+            ev.accept()
+        else:
+            super().mousePressEvent(ev)
 
     @staticmethod
     def _zooming_out(ev):
