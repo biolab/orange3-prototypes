@@ -79,7 +79,11 @@ class OWRegressionPythagorasTree(OWPythagorasTree):
         total = self.tree_adapter.num_samples(self.tree_adapter.root)
         samples = self.tree_adapter.num_samples(node.label)
         ratio = samples / total
-        impurity = self.tree_adapter.get_impurity(node.label)
+
+        instances = self.tree_adapter.get_instances_in_nodes(
+            self.clf_dataset, node)
+        mean = np.mean(instances.Y)
+        std = np.std(instances.Y)
 
         rules = self.tree_adapter.rules(node.label)
         rules = '<br>'.join(
@@ -87,7 +91,8 @@ class OWRegressionPythagorasTree(OWPythagorasTree):
 
         splitting_attr = self.tree_adapter.attribute(node.label)
 
-        return '<p>Impurity: {:2.3f}%'.format(impurity) \
+        return '<p>μ: {:2.3f}'.format(mean) \
+            + '<br>σ: {:2.3f}'.format(std) \
             + '<br>{}/{} samples ({:2.3f}%)'.format(
                 int(samples), total, ratio * 100) \
             + '<br><br>Split by ' + splitting_attr.name \
