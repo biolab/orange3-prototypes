@@ -1,6 +1,5 @@
-from functools import lru_cache
-
 import Orange
+import numpy as np
 from Orange.regression.tree import TreeRegressor
 from Orange.widgets.utils.colorpalette import ContinuousPaletteGenerator
 from PyQt4 import QtGui
@@ -8,8 +7,6 @@ from PyQt4 import QtGui
 from orangecontrib.prototypes.widgets.owpythagorastree import OWPythagorasTree
 from orangecontrib.prototypes.widgets.pythagorastreeviewer import \
     SklTreeAdapter
-
-import numpy as np
 
 
 class OWRegressionPythagorasTree(OWPythagorasTree):
@@ -25,7 +22,6 @@ class OWRegressionPythagorasTree(OWPythagorasTree):
 
         self.REGRESSION_COLOR_CALC = [
             ('None', lambda _, __: QtGui.QColor(255, 255, 255)),
-            ('Instances in node', self._color_num_nodes),
             ('Class mean', self._color_class_mean),
             ('Standard deviation', self._color_stddev),
         ]
@@ -50,12 +46,6 @@ class OWRegressionPythagorasTree(OWPythagorasTree):
         return self.REGRESSION_COLOR_CALC[self.target_class_index][1](
             adapter, tree_node
         )
-
-    def _color_num_nodes(self, adapter, tree_node):
-        # calculate node colors relative to the numbers of samples in the node
-        total_samples = adapter.num_samples(adapter.root)
-        num_samples = adapter.num_samples(tree_node.label)
-        return self.color_palette[num_samples / total_samples]
 
     def _color_class_mean(self, adapter, tree_node):
         # calculate node colors relative to the mean of the node samples

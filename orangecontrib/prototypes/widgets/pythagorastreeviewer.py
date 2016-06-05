@@ -27,10 +27,9 @@ from math import pi, sqrt, cos, sin, degrees
 import numpy as np
 from Orange.preprocess.transformation import Indicator
 from PyQt4 import QtCore, QtGui
-
-# Please note that all angles are in radians
 from PyQt4.QtCore import Qt
 
+# Please note that all angles are in radians
 # z index range, increase if needed
 Z_STEP = 5000000
 

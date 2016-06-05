@@ -62,7 +62,8 @@ class OWClassificationPythagorasTree(OWPythagorasTree):
             + text \
             + '{}/{} samples ({:2.3f}%)'.format(
                 int(samples), total, ratio * 100) \
-            + '<br><br>Split by ' + splitting_attr.name \
+            + ('<br><br>Split by ' + splitting_attr.name
+                if not self.tree_adapter.is_leaf(node.label) else '') \
             + '<hr>' \
             + rules \
             + '</p>'
