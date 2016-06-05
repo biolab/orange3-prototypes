@@ -1,4 +1,5 @@
 import Orange
+import Orange.widgets
 import numpy as np
 from Orange.classification.tree import TreeClassifier
 from PyQt4 import QtGui
