@@ -4,9 +4,8 @@ from Orange.regression.tree import TreeRegressor
 from Orange.widgets.utils.colorpalette import ContinuousPaletteGenerator
 from PyQt4 import QtGui
 
+from orangecontrib.prototypes.utils.tree.skltreeadapter import SklTreeAdapter
 from orangecontrib.prototypes.widgets.owpythagorastree import OWPythagorasTree
-from orangecontrib.prototypes.widgets.pythagorastreeviewer import \
-    SklTreeAdapter
 
 
 class OWRegressionPythagorasTree(OWPythagorasTree):

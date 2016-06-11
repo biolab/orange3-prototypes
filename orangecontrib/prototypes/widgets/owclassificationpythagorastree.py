@@ -4,9 +4,8 @@ import numpy as np
 from Orange.classification.tree import TreeClassifier
 from PyQt4 import QtGui
 
+from orangecontrib.prototypes.utils.tree.skltreeadapter import SklTreeAdapter
 from orangecontrib.prototypes.widgets.owpythagorastree import OWPythagorasTree
-from orangecontrib.prototypes.widgets.pythagorastreeviewer import \
-    SklTreeAdapter
 
 
 class OWClassificationPythagorasTree(OWPythagorasTree):

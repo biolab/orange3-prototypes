@@ -1,7 +1,7 @@
 import unittest
 import Orange.widgets
 
-from orangecontrib.prototypes.widgets.pythagorastreeviewer import (
+from orangecontrib.prototypes.utils.tree.rules import (
     DiscreteRule,
     ContinuousRule,
     IntervalRule,

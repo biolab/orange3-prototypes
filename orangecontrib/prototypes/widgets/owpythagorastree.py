@@ -1,14 +1,20 @@
 from math import sqrt, log
 
-import numpy as np
 from Orange.data.table import Table
 from Orange.widgets import gui, settings
 from Orange.widgets.widget import OWWidget
 from PyQt4 import QtGui
-from PyQt4.QtCore import Qt
+from orangecontrib.prototypes.utils.common.view import (
+    PannableGraphicsView,
+    ZoomableGraphicsView
+)
 
-from orangecontrib.prototypes.widgets.pythagorastreeviewer import \
-    PythagorasTreeViewer, SquareGraphicsItem
+from orangecontrib.prototypes.utils.common.scene import \
+    UpdateItemsOnSelectGraphicsScene
+from orangecontrib.prototypes.widgets.pythagorastreeviewer import (
+    PythagorasTreeViewer,
+    SquareGraphicsItem
+)
 
 
 class OWPythagorasTree(OWWidget):
@@ -263,112 +269,8 @@ class OWPythagorasTree(OWWidget):
         self.report_plot()
 
 
-class ZoomableGraphicsView(QtGui.QGraphicsView):
-    def __init__(self, *args, **kwargs):
-        self.zoom = 1
-        self.scale_factor = 1 / 16
-        # zoomout limit prevents the zoom factor to become negative, which
-        # results in the canvas being flipped over the x axis
-        self._zoomout_limit_reached = False
-        # Does the view need to recalculate the initial scale factor
-        self._needs_to_recalculate_initial = True
-        self._initial_zoom = -1
-        super().__init__(*args, **kwargs)
-
-    def resizeEvent(self, ev):
-        super().resizeEvent(ev)
-        self._needs_to_recalculate_initial = True
-        if self.zoom == -1:
-            self.recalculate_and_fit()
-
-    def wheelEvent(self, ev):
-        if self._zooming_in(ev):
-            self._reset_zoomout_limit()
-        if self._zoomout_limit_reached and self._zooming_out(ev):
-            ev.accept()
-            return
-
-        self.zoom += np.sign(ev.delta()) * self.scale_factor
-        if self.zoom <= 0:
-            self._zoomout_limit_reached = True
-            self.zoom += self.scale_factor
-        else:
-            self.setTransformationAnchor(self.AnchorUnderMouse)
-            self.setTransform(QtGui.QTransform().scale(self.zoom, self.zoom))
-        ev.accept()
-
-    def mousePressEvent(self, ev):
-        # right click resets the zoom factor
-        if ev.button() == Qt.RightButton:
-            self.reset_zoom()
-            ev.accept()
-        else:
-            super().mousePressEvent(ev)
-
-    @staticmethod
-    def _zooming_out(ev):
-        return ev.delta() < 0
-
-    def _zooming_in(self, ev):
-        return not self._zooming_out(ev)
-
-    def _reset_zoomout_limit(self):
-        self._zoomout_limit_reached = False
-
-    def recalculate_and_fit(self):
-        self.fitInView(self.scene().sceneRect(), Qt.KeepAspectRatio)
-        self._initial_zoom = self.matrix().m11()
-        self.zoom = self._initial_zoom
-
-    def reset_zoom(self):
-        """Reset the zoom to the initial size."""
-        self.zoom = self._initial_zoom
-        self._zoomout_limit_reached = False
-        self.setTransform(QtGui.QTransform().scale(self.zoom, self.zoom))
-        if self._needs_to_recalculate_initial:
-            self.recalculate_and_fit()
-
-
-class PannableGraphicsView(QtGui.QGraphicsView):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.setDragMode(QtGui.QGraphicsView.ScrollHandDrag)
-
-    def enterEvent(self, ev):
-        super().enterEvent(ev)
-        self.viewport().setCursor(Qt.ArrowCursor)
-
-    def mouseReleaseEvent(self, ev):
-        super().mouseReleaseEvent(ev)
-        self.viewport().setCursor(Qt.ArrowCursor)
-
-
 class TreeGraphicsView(PannableGraphicsView, ZoomableGraphicsView):
     pass
-
-
-class UpdateItemsOnSelectGraphicsScene(QtGui.QGraphicsScene):
-    """Calls the selection_changed method on items.
-
-    Whenever the scene selection changes, this view will call the
-    ˙selection_changed˙ method on any item on the scene.
-
-    Notes
-    -----
-      - I suspect this is completely unncessary, but have not been able to find
-        a reasonable way to keep the selection logic inside the actual
-        `QGraphicsItem` objects
-
-    """
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.selectionChanged.connect(self.__handle_selection)
-
-    def __handle_selection(self):
-        for item in self.items():
-            if hasattr(item, 'selection_changed'):
-                item.selection_changed()
 
 
 class TreeGraphicsScene(UpdateItemsOnSelectGraphicsScene):
