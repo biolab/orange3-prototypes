@@ -87,7 +87,7 @@ class OWPythagorasTree(OWWidget):
         # The QGraphicsScene doesn't actually require a parent, but not linking
         # the widget to the scene causes errors and a segfault on close due to
         # the way Qt deallocates memory and deletes objects.
-        self.scene = QtGui.QGraphicsScene(self)
+        self.scene = TreeGraphicsScene(self)
         self.scene.selectionChanged.connect(self.commit)
         self.view = TreeGraphicsView(self.scene)
         self.view.setRenderHint(QtGui.QPainter.Antialiasing, True)
@@ -344,4 +344,32 @@ class PannableGraphicsView(QtGui.QGraphicsView):
 
 
 class TreeGraphicsView(PannableGraphicsView, ZoomableGraphicsView):
+    pass
+
+
+class UpdateItemsOnSelectGraphicsScene(QtGui.QGraphicsScene):
+    """Calls the selection_changed method on items.
+
+    Whenever the scene selection changes, this view will call the
+    ˙selection_changed˙ method on any item on the scene.
+
+    Notes
+    -----
+      - I suspect this is completely unncessary, but have not been able to find
+        a reasonable way to keep the selection logic inside the actual
+        `QGraphicsItem` objects
+
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.selectionChanged.connect(self.__handle_selection)
+
+    def __handle_selection(self):
+        for item in self.items():
+            if hasattr(item, 'selection_changed'):
+                item.selection_changed()
+
+
+class TreeGraphicsScene(UpdateItemsOnSelectGraphicsScene):
     pass

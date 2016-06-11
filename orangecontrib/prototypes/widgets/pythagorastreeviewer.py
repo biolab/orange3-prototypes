@@ -327,7 +327,6 @@ class SquareGraphicsItem(QtGui.QGraphicsRectItem):
 
         self.setBrush(kwargs.get('brush', QtGui.QColor('#297A1F')))
         self.setPen(kwargs.get('pen', QtGui.QPen(QtGui.QColor('#000'))))
-        self.setToolTip(kwargs.get('tooltip', 'Tooltip'))
 
         self.setAcceptHoverEvents(True)
         self.setZValue(kwargs.get('zvalue', 0))
@@ -357,24 +356,6 @@ class SquareGraphicsItem(QtGui.QGraphicsRectItem):
         y = self.center.y() - self.length / 2
         return QtCore.QRectF(x, y, height, width)
 
-    def paint(self, painter, option, widget=None):
-        # Override the default selected appearance
-        if self.isSelected():
-            option.state ^= QtGui.QStyle.State_Selected
-            rect = self.rect()
-            # this must render before overlay due to order in which it's drawn
-            super().paint(painter, option, widget)
-            painter.save()
-            pen = QtGui.QPen(QtGui.QColor(75, 134, 204, 200))
-            pen.setWidth(2)
-            pen.setJoinStyle(Qt.MiterJoin)
-            painter.setPen(pen)
-            painter.setBrush(QtGui.QBrush(QtGui.QColor(75, 134, 204, 100)))
-            painter.drawRect(rect.adjusted(1, 1, -1, -1))
-            painter.restore()
-        else:
-            super().paint(painter, option, widget)
-
 
 class InteractiveSquareGraphicsItem(SquareGraphicsItem):
     """Interactive square graphics items.
@@ -396,23 +377,47 @@ class InteractiveSquareGraphicsItem(SquareGraphicsItem):
 
     timer = QtCore.QTimer()
 
+    MAX_OPACITY = 1.
+    SELECTION_OPACITY = .5
+    HOVER_OPACITY = .1
+
     def __init__(self, tree_node, parent=None, **kwargs):
         super().__init__(tree_node, parent, **kwargs)
         self.setFlag(QtGui.QGraphicsItem.ItemIsSelectable, True)
 
         self.initial_zvalue = self.zValue()
+        # The max z value changes if any item is selected
+        self.any_selected = False
+
+        self.setToolTip(kwargs.get('tooltip', 'Tooltip'))
+
+        # self.scene().selectionChanged.connect(self._handle_selected)
 
         InteractiveSquareGraphicsItem.timer.setSingleShot(True)
+
+    def _scene_selection_manager(self):
+        pass
 
     def hoverEnterEvent(self, ev):
         InteractiveSquareGraphicsItem.timer.stop()
 
         def fnc(graphics_item):
             graphics_item.setZValue(Z_STEP)
-            graphics_item.setOpacity(1.)
+            if self.any_selected:
+                if graphics_item.isSelected():
+                    opacity = InteractiveSquareGraphicsItem.MAX_OPACITY
+                else:
+                    opacity = InteractiveSquareGraphicsItem.SELECTION_OPACITY
+            else:
+                opacity = InteractiveSquareGraphicsItem.MAX_OPACITY
+            graphics_item.setOpacity(opacity)
 
         def other_fnc(graphics_item):
-            graphics_item.setOpacity(.1)
+            if graphics_item.isSelected():
+                opacity = InteractiveSquareGraphicsItem.MAX_OPACITY
+            else:
+                opacity = InteractiveSquareGraphicsItem.HOVER_OPACITY
+            graphics_item.setOpacity(opacity)
             graphics_item.setZValue(self.initial_zvalue)
 
         self._propagate_z_values(self, fnc, other_fnc)
@@ -420,14 +425,22 @@ class InteractiveSquareGraphicsItem(SquareGraphicsItem):
     def hoverLeaveEvent(self, ev):
 
         def fnc(graphics_item):
+            # No need to set opacity in this branch since it was just selected
+            # and had the max value
             graphics_item.setZValue(self.initial_zvalue)
 
         def other_fnc(graphics_item):
-            graphics_item.setOpacity(1.)
+            if self.any_selected:
+                if graphics_item.isSelected():
+                    opacity = InteractiveSquareGraphicsItem.MAX_OPACITY
+                else:
+                    opacity = InteractiveSquareGraphicsItem.SELECTION_OPACITY
+            else:
+                opacity = InteractiveSquareGraphicsItem.MAX_OPACITY
+            graphics_item.setOpacity(opacity)
 
         InteractiveSquareGraphicsItem.timer.timeout.connect(
-            lambda: self._propagate_z_values(self, fnc, other_fnc)
-        )
+            lambda: self._propagate_z_values(self, fnc, other_fnc))
 
         InteractiveSquareGraphicsItem.timer.start(250)
 
@@ -453,6 +466,44 @@ class InteractiveSquareGraphicsItem(SquareGraphicsItem):
             fnc(parent)
             # propagate up the tree
             self._propagate_to_parents(parent, fnc, other_fnc)
+
+    def selection_changed(self):
+        # Handle selection changed
+        self.any_selected = len(self.scene().selectedItems()) > 0
+        if self.any_selected:
+            if self.isSelected():
+                dropshadow = QtGui.QGraphicsDropShadowEffect()
+                dropshadow.setBlurRadius(10)
+                dropshadow.setColor(QtGui.QColor(Qt.black))
+                dropshadow.setOffset(0, 0)
+                self.setGraphicsEffect(dropshadow)
+                self.setOpacity(InteractiveSquareGraphicsItem.MAX_OPACITY)
+            else:
+                self.setGraphicsEffect(None)
+                if self.opacity() != \
+                        InteractiveSquareGraphicsItem.HOVER_OPACITY:
+                    self.setOpacity(
+                        InteractiveSquareGraphicsItem.SELECTION_OPACITY)
+        else:
+            self.setGraphicsEffect(None)
+            self.setOpacity(InteractiveSquareGraphicsItem.MAX_OPACITY)
+
+    def paint(self, painter, option, widget=None):
+        # Override the default selected appearance
+        if self.isSelected():
+            option.state ^= QtGui.QStyle.State_Selected
+            rect = self.rect()
+            # this must render before overlay due to order in which it's drawn
+            super().paint(painter, option, widget)
+            painter.save()
+            pen = QtGui.QPen(QtGui.QColor(Qt.black))
+            pen.setWidth(4)
+            pen.setJoinStyle(Qt.MiterJoin)
+            painter.setPen(pen)
+            painter.drawRect(rect.adjusted(2, 2, -2, -2))
+            painter.restore()
+        else:
+            super().paint(painter, option, widget)
 
 
 class TreeNode:
