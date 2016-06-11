@@ -391,8 +391,6 @@ class InteractiveSquareGraphicsItem(SquareGraphicsItem):
 
         self.setToolTip(kwargs.get('tooltip', 'Tooltip'))
 
-        # self.scene().selectionChanged.connect(self._handle_selected)
-
         InteractiveSquareGraphicsItem.timer.setSingleShot(True)
 
     def _scene_selection_manager(self):
