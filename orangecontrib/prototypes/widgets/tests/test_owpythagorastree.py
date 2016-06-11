@@ -1,5 +1,6 @@
 import math
 import unittest
+import Orange.widgets
 
 from orangecontrib.prototypes.widgets.pythagorastreeviewer import \
     PythagorasTree, Point, Square

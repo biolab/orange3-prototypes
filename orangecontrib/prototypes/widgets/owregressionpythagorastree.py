@@ -76,8 +76,12 @@ class OWRegressionPythagorasTree(OWPythagorasTree):
         std = np.std(instances.Y)
 
         rules = self.tree_adapter.rules(node.label)
-        rules = '<br>'.join(
-            '%s %s %s' % (n, s, v) for n, s, v in rules) \
+        sorted_rules = sorted(rules[:-1], key=lambda rule: rule.attr_name)
+        rules_str = ''
+        if len(rules):
+            rules_str = '<hr>'
+            rules_str += '<br>'.join(str(rule) for rule in sorted_rules)
+            rules_str += '<br><b>%s</b>' % rules[-1]
 
         splitting_attr = self.tree_adapter.attribute(node.label)
 
@@ -86,8 +90,7 @@ class OWRegressionPythagorasTree(OWPythagorasTree):
             + '<br>{}/{} samples ({:2.3f}%)'.format(
                 int(samples), total, ratio * 100) \
             + '<br><br>Split by ' + splitting_attr.name \
-            + '<hr>' \
-            + rules \
+            + rules_str \
             + '</p>'
 
     def _get_tree_adapter(self, model):
