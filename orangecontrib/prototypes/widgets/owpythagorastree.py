@@ -4,13 +4,15 @@ from Orange.data.table import Table
 from Orange.widgets import gui, settings
 from Orange.widgets.widget import OWWidget
 from PyQt4 import QtGui
+from PyQt4.QtCore import Qt
+
+from orangecontrib.prototypes.utils.common.owlegend import OWLegend
+from orangecontrib.prototypes.utils.common.scene import \
+    UpdateItemsOnSelectGraphicsScene
 from orangecontrib.prototypes.utils.common.view import (
     PannableGraphicsView,
     ZoomableGraphicsView
 )
-
-from orangecontrib.prototypes.utils.common.scene import \
-    UpdateItemsOnSelectGraphicsScene
 from orangecontrib.prototypes.widgets.pythagorastreeviewer import (
     PythagorasTreeViewer,
     SquareGraphicsItem
@@ -40,6 +42,7 @@ class OWPythagorasTree(OWWidget):
         self.clf_dataset = None
         # The tree adapter instance which is passed from the outside
         self.tree_adapter = None
+        self.legend = None
 
         self.color_palette = None
 
@@ -130,6 +133,9 @@ class OWPythagorasTree(OWWidget):
                 self.clf_dataset = self.dataset
 
             self.ptree.set_tree(self.tree_adapter)
+
+            self.legend = OWLegend(domain=model.domain)
+            self.scene.addItem(self.legend)
 
             self._update_info_box()
             self._update_depth_slider()

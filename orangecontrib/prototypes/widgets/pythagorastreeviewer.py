@@ -18,10 +18,10 @@ Point : namedtuple (x, y)
 from collections import namedtuple, defaultdict, deque
 from math import pi, sqrt, cos, sin, degrees
 
-from orangecontrib.prototypes.utils.tree.treeadapter import TreeAdapter
-
 from PyQt4 import QtCore, QtGui
 from PyQt4.QtCore import Qt
+
+from orangecontrib.prototypes.utils.tree.treeadapter import TreeAdapter
 
 # z index range, increase if needed
 Z_STEP = 5000000

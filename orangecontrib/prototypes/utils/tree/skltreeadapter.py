@@ -44,12 +44,12 @@ class SklTreeAdapter(TreeAdapter):
 
         self._all_leaves = None
 
-    @lru_cache()
+    @lru_cache(maxsize=1024)
     def weight(self, node):
         return self._adjust_weight(self.num_samples(node)) / \
                self._adjusted_child_weight(self.parent(node))
 
-    @lru_cache()
+    @lru_cache(maxsize=1024)
     def _adjusted_child_weight(self, node):
         """Helps when dealing with adjusted weights.
 
@@ -76,7 +76,7 @@ class SklTreeAdapter(TreeAdapter):
     def num_samples(self, node):
         return self._tree.n_node_samples[node]
 
-    @lru_cache()
+    @lru_cache(maxsize=1024)
     def parent(self, node):
         for children in (self._tree.children_left, self._tree.children_right):
             try:
@@ -122,7 +122,7 @@ class SklTreeAdapter(TreeAdapter):
     def domain(self):
         return self._domain
 
-    @lru_cache()
+    @lru_cache(maxsize=1024)
     def rules(self, node):
         if node != self.root:
             parent = self.parent(node)
@@ -174,7 +174,7 @@ class SklTreeAdapter(TreeAdapter):
     def splitting_attribute(self, node):
         return self._tree.feature[node]
 
-    @lru_cache()
+    @lru_cache(maxsize=1024)
     def leaves(self, node):
         start, stop = self._subnode_range(node)
         if start == stop:
