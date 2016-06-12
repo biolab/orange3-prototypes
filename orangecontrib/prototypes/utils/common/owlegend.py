@@ -1,6 +1,7 @@
 """
 Legend classes to use with `QGraphicsScene` objects.
 """
+import numpy as np
 from PyQt4 import QtGui, QtCore
 from PyQt4.QtCore import Qt
 
@@ -141,6 +142,114 @@ class LegendItem(QtGui.QGraphicsLinearLayout):
         self.setSpacing(5)
 
 
+class LegendGradient(QtGui.QGraphicsWidget):
+    """Gradient widget.
+
+    A gradient square bar that can be used to display continuous values.
+
+    Parameters
+    ----------
+    palette : iterable[QtGui.QColor]
+    parent : QtGui.QGraphicsWidget
+    orientation : Qt.Orientation
+
+    Notes
+    -----
+    .. Note:: While the gradient does support any number of colors, any more
+        than 3 is not very readable. This should not be a problem, since Orange
+        only implements 2 or 3 colors.
+
+    """
+
+    # Default sizes (assume gradient is vertical by default)
+    GRADIENT_WIDTH = 20
+    GRADIENT_HEIGHT = 150
+
+    def __init__(self, palette, parent, orientation):
+        super().__init__(parent)
+
+        self.__gradient = QtGui.QLinearGradient()
+        num_colors = len(palette)
+        for idx, stop in enumerate(palette):
+            self.__gradient.setColorAt(idx * (1. / (num_colors - 1)), stop)
+
+        # We need to tell the gradient where it's start and stop points are
+        self.__gradient.setStart(QtCore.QPointF(0, 0))
+        if orientation == Qt.Vertical:
+            final_stop = QtCore.QPointF(0, self.GRADIENT_HEIGHT)
+        else:
+            final_stop = QtCore.QPointF(self.GRADIENT_HEIGHT, 0)
+        self.__gradient.setFinalStop(final_stop)
+
+        # Get the appropriate rectangle dimensions based on orientation
+        if orientation == Qt.Vertical:
+            w, h = self.GRADIENT_WIDTH, self.GRADIENT_HEIGHT
+        elif orientation == Qt.Horizontal:
+            w, h = self.GRADIENT_HEIGHT, self.GRADIENT_WIDTH
+
+        self.__rect_item = QtGui.QGraphicsRectItem(0, 0, w, h, self)
+        self.__rect_item.setPen(QtGui.QPen(QtGui.QColor(0, 0, 0, 0)))
+        self.__rect_item.setBrush(QtGui.QBrush(self.__gradient))
+
+    def sizeHint(self, size_hint, size_constraint=None, *args, **kwargs):
+        return QtCore.QSizeF(self.__rect_item.boundingRect().size())
+
+
+class ContinuousLegendItem(QtGui.QGraphicsLinearLayout):
+    """Continuous legend item.
+
+    Contains a gradient bar with the color ranges, as well as two labels - one
+    on each side of the gradient bar.
+
+    Parameters
+    ----------
+    palette : iterable[QtGui.QColor]
+    values : iterable[float...]
+        The number of values must match the number of colors in passed in the
+        color palette.
+    parent : QtGui.QGraphicsWidget
+    font : QtGui.QFont
+    orientation : Qt.Orientation
+
+    """
+
+    def __init__(self, palette, values, parent, font=None,
+                 orientation=Qt.Vertical):
+        if orientation == Qt.Vertical:
+            super().__init__(Qt.Horizontal)
+        else:
+            super().__init__(Qt.Vertical)
+
+        self.__parent = parent
+        self.__palette = palette
+        self.__values = values
+
+        self.__gradient = LegendGradient(palette, parent, orientation)
+        self.__labels_layout = QtGui.QGraphicsLinearLayout(orientation)
+
+        str_vals = self._format_values(values)
+
+        self.__start_label = LegendItemTitle(str_vals[0], parent, font=font)
+        self.__end_label = LegendItemTitle(str_vals[1], parent, font=font)
+        self.__labels_layout.addItem(self.__start_label)
+        self.__labels_layout.addStretch(1)
+        self.__labels_layout.addItem(self.__end_label)
+
+        # Gradient should be to the left, then labels on the right if vertical
+        if orientation == Qt.Vertical:
+            self.addItem(self.__gradient)
+            self.addItem(self.__labels_layout)
+        # Gradient should be on the bottom, labels on top if horizontal
+        elif orientation == Qt.Horizontal:
+            self.addItem(self.__labels_layout)
+            self.addItem(self.__gradient)
+
+    @staticmethod
+    def _format_values(values):
+        """Get the formatted values to output."""
+        return ['{:.3f}'.format(v) for v in values]
+
+
 class LegendBuilder:
     """Legend builder.
 
@@ -159,13 +268,16 @@ class LegendBuilder:
     Examples
     --------
     A basic example
-    >>> legend = LegendBuilder()(domain)
+    >>> legend = LegendBuilder()(domain, dataset)
 
     An example using the `want_binned` method
-    >>> legend = LegendBuilder(want_binned=True)(domain)
+    >>> legend = LegendBuilder(want_binned=True)(domain, dataset)
 
     An example passing a kwarg to the `Legend` constructor.
-    >>> legend = LegendBuilder()(domain, color_indicator_cls=LegendItemCircle)
+    >>> legend = LegendBuilder()(
+    >>>     domain,
+    >>>     dataset,
+    >>>     color_indicator_cls=LegendItemCircle)
 
     Notes
     -----
@@ -179,12 +291,16 @@ class LegendBuilder:
     def __init__(self, want_binned=False):
         self.want_binned = want_binned
 
-    def __call__(self, domain, *args, **kwargs):
+    def __call__(self, domain, dataset, *args, **kwargs):
         """Build the appropriate legend instance.
 
         Parameters
         ----------
         domain : Orange.data.domain.Domain
+        dataset : Orange.data.table.Table
+            Note that no reference to the dataset is kept, it is only required
+            to calculate some values that are then passed on to the Legend
+            objects.
         args
             Any excess arguments will be passed down to the `Legend`
             constructor. See the `Legend` as well as it subclass constructors
@@ -212,7 +328,9 @@ class LegendBuilder:
             if self.want_binned:
                 return OWBinnedContinuousLegend(*args, domain=domain, **kwargs)
             else:
-                return OWContinuousLegend(*args, domain=domain, **kwargs)
+                value_range = [np.min(dataset.Y), np.max(dataset.Y)]
+                return OWContinuousLegend(
+                    *args, domain=domain, range=value_range, **kwargs)
 
 
 class Legend(QtGui.QGraphicsWidget):
@@ -254,7 +372,7 @@ class Legend(QtGui.QGraphicsWidget):
 
     def __init__(self, parent=None, orientation=Qt.Vertical, domain=None,
                  items=None, bg_color=QtGui.QColor(232, 232, 232, 196),
-                 font=None, color_indicator_cls=LegendItemSquare):
+                 font=None, color_indicator_cls=LegendItemSquare, *_, **__):
         super().__init__(parent)
 
         self.orientation = orientation
@@ -324,7 +442,7 @@ class Legend(QtGui.QGraphicsWidget):
 
         painter.setPen(pen)
         painter.setBrush(brush)
-        painter.drawRoundedRect(self.contentsRect(), 2, 2)
+        painter.drawRect(self.contentsRect())
         painter.restore()
 
 
@@ -356,20 +474,59 @@ class OWDiscreteLegend(Legend):
     def set_items(self, values):
         for class_name, color in values:
             legend_item = LegendItem(
-                QtGui.QColor(*color),
-                class_name,
-                self,
-                self.color_indicator_cls,
+                color=QtGui.QColor(*color),
+                title=class_name,
+                parent=self,
+                color_indicator_cls=self.color_indicator_cls,
                 font=self.font
             )
             self._layout.addItem(legend_item)
 
 
 class OWContinuousLegend(Legend):
+    def __init__(self, *args, **kwargs):
+        # Variables used in the `set_` methods must be set before calling super
+        self.__range = kwargs.get('range', ())
+
+        super().__init__(*args, **kwargs)
+
+        self._layout.setContentsMargins(10, 10, 10, 10)
+
     def set_domain(self, domain):
-        pass
+        class_var = domain.class_var
+
+        if not class_var.is_continuous:
+            raise AttributeError('[OWContinuousLegend] The class var provided '
+                                 'was not continuous.')
+
+        # The first and last values must represent the range, the rest should
+        # be dummy variables, as they are not shown anywhere
+        values = self.__range
+
+        start, end, pass_through_black = class_var.colors
+        # If pass through black, push black in between and add index to vals
+        if pass_through_black:
+            colors = [QtGui.QColor(*c) for c in [start, (0, 0, 0), end]]
+            values.insert(1, -1)
+        else:
+            colors = [QtGui.QColor(*c) for c in [start, end]]
+
+        # If the orientation is vertical, it makes more sense for the smaller
+        # value to be shown on the bottom
+        if self.orientation == Qt.Vertical:
+            colors, values = list(reversed(colors)), list(reversed(values))
+
+        self._layout.addItem(ContinuousLegendItem(
+            palette=colors,
+            values=values,
+            parent=self,
+            font=self.font,
+            orientation=self.orientation
+        ))
 
     def set_items(self, values):
+        # values must contain [ min_value + color, pass_through_black,
+        # max_value + color]
         pass
 
 

@@ -134,7 +134,8 @@ class OWPythagorasTree(OWWidget):
             self.ptree.set_tree(self.tree_adapter)
 
             self.legend = LegendBuilder()(
-                domain=model.domain
+                domain=model.domain,
+                dataset=self.clf_dataset
             )
             self.scene.addItem(self.legend)
 
