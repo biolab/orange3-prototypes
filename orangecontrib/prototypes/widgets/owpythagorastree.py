@@ -4,9 +4,8 @@ from Orange.data.table import Table
 from Orange.widgets import gui, settings
 from Orange.widgets.widget import OWWidget
 from PyQt4 import QtGui
-from PyQt4.QtCore import Qt
 
-from orangecontrib.prototypes.utils.common.owlegend import OWLegend
+from orangecontrib.prototypes.utils.common.owlegend import LegendBuilder
 from orangecontrib.prototypes.utils.common.scene import \
     UpdateItemsOnSelectGraphicsScene
 from orangecontrib.prototypes.utils.common.view import (
@@ -134,7 +133,9 @@ class OWPythagorasTree(OWWidget):
 
             self.ptree.set_tree(self.tree_adapter)
 
-            self.legend = OWLegend(domain=model.domain)
+            self.legend = LegendBuilder()(
+                domain=model.domain
+            )
             self.scene.addItem(self.legend)
 
             self._update_info_box()
