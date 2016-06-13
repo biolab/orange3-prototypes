@@ -4,6 +4,7 @@ from Orange.regression.tree import TreeRegressor
 from Orange.widgets.utils.colorpalette import ContinuousPaletteGenerator
 from PyQt4 import QtGui
 
+from orangecontrib.prototypes.utils.common.owlegend import OWContinuousLegend
 from orangecontrib.prototypes.utils.tree.skltreeadapter import SklTreeAdapter
 from orangecontrib.prototypes.widgets.owpythagorastree import OWPythagorasTree
 
@@ -25,18 +26,59 @@ class OWRegressionPythagorasTree(OWPythagorasTree):
             ('Standard deviation', self._color_stddev),
         ]
 
+    # MODEL CHANGED CONTROL ELEMENTS UPDATE METHODS
     def _update_target_class_combo(self):
         self._clear_target_class_combo()
         self.target_class_combo.addItems(
             list(zip(*self.REGRESSION_COLOR_CALC))[0])
         self.target_class_combo.setCurrentIndex(self.target_class_index)
 
+    def _update_legend_colors(self):
+        if self.legend is not None:
+            self.scene.removeItem(self.legend)
+
+        def _get_colors_domain(domain):
+            class_var = domain.class_var
+            start, end, pass_through_black = class_var.colors
+            if pass_through_black:
+                lst_colors = [QtGui.QColor(*c) for c
+                              in [start, (0, 0, 0), end]]
+            else:
+                lst_colors = [QtGui.QColor(*c) for c in [start, end]]
+            return lst_colors
+
+        # Currently, the first index just draws the outline without any color
+        if self.target_class_index == 0:
+            self.legend = None
+            return
+        # The colors are the class mean
+        elif self.target_class_index == 1:
+            values = (np.min(self.clf_dataset.Y), np.max(self.clf_dataset.Y))
+            colors = _get_colors_domain(self.model.domain)
+            while len(values) != len(colors):
+                values.insert(1, -1)
+
+            self.legend = OWContinuousLegend(items=list(zip(values, colors)))
+        # Colors are the stddev
+        elif self.target_class_index == 2:
+            values = (0, np.std(self.clf_dataset.Y))
+            colors = _get_colors_domain(self.model.domain)
+            while len(values) != len(colors):
+                values.insert(1, -1)
+
+            self.legend = OWContinuousLegend(items=list(zip(values, colors)))
+
+        self.legend.setVisible(self.show_legend)
+        self.scene.addItem(self.legend)
+
+    # MODEL REMOVED CONTROL ELEMENTS CLEAR METHODS
     def _clear_target_class_combo(self):
         # Since the target classes are just the different coloring methods,
         # we can reuse the selected index when the tree changes, unlike with
         # the classification tree.
         self.target_class_combo.clear()
 
+    # HELPFUL METHODS
     def _get_color_palette(self):
         return ContinuousPaletteGenerator(
             *self.tree_adapter.domain.class_var.colors)

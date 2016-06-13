@@ -97,7 +97,7 @@ class LegendItemTitle(QtGui.QGraphicsWidget):
     def __init__(self, text, parent, font):
         super().__init__(parent)
 
-        self.__text = QtGui.QGraphicsTextItem(text)
+        self.__text = QtGui.QGraphicsTextItem(text.title())
         self.__text.setParentItem(self)
         self.__text.setFont(font)
 
@@ -389,6 +389,19 @@ class Legend(QtGui.QGraphicsWidget):
         self.setFlags(QtGui.QGraphicsWidget.ItemIsMovable |
                       QtGui.QGraphicsItem.ItemIgnoresTransformations)
 
+        if domain is not None:
+            self.set_domain(domain)
+        elif items is not None:
+            self.set_items(items)
+
+    def _clear_layout(self):
+        self._layout = None
+        for child in self.children():
+            child.setParent(None)
+
+    def _setup_layout(self):
+        self._clear_layout()
+
         self._layout = QtGui.QGraphicsLinearLayout(self.orientation)
         self._layout.setContentsMargins(10, 5, 10, 5)
         # If horizontal, there needs to be horizontal space between the items
@@ -398,11 +411,6 @@ class Legend(QtGui.QGraphicsWidget):
         else:
             self._layout.setSpacing(0)
         self.setLayout(self._layout)
-
-        if domain is not None:
-            self.set_domain(domain)
-        elif items is not None:
-            self.set_items(items)
 
     def set_domain(self, domain):
         """Handle receiving the domain object.
@@ -427,13 +435,23 @@ class Legend(QtGui.QGraphicsWidget):
 
         Parameters
         ----------
-        values : iterable[QtGui.QColor, str]
+        values : iterable[object, QtGui.QColor]
 
         Returns
         -------
 
         """
         raise NotImplemented()
+
+    @staticmethod
+    def _convert_to_color(obj):
+        if isinstance(obj, QtGui.QColor):
+            return obj
+        elif isinstance(obj, tuple) or isinstance(obj, list):
+            assert len(obj) in (3, 4)
+            return QtGui.QColor(*obj)
+        else:
+            return QtGui.QColor(obj)
 
     def paint(self, painter, options, widget=None):
         painter.save()
@@ -472,9 +490,10 @@ class OWDiscreteLegend(Legend):
         self.set_items(zip(class_var.values, class_var.colors.tolist()))
 
     def set_items(self, values):
+        self._setup_layout()
         for class_name, color in values:
             legend_item = LegendItem(
-                color=QtGui.QColor(*color),
+                color=self._convert_to_color(color),
                 title=class_name,
                 parent=self,
                 color_indicator_cls=self.color_indicator_cls,
@@ -506,28 +525,30 @@ class OWContinuousLegend(Legend):
         start, end, pass_through_black = class_var.colors
         # If pass through black, push black in between and add index to vals
         if pass_through_black:
-            colors = [QtGui.QColor(*c) for c in [start, (0, 0, 0), end]]
+            colors = [self._convert_to_color(c) for c
+                      in [start, '#000000', end]]
             values.insert(1, -1)
         else:
-            colors = [QtGui.QColor(*c) for c in [start, end]]
+            colors = [self._convert_to_color(c) for c in [start, end]]
+
+        self.set_items(list(zip(values, colors)))
+
+    def set_items(self, values):
+        vals, colors = list(zip(*values))
 
         # If the orientation is vertical, it makes more sense for the smaller
         # value to be shown on the bottom
-        if self.orientation == Qt.Vertical:
-            colors, values = list(reversed(colors)), list(reversed(values))
+        if self.orientation == Qt.Vertical and vals[0] < vals[len(vals) - 1]:
+            colors, vals = list(reversed(colors)), list(reversed(vals))
 
+        self._setup_layout()
         self._layout.addItem(ContinuousLegendItem(
             palette=colors,
-            values=values,
+            values=vals,
             parent=self,
             font=self.font,
             orientation=self.orientation
         ))
-
-    def set_items(self, values):
-        # values must contain [ min_value + color, pass_through_black,
-        # max_value + color]
-        pass
 
 
 class OWBinnedContinuousLegend(Legend):

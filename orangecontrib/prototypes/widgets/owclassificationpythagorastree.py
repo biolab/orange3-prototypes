@@ -4,6 +4,7 @@ import numpy as np
 from Orange.classification.tree import TreeClassifier
 from PyQt4 import QtGui
 
+from orangecontrib.prototypes.utils.common.owlegend import OWDiscreteLegend
 from orangecontrib.prototypes.utils.tree.skltreeadapter import SklTreeAdapter
 from orangecontrib.prototypes.widgets.owpythagorastree import OWPythagorasTree
 
@@ -16,6 +17,7 @@ class OWClassificationPythagorasTree(OWPythagorasTree):
 
     inputs = [('Classification Tree', TreeClassifier, 'set_tree')]
 
+    # MODEL CHANGED CONTROL ELEMENTS UPDATE METHODS
     def _update_target_class_combo(self):
         self._clear_target_class_combo()
         self.target_class_combo.addItem('None')
@@ -23,6 +25,25 @@ class OWClassificationPythagorasTree(OWPythagorasTree):
                   self.tree_adapter.domain.class_vars[0].values]
         self.target_class_combo.addItems(values)
 
+    def _update_legend_colors(self):
+        if self.legend is not None:
+            self.scene.removeItem(self.legend)
+
+        if self.target_class_index == 0:
+            self.legend = OWDiscreteLegend(domain=self.model.domain)
+        else:
+            items = (
+                (self.target_class_combo.itemText(self.target_class_index),
+                 self.color_palette[self.target_class_index - 1]
+                 ),
+                ('other', QtGui.QColor('#ffffff'))
+            )
+            self.legend = OWDiscreteLegend(items=items)
+
+        self.legend.setVisible(self.show_legend)
+        self.scene.addItem(self.legend)
+
+    # HELPFUL METHODS
     def _get_node_color(self, adapter, tree_node):
         # this is taken almost directly from the existing classification tree
         # viewer
@@ -49,7 +70,7 @@ class OWClassificationPythagorasTree(OWPythagorasTree):
             modus = np.argmax(distribution)
             samples = distribution[modus]
             text = self.tree_adapter.domain.class_vars[0].values[modus] + \
-                '<br>'
+                   '<br>'
         ratio = samples / np.sum(distribution)
 
         rules = self.tree_adapter.rules(node.label)
@@ -63,13 +84,13 @@ class OWClassificationPythagorasTree(OWPythagorasTree):
         splitting_attr = self.tree_adapter.attribute(node.label)
 
         return '<p>' \
-            + text \
-            + '{}/{} samples ({:2.3f}%)'.format(
-                int(samples), total, ratio * 100) \
-            + ('<br><br>Split by ' + splitting_attr.name
-                if not self.tree_adapter.is_leaf(node.label) else '') \
-            + rules_str \
-            + '</p>'
+               + text \
+               + '{}/{} samples ({:2.3f}%)'.format(
+            int(samples), total, ratio * 100) \
+               + ('<br><br>Split by ' + splitting_attr.name
+                  if not self.tree_adapter.is_leaf(node.label) else '') \
+               + rules_str \
+               + '</p>'
 
     def _get_tree_adapter(self, model):
         return SklTreeAdapter(

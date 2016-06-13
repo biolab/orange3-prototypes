@@ -133,11 +133,8 @@ class OWPythagorasTree(OWWidget):
 
             self.ptree.set_tree(self.tree_adapter)
 
-            self.legend = LegendBuilder()(
-                domain=model.domain,
-                dataset=self.clf_dataset
-            )
-            self.scene.addItem(self.legend)
+            self._update_legend_colors()
+            self._update_legend_visibility()
 
             self._update_info_box()
             self._update_depth_slider()
@@ -152,6 +149,10 @@ class OWPythagorasTree(OWWidget):
         self.clf_dataset = None
         self.tree_adapter = None
 
+        if self.legend is not None:
+            self.scene.removeItem(self.legend)
+        self.legend = None
+
         self.ptree.clear()
         self._clear_info_box()
         self._clear_target_class_combo()
@@ -165,6 +166,7 @@ class OWPythagorasTree(OWWidget):
 
     def update_colors(self):
         self.ptree.target_class_has_changed()
+        self._update_legend_colors()
 
     def update_size_calc(self):
         self._update_log_scale_slider()
@@ -187,7 +189,7 @@ class OWPythagorasTree(OWWidget):
         self.ptree.tooltip_has_changed()
 
     def update_show_legend(self):
-        pass
+        self._update_legend_visibility()
 
     # MODEL CHANGED CONTROL ELEMENTS UPDATE METHODS
     def _update_info_box(self):
@@ -203,6 +205,17 @@ class OWPythagorasTree(OWWidget):
 
     def _update_target_class_combo(self):
         return []
+
+    def _update_legend_visibility(self):
+        if self.legend is not None:
+            self.legend.setVisible(self.show_legend)
+
+    def _update_legend_colors(self):
+        self.legend = LegendBuilder()(
+            domain=self.model.domain,
+            dataset=self.clf_dataset
+        )
+        self.scene.addItem(self.legend)
 
     def _update_log_scale_slider(self):
         """On calc method combo box changed."""
