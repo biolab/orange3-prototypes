@@ -467,16 +467,10 @@ class Legend(QtGui.QGraphicsWidget):
 class OWDiscreteLegend(Legend):
     """Discrete legend.
 
-    Legend for discrete class variables.
-
-    Notes
-    -----
-    .. Warning:: Ignores `want_binned` parameter - it would make no sense on a
-        discrete variable.
-
     See Also
     --------
     Legend
+    OWContinuousLegend
 
     """
 
@@ -503,6 +497,15 @@ class OWDiscreteLegend(Legend):
 
 
 class OWContinuousLegend(Legend):
+    """Continuous legend.
+
+    See Also
+    --------
+    Legend
+    OWDiscreteLegend
+
+    """
+    
     def __init__(self, *args, **kwargs):
         # Variables used in the `set_` methods must be set before calling super
         self.__range = kwargs.get('range', ())
