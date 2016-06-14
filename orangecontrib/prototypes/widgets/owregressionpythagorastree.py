@@ -4,7 +4,10 @@ from Orange.regression.tree import TreeRegressor
 from Orange.widgets.utils.colorpalette import ContinuousPaletteGenerator
 from PyQt4 import QtGui
 
-from orangecontrib.prototypes.utils.common.owlegend import OWContinuousLegend
+from orangecontrib.prototypes.utils.common.owlegend import (
+    OWContinuousLegend,
+    Anchorable
+)
 from orangecontrib.prototypes.utils.tree.skltreeadapter import SklTreeAdapter
 from orangecontrib.prototypes.widgets.owpythagorastree import OWPythagorasTree
 
@@ -47,6 +50,11 @@ class OWRegressionPythagorasTree(OWPythagorasTree):
                 lst_colors = [QtGui.QColor(*c) for c in [start, end]]
             return lst_colors
 
+        legend_options = {
+            'corner': Anchorable.BOTTOM_RIGHT,
+            'offset': (110, 180),
+        }
+
         # Currently, the first index just draws the outline without any color
         if self.target_class_index == 0:
             self.legend = None
@@ -58,7 +66,8 @@ class OWRegressionPythagorasTree(OWPythagorasTree):
             while len(values) != len(colors):
                 values.insert(1, -1)
 
-            self.legend = OWContinuousLegend(items=list(zip(values, colors)))
+            self.legend = OWContinuousLegend(items=list(zip(values, colors)),
+                                             **legend_options)
         # Colors are the stddev
         elif self.target_class_index == 2:
             values = (0, np.std(self.clf_dataset.Y))
@@ -66,7 +75,8 @@ class OWRegressionPythagorasTree(OWPythagorasTree):
             while len(values) != len(colors):
                 values.insert(1, -1)
 
-            self.legend = OWContinuousLegend(items=list(zip(values, colors)))
+            self.legend = OWContinuousLegend(items=list(zip(values, colors)),
+                                             **legend_options)
 
         self.legend.setVisible(self.show_legend)
         self.scene.addItem(self.legend)

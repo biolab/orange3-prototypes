@@ -5,7 +5,10 @@ from Orange.widgets import gui, settings
 from Orange.widgets.widget import OWWidget
 from PyQt4 import QtGui
 
-from orangecontrib.prototypes.utils.common.owlegend import LegendBuilder
+from orangecontrib.prototypes.utils.common.owlegend import (
+    LegendBuilder,
+    AnchorableGraphicsView
+)
 from orangecontrib.prototypes.utils.common.scene import \
     UpdateItemsOnSelectGraphicsScene
 from orangecontrib.prototypes.utils.common.view import (
@@ -103,11 +106,11 @@ class OWPythagorasTree(OWWidget):
 
         self.ptree = PythagorasTreeViewer()
         self.ptree.set_node_color_func(self._get_node_color)
+        self.scene.addItem(self.ptree)
         if self.tooltips_enabled:
             self.ptree.set_tooltip_func(self._get_tooltip)
         else:
             self.ptree.set_tooltip_func(lambda _: None)
-        self.scene.addItem(self.ptree)
 
         self.resize(800, 500)
         # Clear the widget to correctly set the intial values
@@ -290,7 +293,8 @@ class OWPythagorasTree(OWWidget):
         self.report_plot()
 
 
-class TreeGraphicsView(PannableGraphicsView, ZoomableGraphicsView):
+class TreeGraphicsView(PannableGraphicsView, ZoomableGraphicsView,
+                       AnchorableGraphicsView):
     pass
 
 

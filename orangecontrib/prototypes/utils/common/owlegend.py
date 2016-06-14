@@ -6,6 +6,113 @@ from PyQt4 import QtGui, QtCore
 from PyQt4.QtCore import Qt
 
 
+class Anchorable(QtGui.QGraphicsWidget):
+
+    __corners = ['topLeft', 'topRight', 'bottomLeft', 'bottomRight']
+    TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT = __corners
+
+    def __init__(self, parent=None, corner='bottomRight', offset=(10, 10)):
+        super().__init__(parent)
+
+        self.__corner_str = corner if corner in self.__corners else None
+
+        if isinstance(offset, tuple) or isinstance(offset, list):
+            assert len(offset) == 2
+            self.__offset = QtCore.QPoint(*offset)
+        elif isinstance(offset, QtCore.QPoint):
+            self.__offset = offset
+        else:
+            self.__offset = None
+
+    def moveEvent(self, ev):
+        super().moveEvent(ev)
+        self.recalculate_offset()
+
+    def showEvent(self, ev):
+        super().showEvent(ev)
+        # When the item is first shown, the position should be updated to apply
+        # the initial offset
+        self.update_pos()
+
+    def recalculate_offset(self):
+        view = self.__get_view()
+        # Get the view box and position of legend relative to the view,
+        # not the scene
+        pos = view.mapFromScene(self.pos())
+        legend_box = QtCore.QRect(pos, self.size().toSize())
+        view_box = QtCore.QRect(QtCore.QPoint(0, 0), view.size())
+
+        def distance(t1, t2):
+            # 2d euclidean distance
+            return np.sqrt((t1.x() - t2.x()) ** 2 + (t1.y() - t2.y()) ** 2)
+
+        # Then we need to find the corner closest to the legend
+        distances = [
+            (distance(getattr(view_box, corner)(),
+                      getattr(legend_box, corner)()), corner)
+            for corner in self.__corners
+        ]
+        _, self.__corner_str = min(distances)
+        # Then we need to move the legend along that corner while keeping
+        # the same distance
+        vb_corner = getattr(view_box, self.__corner_str)()
+
+        self.__offset = vb_corner - pos
+
+    def update_pos(self):
+        if self.__corner_str:
+            view = self.__get_view()
+            box = QtCore.QRect(QtCore.QPoint(0, 0), view.size())
+            corner = getattr(box, self.__corner_str)()
+            new_pos = corner - self.__offset
+            self.setPos(view.mapToScene(new_pos))
+
+    def __get_view(self):
+        view, = self.scene().views()
+        return view
+
+    def __usable_viewbox(self):
+        view = self.__get_view()
+
+        if view.horizontalScrollBar().isVisible():
+            h = view.horizontalScrollBar().size().height()
+        else:
+            h = 0
+
+        if view.verticalScrollBar().isVisible():
+            w = view.verticalScrollBar().size().width()
+        else:
+            w = 0
+
+        size = view.size() - QtCore.QSize(w, h)
+        return QtCore.QRect(QtCore.QPoint(0, 0), size)
+
+
+class AnchorableGraphicsView(QtGui.QGraphicsView):
+    def resizeEvent(self, ev):
+        super().resizeEvent(ev)
+        self.__update_items()
+
+    def mousePressEvent(self, ev):
+        super().mousePressEvent(ev)
+        self.__update_items()
+
+    def wheelEvent(self, ev):
+        super().wheelEvent(ev)
+        self.__update_items()
+
+    def mouseMoveEvent(self, ev):
+        super().mouseMoveEvent(ev)
+        self.__update_items()
+
+    def __update_items(self):
+        for item in self.__anchorable_items():
+            item.update_pos()
+
+    def __anchorable_items(self):
+        return [i for i in self.scene().items() if isinstance(i, Anchorable)]
+
+
 class ColorIndicator(QtGui.QGraphicsWidget):
     pass
 
@@ -333,7 +440,7 @@ class LegendBuilder:
                     *args, domain=domain, range=value_range, **kwargs)
 
 
-class Legend(QtGui.QGraphicsWidget):
+class Legend(Anchorable):
     """Base legend class.
 
     This class provides common attributes for any legend derivates:
@@ -372,8 +479,8 @@ class Legend(QtGui.QGraphicsWidget):
 
     def __init__(self, parent=None, orientation=Qt.Vertical, domain=None,
                  items=None, bg_color=QtGui.QColor(232, 232, 232, 196),
-                 font=None, color_indicator_cls=LegendItemSquare, *_, **__):
-        super().__init__(parent)
+                 font=None, color_indicator_cls=LegendItemSquare, **kwargs):
+        super().__init__(parent, **kwargs)
 
         self.orientation = orientation
         self.bg_color = QtGui.QBrush(bg_color)

@@ -41,7 +41,6 @@ class ZoomableGraphicsView(QtGui.QGraphicsView):
         if self.__zooming_in(ev):
             self.__reset_zoomout_limit()
         if self._zoomout_limit_reached and self.__zooming_out(ev):
-            ev.accept()
             return
 
         self.zoom += np.sign(ev.delta()) * self.scale_factor
@@ -51,15 +50,14 @@ class ZoomableGraphicsView(QtGui.QGraphicsView):
         else:
             self.setTransformationAnchor(self.AnchorUnderMouse)
             self.setTransform(QtGui.QTransform().scale(self.zoom, self.zoom))
-        ev.accept()
+
+        super().wheelEvent(ev)
 
     def mousePressEvent(self, ev):
         # right click resets the zoom factor
         if ev.button() == Qt.RightButton:
             self.reset_zoom()
-            ev.accept()
-        else:
-            super().mousePressEvent(ev)
+        super().mousePressEvent(ev)
 
     @staticmethod
     def __zooming_out(ev):
@@ -106,9 +104,9 @@ class PannableGraphicsView(QtGui.QGraphicsView):
         self.setDragMode(QtGui.QGraphicsView.ScrollHandDrag)
 
     def enterEvent(self, ev):
-        super().enterEvent(ev)
         self.viewport().setCursor(Qt.ArrowCursor)
+        super().enterEvent(ev)
 
     def mouseReleaseEvent(self, ev):
-        super().mouseReleaseEvent(ev)
         self.viewport().setCursor(Qt.ArrowCursor)
+        super().mouseReleaseEvent(ev)

@@ -4,7 +4,10 @@ import numpy as np
 from Orange.classification.tree import TreeClassifier
 from PyQt4 import QtGui
 
-from orangecontrib.prototypes.utils.common.owlegend import OWDiscreteLegend
+from orangecontrib.prototypes.utils.common.owlegend import (
+    OWDiscreteLegend,
+    Anchorable
+)
 from orangecontrib.prototypes.utils.tree.skltreeadapter import SklTreeAdapter
 from orangecontrib.prototypes.widgets.owpythagorastree import OWPythagorasTree
 
@@ -29,8 +32,14 @@ class OWClassificationPythagorasTree(OWPythagorasTree):
         if self.legend is not None:
             self.scene.removeItem(self.legend)
 
+        legend_options = {
+            'corner': Anchorable.BOTTOM_RIGHT,
+            'offset': (150, 95),
+        }
+
         if self.target_class_index == 0:
-            self.legend = OWDiscreteLegend(domain=self.model.domain)
+            self.legend = OWDiscreteLegend(domain=self.model.domain,
+                                           **legend_options)
         else:
             items = (
                 (self.target_class_combo.itemText(self.target_class_index),
@@ -38,7 +47,7 @@ class OWClassificationPythagorasTree(OWPythagorasTree):
                  ),
                 ('other', QtGui.QColor('#ffffff'))
             )
-            self.legend = OWDiscreteLegend(items=items)
+            self.legend = OWDiscreteLegend(items=items, **legend_options)
 
         self.legend.setVisible(self.show_legend)
         self.scene.addItem(self.legend)
