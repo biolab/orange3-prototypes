@@ -34,7 +34,7 @@ class OWClassificationPythagorasTree(OWPythagorasTree):
 
         legend_options = {
             'corner': Anchorable.BOTTOM_RIGHT,
-            'offset': (150, 95),
+            'offset': (10, 10),
         }
 
         if self.target_class_index == 0:

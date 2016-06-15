@@ -52,7 +52,7 @@ class OWRegressionPythagorasTree(OWPythagorasTree):
 
         legend_options = {
             'corner': Anchorable.BOTTOM_RIGHT,
-            'offset': (110, 180),
+            'offset': (10, 10),
         }
 
         # Currently, the first index just draws the outline without any color

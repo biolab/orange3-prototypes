@@ -15,26 +15,75 @@ class Anchorable(QtGui.QGraphicsWidget):
         super().__init__(parent)
 
         self.__corner_str = corner if corner in self.__corners else None
+        # The flag indicates whether or not the item has been drawn on yet.
+        # This is useful for determining the initial offset, due to the fact
+        # that dimensions are available in the resize event, which can occur
+        # multiple times.
+        self.__has_been_drawn = False
 
         if isinstance(offset, tuple) or isinstance(offset, list):
             assert len(offset) == 2
             self.__offset = QtCore.QPoint(*offset)
         elif isinstance(offset, QtCore.QPoint):
             self.__offset = offset
-        else:
-            self.__offset = None
 
     def moveEvent(self, ev):
         super().moveEvent(ev)
-        self.recalculate_offset()
+        # This check is needed because simply resizing the window will cause
+        # the item to move and trigger a `moveEvent` therefore we need to check
+        # that the movement was done intentionally by the user using the mouse
+        if QtGui.QApplication.mouseButtons() == Qt.LeftButton:
+            self.recalculate_offset()
 
-    def showEvent(self, ev):
-        super().showEvent(ev)
-        # When the item is first shown, the position should be updated to apply
-        # the initial offset
-        self.update_pos()
+    def resizeEvent(self, ev):
+        # When the item is first shown, we need to update its position
+        super().resizeEvent(ev)
+        if not self.__has_been_drawn:
+            self.__offset = self.__calculate_actual_offset(self.__offset)
+            self.update_pos()
+            self.__has_been_drawn = True
 
     def recalculate_offset(self):
+        # This is called whenever the item is being moved and needs to
+        # recalculate its offset
+        view = self.__get_view()
+        # Get the view box and position of legend relative to the view,
+        # not the scene
+        pos = view.mapFromScene(self.pos())
+        view_box = QtCore.QRect(QtCore.QPoint(0, 0), view.size())
+
+        self.__corner_str = self.__get_closest_corner()
+        viewbox_corner = getattr(view_box, self.__corner_str)()
+
+        self.__offset = viewbox_corner - pos
+
+    def update_pos(self):
+        # This is called whenever something happened with the view that caused
+        # this item to move from its anchored position, so we have to adjust
+        # the position to maintain the effect of being anchored
+        if self.__corner_str:
+            view = self.__get_view()
+            box = QtCore.QRect(QtCore.QPoint(0, 0), view.size())
+            corner = getattr(box, self.__corner_str)()
+            new_pos = corner - self.__offset
+            self.setPos(view.mapToScene(new_pos))
+
+    def __calculate_actual_offset(self, offset):
+        """Take the offset specified in the constructor and calculate the
+        actual offset from the top left corner of the item so positioning can
+        be done correctly."""
+        off_x, off_y = offset.x(), offset.y()
+        w, h = self.boundingRect().width(), self.boundingRect().height()
+        if self.__corner_str == self.TOP_LEFT:
+            return QtCore.QPoint(-off_x, -off_y)
+        elif self.__corner_str == self.TOP_RIGHT:
+            return QtCore.QPoint(off_x + w, -off_y)
+        elif self.__corner_str == self.BOTTOM_RIGHT:
+            return QtCore.QPoint(off_x + w, off_y + h)
+        elif self.__corner_str == self.BOTTOM_LEFT:
+            return QtCore.QPoint(-off_x, off_y + h)
+
+    def __get_closest_corner(self):
         view = self.__get_view()
         # Get the view box and position of legend relative to the view,
         # not the scene
@@ -46,26 +95,19 @@ class Anchorable(QtGui.QGraphicsWidget):
             # 2d euclidean distance
             return np.sqrt((t1.x() - t2.x()) ** 2 + (t1.y() - t2.y()) ** 2)
 
-        # Then we need to find the corner closest to the legend
         distances = [
             (distance(getattr(view_box, corner)(),
                       getattr(legend_box, corner)()), corner)
             for corner in self.__corners
         ]
-        _, self.__corner_str = min(distances)
-        # Then we need to move the legend along that corner while keeping
-        # the same distance
-        vb_corner = getattr(view_box, self.__corner_str)()
+        _, corner = min(distances)
+        return corner
 
-        self.__offset = vb_corner - pos
-
-    def update_pos(self):
-        if self.__corner_str:
-            view = self.__get_view()
-            box = QtCore.QRect(QtCore.QPoint(0, 0), view.size())
-            corner = getattr(box, self.__corner_str)()
-            new_pos = corner - self.__offset
-            self.setPos(view.mapToScene(new_pos))
+    def __get_own_corner(self):
+        view = self.__get_view()
+        pos = view.mapFromScene(self.pos())
+        legend_box = QtCore.QRect(pos, self.size().toSize())
+        return getattr(legend_box, self.__corner_str)()
 
     def __get_view(self):
         view, = self.scene().views()
