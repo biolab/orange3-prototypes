@@ -171,8 +171,8 @@ class PannableGraphicsView(QtGui.QGraphicsView):
         super().enterEvent(ev)
 
     def mouseReleaseEvent(self, ev):
-        self.viewport().setCursor(Qt.ArrowCursor)
         super().mouseReleaseEvent(ev)
+        self.viewport().setCursor(Qt.ArrowCursor)
 
 
 class PreventDefaultWheelEvent(QtGui.QGraphicsView):
