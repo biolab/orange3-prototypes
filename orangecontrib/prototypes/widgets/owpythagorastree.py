@@ -271,6 +271,7 @@ class OWPythagorasTree(OWWidget):
         self.scene.setSceneRect(self.view.central_widget_rect())
         # reset the zoom level
         self.view.recalculate_and_fit()
+        self.view.update_anchored_items()
 
     def onDeleteWidget(self):
         """When deleting the widget."""

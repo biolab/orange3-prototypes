@@ -43,6 +43,11 @@ class Anchorable(QtGui.QGraphicsWidget):
             self.update_pos()
             self.__has_been_drawn = True
 
+    def showEvent(self, ev):
+        # When the item is first shown, we need to update its position
+        super().showEvent(ev)
+        self.update_pos()
+
     def recalculate_offset(self):
         # This is called whenever the item is being moved and needs to
         # recalculate its offset
@@ -136,21 +141,21 @@ class Anchorable(QtGui.QGraphicsWidget):
 class AnchorableGraphicsView(QtGui.QGraphicsView):
     def resizeEvent(self, ev):
         super().resizeEvent(ev)
-        self.__update_items()
+        self.update_anchored_items()
 
     def mousePressEvent(self, ev):
         super().mousePressEvent(ev)
-        self.__update_items()
+        self.update_anchored_items()
 
     def wheelEvent(self, ev):
         super().wheelEvent(ev)
-        self.__update_items()
+        self.update_anchored_items()
 
     def mouseMoveEvent(self, ev):
         super().mouseMoveEvent(ev)
-        self.__update_items()
+        self.update_anchored_items()
 
-    def __update_items(self):
+    def update_anchored_items(self):
         for item in self.__anchorable_items():
             item.update_pos()
 
