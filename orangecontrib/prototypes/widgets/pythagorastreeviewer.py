@@ -73,6 +73,9 @@ class PythagorasTreeViewer(QtGui.QGraphicsWidget):
         # The root tree node instance which is calculated inside the class
         self._tree = None
 
+        self.setSizePolicy(QtGui.QSizePolicy.Expanding,
+                           QtGui.QSizePolicy.Expanding)
+
         # Necessary settings that need to be set from the outside
         self._depth_limit = depth_limit
         # Provide a nice green default in case no color function is provided
@@ -85,9 +88,6 @@ class PythagorasTreeViewer(QtGui.QGraphicsWidget):
         self._square_objects = {}
         self._drawn_nodes = deque()
         self._frontier = deque()
-
-        # Store the items in a item group container
-        self._item_group = QtGui.QGraphicsWidget(self)
 
         # If a tree adapter was passed, set and draw the tree
         if adapter is not None:
@@ -259,7 +259,7 @@ class PythagorasTreeViewer(QtGui.QGraphicsWidget):
                     if self._interactive else SquareGraphicsItem
                 self._square_objects[node.label] = square_obj(
                     node,
-                    parent=self._item_group,
+                    parent=self,
                     brush=QtGui.QBrush(
                         self._calc_node_color(self._tree_adapter, node)
                     ),
@@ -286,6 +286,9 @@ class PythagorasTreeViewer(QtGui.QGraphicsWidget):
         self._frontier.clear()
         self._drawn_nodes.clear()
         self._square_objects.clear()
+
+    def boundingRect(self):
+        return self.childrenBoundingRect()
 
 
 class SquareGraphicsItem(QtGui.QGraphicsRectItem):
@@ -460,14 +463,8 @@ class InteractiveSquareGraphicsItem(SquareGraphicsItem):
         self.any_selected = len(self.scene().selectedItems()) > 0
         if self.any_selected:
             if self.isSelected():
-                dropshadow = QtGui.QGraphicsDropShadowEffect()
-                dropshadow.setBlurRadius(10)
-                dropshadow.setColor(QtGui.QColor(Qt.black))
-                dropshadow.setOffset(0, 0)
-                self.setGraphicsEffect(dropshadow)
                 self.setOpacity(self.MAX_OPACITY)
             else:
-                self.setGraphicsEffect(None)
                 if self.opacity() != self.HOVER_OPACITY:
                     self.setOpacity(self.SELECTION_OPACITY)
         else:

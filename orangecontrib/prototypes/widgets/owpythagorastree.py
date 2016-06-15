@@ -13,7 +13,8 @@ from orangecontrib.prototypes.utils.common.scene import \
     UpdateItemsOnSelectGraphicsScene
 from orangecontrib.prototypes.utils.common.view import (
     PannableGraphicsView,
-    ZoomableGraphicsView
+    ZoomableGraphicsView,
+    PreventDefaultWheelEvent
 )
 from orangecontrib.prototypes.widgets.pythagorastreeviewer import (
     PythagorasTreeViewer,
@@ -100,13 +101,14 @@ class OWPythagorasTree(OWWidget):
         # the way Qt deallocates memory and deletes objects.
         self.scene = TreeGraphicsScene(self)
         self.scene.selectionChanged.connect(self.commit)
-        self.view = TreeGraphicsView(self.scene)
+        self.view = TreeGraphicsView(self.scene, padding=(150, 150))
         self.view.setRenderHint(QtGui.QPainter.Antialiasing, True)
         self.mainArea.layout().addWidget(self.view)
 
         self.ptree = PythagorasTreeViewer()
         self.ptree.set_node_color_func(self._get_node_color)
         self.scene.addItem(self.ptree)
+        self.view.set_central_widget(self.ptree)
         if self.tooltips_enabled:
             self.ptree.set_tooltip_func(self._get_tooltip)
         else:
@@ -266,8 +268,7 @@ class OWPythagorasTree(OWWidget):
     def _update_main_area(self):
         # refresh the scene rect, cuts away the excess whitespace, and adds
         # padding for panning.
-        self.scene.setSceneRect(self.scene.itemsBoundingRect()
-                                .adjusted(-150, -150, 150, 150))
+        self.scene.setSceneRect(self.view.central_widget_rect())
         # reset the zoom level
         self.view.recalculate_and_fit()
 
@@ -293,8 +294,12 @@ class OWPythagorasTree(OWWidget):
         self.report_plot()
 
 
-class TreeGraphicsView(PannableGraphicsView, ZoomableGraphicsView,
-                       AnchorableGraphicsView):
+class TreeGraphicsView(
+    PannableGraphicsView,
+    ZoomableGraphicsView,
+    AnchorableGraphicsView,
+    PreventDefaultWheelEvent
+):
     pass
 
 
