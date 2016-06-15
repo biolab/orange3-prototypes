@@ -50,7 +50,7 @@ class Anchorable(QtGui.QGraphicsWidget):
         # Get the view box and position of legend relative to the view,
         # not the scene
         pos = view.mapFromScene(self.pos())
-        view_box = QtCore.QRect(QtCore.QPoint(0, 0), view.size())
+        view_box = self.__usable_viewbox()
 
         self.__corner_str = self.__get_closest_corner()
         viewbox_corner = getattr(view_box, self.__corner_str)()
@@ -61,9 +61,9 @@ class Anchorable(QtGui.QGraphicsWidget):
         # This is called whenever something happened with the view that caused
         # this item to move from its anchored position, so we have to adjust
         # the position to maintain the effect of being anchored
-        if self.__corner_str:
-            view = self.__get_view()
-            box = QtCore.QRect(QtCore.QPoint(0, 0), view.size())
+        view = self.__get_view()
+        if self.__corner_str and view is not None:
+            box = self.__usable_viewbox()
             corner = getattr(box, self.__corner_str)()
             new_pos = corner - self.__offset
             self.setPos(view.mapToScene(new_pos))
@@ -110,8 +110,11 @@ class Anchorable(QtGui.QGraphicsWidget):
         return getattr(legend_box, self.__corner_str)()
 
     def __get_view(self):
-        view, = self.scene().views()
-        return view
+        if self.scene() is not None:
+            view, = self.scene().views()
+            return view
+        else:
+            return None
 
     def __usable_viewbox(self):
         view = self.__get_view()
