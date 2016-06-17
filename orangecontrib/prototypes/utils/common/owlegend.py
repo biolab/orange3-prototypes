@@ -139,6 +139,14 @@ class Anchorable(QtGui.QGraphicsWidget):
 
 
 class AnchorableGraphicsView(QtGui.QGraphicsView):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.horizontalScrollBar().valueChanged.connect(
+            self.update_anchored_items)
+        self.verticalScrollBar().valueChanged.connect(
+            self.update_anchored_items)
+
     def resizeEvent(self, ev):
         super().resizeEvent(ev)
         self.update_anchored_items()
