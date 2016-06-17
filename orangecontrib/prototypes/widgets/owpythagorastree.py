@@ -53,7 +53,8 @@ class OWPythagorasTree(OWWidget):
         self.SIZE_CALCULATION = [
             ('Normal', lambda x: x),
             ('Square root', lambda x: sqrt(x)),
-            ('Logarithmic', lambda x: log(x * self.size_log_scale)),
+            # The +1 is there so that we don't get division by 0 exceptions
+            ('Logarithmic', lambda x: log(x * self.size_log_scale + 1)),
         ]
 
         # CONTROL AREA
@@ -225,9 +226,9 @@ class OWPythagorasTree(OWWidget):
     def _update_log_scale_slider(self):
         """On calc method combo box changed."""
         if self.SIZE_CALCULATION[self.size_calc_idx][0] == 'Logarithmic':
-            self.log_scale_box.setEnabled(True)
+            self.log_scale_box.parent().setEnabled(True)
         else:
-            self.log_scale_box.setEnabled(False)
+            self.log_scale_box.parent().setEnabled(False)
 
     # MODEL REMOVED CONTROL ELEMENTS CLEAR METHODS
     def _clear_info_box(self):
