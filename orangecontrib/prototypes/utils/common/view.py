@@ -47,8 +47,6 @@ class ZoomableGraphicsView(QtGui.QGraphicsView):
     def resizeEvent(self, ev):
         super().resizeEvent(ev)
         self.__needs_to_recalculate_initial = True
-        if self.zoom == -1:
-            self.recalculate_and_fit()
 
     def wheelEvent(self, ev):
         self.__handle_zoom(ev.delta())
@@ -125,7 +123,7 @@ class ZoomableGraphicsView(QtGui.QGraphicsView):
 
         """
         if self.__central_widget is None:
-            return self.scene().itemsBoundingRect()
+            return self.scene().itemsBoundingRect().adjusted(*self.__padding)
         return self.__central_widget.boundingRect().adjusted(*self.__padding)
 
     def recalculate_and_fit(self):
@@ -150,9 +148,11 @@ class ZoomableGraphicsView(QtGui.QGraphicsView):
         """Reset the zoom to the optimal factor."""
         self.zoom = self.__initial_zoom
         self.__zoomout_limit_reached = False
-        self.setTransform(QtGui.QTransform().scale(self.zoom, self.zoom))
+
         if self.__needs_to_recalculate_initial:
             self.recalculate_and_fit()
+        else:
+            self.setTransform(QtGui.QTransform().scale(self.zoom, self.zoom))
 
 
 class PannableGraphicsView(QtGui.QGraphicsView):
