@@ -1,4 +1,7 @@
-class TreeAdapter:
+from abc import ABCMeta, abstractmethod
+
+
+class TreeAdapter(metaclass=ABCMeta):
     """Base class for tree representation.
 
     Any subclass should implement the methods listed in this base class. Note
@@ -10,6 +13,7 @@ class TreeAdapter:
     ROOT_PARENT = -1
     NO_CHILD = -1
 
+    @abstractmethod
     def weight(self, node):
         """Get the weight of the given node.
 
@@ -26,8 +30,9 @@ class TreeAdapter:
             The weight of the node relative to its siblings.
 
         """
-        raise NotImplemented()
+        pass
 
+    @abstractmethod
     def num_samples(self, node):
         """Get the number of samples that a given node contains.
 
@@ -41,8 +46,9 @@ class TreeAdapter:
         int
 
         """
-        raise NotImplemented()
+        pass
 
+    @abstractmethod
     def parent(self, node):
         """Get the parent of a given node. Return -1 if the node is the root.
 
@@ -55,8 +61,9 @@ class TreeAdapter:
         object
 
         """
-        raise NotImplemented()
+        pass
 
+    @abstractmethod
     def has_children(self, node):
         """Check if the given node has any children.
 
@@ -69,7 +76,7 @@ class TreeAdapter:
         bool
 
         """
-        raise NotImplemented()
+        pass
 
     def is_leaf(self, node):
         """Check if the given node is a leaf node.
@@ -85,6 +92,7 @@ class TreeAdapter:
         """
         return not self.has_children(node)
 
+    @abstractmethod
     def children(self, node):
         """Get all the children of a given node.
 
@@ -98,8 +106,9 @@ class TreeAdapter:
             A iterable object containing the labels of the child nodes.
 
         """
-        raise NotImplemented()
+        pass
 
+    @abstractmethod
     def get_distribution(self, node):
         """Get the distribution of types for a given node.
 
@@ -118,8 +127,9 @@ class TreeAdapter:
             the number of nodes that belong to a given class inside the node.
 
         """
-        raise NotImplemented()
+        pass
 
+    @abstractmethod
     def get_impurity(self, node):
         """Get the impurity of a given node.
 
@@ -132,8 +142,9 @@ class TreeAdapter:
         object
 
         """
-        raise NotImplemented()
+        pass
 
+    @abstractmethod
     def rules(self, node):
         """Get a list of rules that define the given node.
 
@@ -147,8 +158,9 @@ class TreeAdapter:
             A list of Rule objects, can be of any type.
 
         """
-        raise NotImplemented()
+        pass
 
+    @abstractmethod
     def attribute(self, node):
         """Get the attribute that splits the given tree.
 
@@ -160,7 +172,7 @@ class TreeAdapter:
         -------
 
         """
-        raise NotImplemented()
+        pass
 
     def is_root(self, node):
         """Check if a given node is the root node.
@@ -175,6 +187,7 @@ class TreeAdapter:
         """
         return node == self.root
 
+    @abstractmethod
     def leaves(self, node):
         """Get all the leavse that belong to the subtree of a given node.
 
@@ -186,8 +199,9 @@ class TreeAdapter:
         -------
 
         """
-        raise NotImplemented()
+        pass
 
+    @abstractmethod
     def get_instances_in_nodes(self, dataset, nodes):
         """Get all the instances belonging to a set of nodes for a given
         dataset.
@@ -203,9 +217,10 @@ class TreeAdapter:
         -------
 
         """
-        raise NotImplemented()
+        pass
 
     @property
+    @abstractmethod
     def max_depth(self):
         """Get the maximum depth that the tree reaches.
 
@@ -214,9 +229,10 @@ class TreeAdapter:
         int
 
         """
-        raise NotImplemented()
+        pass
 
     @property
+    @abstractmethod
     def num_nodes(self):
         """Get the total number of nodes that the tree contains.
 
@@ -228,9 +244,10 @@ class TreeAdapter:
         int
 
         """
-        raise NotImplemented()
+        pass
 
     @property
+    @abstractmethod
     def root(self):
         """Get the label of the root node.
 
@@ -239,9 +256,10 @@ class TreeAdapter:
         object
 
         """
-        raise NotImplemented()
+        pass
 
     @property
+    @abstractmethod
     def domain(self):
         """Get the domain of the given tree.
 
@@ -252,4 +270,4 @@ class TreeAdapter:
         -------
 
         """
-        raise NotImplemented()
+        pass
