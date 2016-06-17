@@ -79,27 +79,29 @@ class OWClassificationPythagorasTree(OWPythagorasTree):
             modus = np.argmax(distribution)
             samples = distribution[modus]
             text = self.tree_adapter.domain.class_vars[0].values[modus] + \
-                   '<br>'
+                '<br>'
         ratio = samples / np.sum(distribution)
 
         rules = self.tree_adapter.rules(node.label)
         sorted_rules = sorted(rules[:-1], key=lambda rule: rule.attr_name)
         rules_str = ''
         if len(rules):
-            rules_str = '<hr>'
             rules_str += '<br>'.join(str(rule) for rule in sorted_rules)
             rules_str += '<br><b>%s</b>' % rules[-1]
 
         splitting_attr = self.tree_adapter.attribute(node.label)
 
         return '<p>' \
-               + text \
-               + '{}/{} samples ({:2.3f}%)'.format(
-            int(samples), total, ratio * 100) \
-               + ('<br><br>Split by ' + splitting_attr.name
-                  if not self.tree_adapter.is_leaf(node.label) else '') \
-               + rules_str \
-               + '</p>'
+            + text \
+            + '{}/{} samples ({:2.3f}%)'.format(
+                int(samples), total, ratio * 100) \
+            + '<hr>' \
+            + ('Split by ' + splitting_attr.name
+                if not self.tree_adapter.is_leaf(node.label) else '') \
+            + ('<br><br>' if len(rules) and not self.tree_adapter.is_leaf(
+                node.label) else '') \
+            + rules_str \
+            + '</p>'
 
     def _get_tree_adapter(self, model):
         return SklTreeAdapter(
