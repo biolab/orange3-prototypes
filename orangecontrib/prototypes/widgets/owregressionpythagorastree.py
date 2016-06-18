@@ -27,6 +27,7 @@ class OWRegressionPythagorasTree(OWPythagorasTree):
             ('None', lambda _, __: QtGui.QColor(255, 255, 255)),
             ('Class mean', self._color_class_mean),
             ('Standard deviation', self._color_stddev),
+            ('Variance', self._color_variance),
         ]
 
     # MODEL CHANGED CONTROL ELEMENTS UPDATE METHODS
@@ -77,6 +78,15 @@ class OWRegressionPythagorasTree(OWPythagorasTree):
 
             self.legend = OWContinuousLegend(items=list(zip(values, colors)),
                                              **legend_options)
+        # Colors are the variance
+        elif self.target_class_index == 3:
+            values = (0, np.var(self.clf_dataset.Y))
+            colors = _get_colors_domain(self.model.domain)
+            while len(values) != len(colors):
+                values.insert(1, -1)
+
+            self.legend = OWContinuousLegend(items=list(zip(values, colors)),
+                                             **legend_options)
 
         self.legend.setVisible(self.show_legend)
         self.scene.addItem(self.legend)
@@ -116,6 +126,15 @@ class OWRegressionPythagorasTree(OWPythagorasTree):
 
         return self.color_palette[(std - min_mean) / (max_mean - min_mean)]
 
+    def _color_variance(self, adapter, tree_node):
+        # calculate node colors relative to the standard deviation in the node
+        # samples
+        min_var, max_var = 0, np.var(self.clf_dataset.Y)
+        instances = adapter.get_instances_in_nodes(self.clf_dataset, tree_node)
+        var = np.var(instances.Y)
+
+        return self.color_palette[(var - min_var) / (max_var - min_var)]
+
     def _get_tooltip(self, node):
         total = self.tree_adapter.num_samples(self.tree_adapter.root)
         samples = self.tree_adapter.num_samples(node.label)
@@ -125,6 +144,7 @@ class OWRegressionPythagorasTree(OWPythagorasTree):
             self.clf_dataset, node)
         mean = np.mean(instances.Y)
         std = np.std(instances.Y)
+        var = np.var(instances.Y)
 
         rules = self.tree_adapter.rules(node.label)
         sorted_rules = sorted(rules[:-1], key=lambda rule: rule.attr_name)
@@ -136,7 +156,8 @@ class OWRegressionPythagorasTree(OWPythagorasTree):
         splitting_attr = self.tree_adapter.attribute(node.label)
 
         return '<p>Mean: {:2.3f}'.format(mean) \
-            + '<br>Variance: {:2.3f}'.format(std) \
+            + '<br>Standard deviation: {:2.3f}'.format(std) \
+            + '<br>Variance: {:2.3f}'.format(var) \
             + '<br>{}/{} samples ({:2.3f}%)'.format(
                 int(samples), total, ratio * 100) \
             + '<hr>' \
