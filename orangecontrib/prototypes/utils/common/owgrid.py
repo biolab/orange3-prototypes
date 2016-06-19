@@ -8,8 +8,14 @@ class GridItem(QtGui.QGraphicsWidget):
     def __init__(self, widget, parent=None):
         super().__init__(parent)
 
-        self._widget = widget
-        self._widget.setParent(self)
+        self.widget = widget
+        if hasattr(self.widget, 'setParent'):
+            self.widget.setParent(self)
+            self.widget.setParentItem(self)
+
+    def sizeHint(self, size_hint, size_constraint=None, *args, **kwargs):
+        return self.widget.sizeHint(
+            size_hint, size_constraint, *args, **kwargs)
 
 
 class SelectableGridItem(GridItem):
@@ -20,6 +26,15 @@ class SelectableGridItem(GridItem):
 
     def paint(self, painter, options, widget=None):
         super().paint(painter, options, widget)
+        if self.isSelected():
+            rect = self.rect()
+            painter.save()
+            pen = QtGui.QPen(QtGui.QColor(Qt.black))
+            pen.setWidth(4)
+            pen.setJoinStyle(Qt.MiterJoin)
+            painter.setPen(pen)
+            painter.drawRect(rect.adjusted(2, 2, -2, -2))
+            painter.restore()
 
 
 class OWGrid(QtGui.QGraphicsWidget):

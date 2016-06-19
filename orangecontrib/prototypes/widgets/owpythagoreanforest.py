@@ -8,7 +8,8 @@ from Orange.widgets.widget import OWWidget
 from PyQt4 import QtGui, QtCore
 from PyQt4.QtCore import Qt
 
-from orangecontrib.prototypes.utils.common.owgrid import OWGrid
+from orangecontrib.prototypes.utils.common.owgrid import OWGrid, \
+    SelectableGridItem
 from orangecontrib.prototypes.utils.tree.skltreeadapter import SklTreeAdapter
 from orangecontrib.prototypes.widgets.pythagorastreeviewer import \
     PythagorasTreeViewer
@@ -83,6 +84,7 @@ class OWPythagoreanForest(OWWidget):
 
         # MAIN AREA
         self.scene = QtGui.QGraphicsScene(self)
+        self.scene.selectionChanged.connect(self.commit)
         self.grid = OWGrid()
         self.grid.geometryChanged.connect(self._update_scene_rect)
         self.scene.addItem(self.grid)
@@ -205,16 +207,18 @@ class OWPythagoreanForest(OWWidget):
             ptree.scale(.1, .1)
             self.ptrees.append(ptree)
 
-        # self.grid.set_items([GridItem(ptree, self.grid)
-        #                      for ptree in self.ptrees])
+        # self.grid.set_items(self.ptrees)
 
         self.items = []
+        self.grid_items = []
         for _ in range(5):
-            wd = QtGui.QGraphicsWidget(self.grid)
+            wd = QtGui.QGraphicsWidget()
             QtGui.QGraphicsRectItem(0, 0, 100, 100, wd)
             wd.sizeHint = lambda *_: QtCore.QSizeF(100, 100)
             self.items.append(wd)
-        self.grid.set_items(self.items)
+
+            self.grid_items.append(SelectableGridItem(wd, self.grid))
+        self.grid.set_items(self.grid_items)
 
         if self.grid:
             width = (self.view.width() -
@@ -229,6 +233,7 @@ class OWPythagoreanForest(OWWidget):
 
     def commit(self):
         """Commit the selected tree to output."""
+        print('selection changed')
         pass
         model = self.model
         tree = model.skl_model.estimators_[0]
