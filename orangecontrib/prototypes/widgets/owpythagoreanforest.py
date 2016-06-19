@@ -254,7 +254,6 @@ class OWPythagoreanForest(OWWidget):
         super().resizeEvent(ev)
 
 
-# class GridItem(ZoomableGridItem, SelectableGridItem):
 class GridItem(PaddedGridItem, SelectableGridItem, ZoomableGridItem):
     pass
 
@@ -298,7 +297,7 @@ def main():
     app = QtGui.QApplication(argv)
     ow = OWPythagoreanForest()
     data = Orange.data.Table(filename)
-    clf = RandomForestLearner(n_estimators=100)(data)
+    clf = RandomForestLearner(n_estimators=1)(data)
     clf.instances = data
     ow.set_rf(clf)
 

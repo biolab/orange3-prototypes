@@ -5,7 +5,7 @@ from PyQt4.QtCore import Qt
 
 
 class GridItem(QtGui.QGraphicsWidget):
-    def __init__(self, widget, parent=None):
+    def __init__(self, widget, parent=None, **_):
         super().__init__(parent)
         # For some reason, the super constructor is not setting the parent
         self.setParent(parent)
@@ -15,23 +15,31 @@ class GridItem(QtGui.QGraphicsWidget):
             self.widget.setParentItem(self)
             self.widget.setParent(self)
 
-    def sizeHint(self, size_hint, size_constraint=None, *args, **kwargs):
+        # Move the child widget to (0, 0) so that bounding rects match up
+        # This is needed because the bounding rect is caluclated with the size
+        # hint from (0, 0), regardless of any method override
+        rect = self.widget.childrenBoundingRect()
+        self.widget.moveBy(-rect.topLeft().x(), -rect.topLeft().y())
+
+        QtGui.QGraphicsRectItem(self.boundingRect(), self)
+
+    def sizeHint(self, size_hint, size_constraint=None, **kwargs):
         return self.widget.sizeHint(
-            size_hint, size_constraint, *args, **kwargs)
+            size_hint, size_constraint, **kwargs)
 
     def boundingRect(self):
-        top_left = self.mapFromItem(
-            self.widget, self.widget.childrenBoundingRect().topLeft())
-        return QtCore.QRectF(top_left, self.sizeHint(Qt.PreferredSize))
+        return QtCore.QRectF(
+            QtCore.QPointF(0, 0), self.widget.childrenBoundingRect().size())
 
 
 class SelectableGridItem(GridItem):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, widget, parent=None, **kwargs):
+        super().__init__(widget, parent, **kwargs)
 
         self.setFlags(QtGui.QGraphicsWidget.ItemIsSelectable)
 
     def paint(self, painter, options, widget=None):
+
         super().paint(painter, options, widget)
         if self.isSelected():
             rect = self.boundingRect()
@@ -45,13 +53,21 @@ class SelectableGridItem(GridItem):
 
 
 class PaddedGridItem(GridItem):
-    def __init__(self, widget, parent=None, padding=20, *args, **kwargs):
+    def __init__(self, widget, parent=None, padding=20, **kwargs):
         self._padding = padding
-        super().__init__(widget, parent, *args, **kwargs)
+
+        super().__init__(widget, parent, **kwargs)
+
+        # Moving the child widget is important in order to keep the bounding
+        # boxes aligned
+        self.widget.moveBy(self._padding, self._padding)
 
     def boundingRect(self):
-        return super().boundingRect().adjusted(
-            -self._padding, -self._padding, self._padding, self._padding)
+        return QtCore.QRectF(
+            QtCore.QPointF(0, 0),
+            super().boundingRect().adjusted(
+                -self._padding, -self._padding, self._padding, self._padding
+            ).size())
 
     def sizeHint(self, size_hint, size_constraint=None, *args, **kwargs):
         return super().sizeHint(size_hint, size_constraint, *args, **kwargs) \
@@ -59,10 +75,10 @@ class PaddedGridItem(GridItem):
     
 
 class ZoomableGridItem(GridItem):
-    def __init__(self, widget, parent=None, max_size=100, *args, **kwargs):
+    def __init__(self, widget, parent=None, max_size=100, **kwargs):
         self._max_size = QtCore.QSizeF(max_size, max_size)
 
-        super().__init__(widget, parent, *args, **kwargs)
+        super().__init__(widget, parent, **kwargs)
 
         self._resize_widget()
 
@@ -72,11 +88,19 @@ class ZoomableGridItem(GridItem):
         self._resize_widget()
 
     def _resize_widget(self):
+        # First, resize the widget
         w = self.widget
         sh = self.sizeHint(Qt.PreferredSize)
         scale_w = sh.width() / w.sizeHint(Qt.PreferredSize).width()
         scale_h = sh.height() / w.sizeHint(Qt.PreferredSize).height()
         w.scale(scale_w, scale_h)
+        # Then, move to (0, 0) to align bounding boxes
+        rect = self.boundingRect()
+        self.widget.moveBy(-rect.bottomRight().y(),
+                           -rect.bottomRight().x())
+
+    def boundingRect(self):
+        return QtCore.QRectF(QtCore.QPointF(0, 0), self._max_size)
 
     def sizeHint(self, size_hint, size_constraint=None, *args, **kwargs):
         size = super().sizeHint(Qt.PreferredSize)
@@ -90,7 +114,7 @@ class OWGrid(QtGui.QGraphicsWidget):
 
         self.setSizePolicy(QtGui.QSizePolicy.Maximum,
                            QtGui.QSizePolicy.Maximum)
-        self.setContentsMargins(10, 10, 10, 10)
+        self.setContentsMargins(0, 0, 0, 0)
 
         self.__layout = QtGui.QGraphicsGridLayout()
         self.__layout.setContentsMargins(0, 0, 0, 0)
