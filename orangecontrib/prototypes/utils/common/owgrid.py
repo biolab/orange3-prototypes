@@ -1,6 +1,6 @@
 from itertools import zip_longest
 
-from PyQt4 import QtGui
+from PyQt4 import QtGui, QtCore
 from PyQt4.QtCore import Qt
 
 
@@ -10,7 +10,6 @@ class GridItem(QtGui.QGraphicsWidget):
 
         self.widget = widget
         if hasattr(self.widget, 'setParent'):
-            self.widget.setParent(self)
             self.widget.setParentItem(self)
 
     def sizeHint(self, size_hint, size_constraint=None, *args, **kwargs):
@@ -35,6 +34,27 @@ class SelectableGridItem(GridItem):
             painter.setPen(pen)
             painter.drawRect(rect.adjusted(2, 2, -2, -2))
             painter.restore()
+
+
+class ZoomableGridItem(GridItem):
+    def __init__(self, widget, parent=None, max_size=100, *args, **kwargs):
+        super().__init__(widget, parent, *args, **kwargs)
+
+        self.__max_size = QtCore.QSizeF(max_size, max_size)
+
+        # Perform initial resize on widget
+        sh = self.sizeHint(Qt.PreferredSize)
+        scale_w = sh.width() / widget.sizeHint(Qt.PreferredSize).width()
+        scale_h = sh.height() / widget.sizeHint(Qt.PreferredSize).height()
+        widget.scale(scale_w, scale_h)
+
+    def set_max_size(self, max_size):
+        self.__max_size = QtCore.QSizeF(max_size, max_size)
+
+    def sizeHint(self, size_hint, size_constraint=None, *args, **kwargs):
+        size = self.widget.sizeHint(Qt.PreferredSize)
+        size.scale(self.__max_size, Qt.KeepAspectRatio)
+        return size
 
 
 class OWGrid(QtGui.QGraphicsWidget):

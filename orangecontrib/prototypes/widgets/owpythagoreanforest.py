@@ -9,7 +9,7 @@ from PyQt4 import QtGui, QtCore
 from PyQt4.QtCore import Qt
 
 from orangecontrib.prototypes.utils.common.owgrid import OWGrid, \
-    SelectableGridItem
+    SelectableGridItem, ZoomableGridItem
 from orangecontrib.prototypes.utils.tree.skltreeadapter import SklTreeAdapter
 from orangecontrib.prototypes.widgets.pythagorastreeviewer import \
     PythagorasTreeViewer
@@ -40,9 +40,10 @@ class OWPythagoreanForest(OWWidget):
         # The raw skltree model that was passed to the input
         self.model = None
         self.forest_adapter = None
-        self.ptrees = []
         self.dataset = None
         self.clf_dataset = None
+        # We need to store refernces to the trees and grid items
+        self.ptrees, self.grid_items = [], []
 
         self.color_palette = None
 
@@ -135,7 +136,16 @@ class OWPythagoreanForest(OWWidget):
         pass
 
     def zoom_changed(self):
-        pass
+        for tree in self.ptrees:
+            tree.setPreferredSize(self._tree_size(tree))
+            tree.update()
+
+        if self.grid:
+            width = (self.view.width() -
+                     self.view.verticalScrollBar().width())
+
+            self.grid.reflow(width)
+            self.grid.setPreferredWidth(width)
 
     # MODEL CHANGED METHODS
     def _update_info_box(self):
@@ -168,6 +178,11 @@ class OWPythagoreanForest(OWWidget):
     # HELPFUL METHODS
     def _update_main_area(self):
         pass
+
+    def _tree_size(self, tree):
+        scale = 2 * self.zoom / 10.
+        size = QtCore.QSizeF(tree.size()) * scale
+        return size.expandedTo(QtCore.QSizeF(16, 16))
 
     def _get_color_palette(self):
         if self.model.domain.class_var.is_discrete:
@@ -204,22 +219,12 @@ class OWPythagoreanForest(OWWidget):
             ptree = PythagorasTreeViewer(
                 None, tree, node_color_func=self._get_node_color,
                 interactive=False)
-            ptree.scale(.1, .1)
             self.ptrees.append(ptree)
+            self.grid_items.append(GridItem(ptree, self.grid, max_size=250))
 
-        # self.grid.set_items(self.ptrees)
-
-        self.items = []
-        self.grid_items = []
-        for _ in range(5):
-            wd = QtGui.QGraphicsWidget()
-            QtGui.QGraphicsRectItem(0, 0, 100, 100, wd)
-            wd.sizeHint = lambda *_: QtCore.QSizeF(100, 100)
-            self.items.append(wd)
-
-            self.grid_items.append(SelectableGridItem(wd, self.grid))
         self.grid.set_items(self.grid_items)
 
+        # TODO check that this is really necessary
         if self.grid:
             width = (self.view.width() -
                      self.view.verticalScrollBar().width())
@@ -254,6 +259,10 @@ class OWPythagoreanForest(OWWidget):
         self.grid.setPreferredWidth(width)
 
         super().resizeEvent(ev)
+
+
+class GridItem(SelectableGridItem, ZoomableGridItem):
+    pass
 
 
 class SklRandomForestAdapter:

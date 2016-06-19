@@ -290,6 +290,9 @@ class PythagorasTreeViewer(QtGui.QGraphicsWidget):
     def boundingRect(self):
         return self.childrenBoundingRect()
 
+    def sizeHint(self, size_hint, size_constraint=None, *args, **kwargs):
+        return self.boundingRect().size()
+
 
 class SquareGraphicsItem(QtGui.QGraphicsRectItem):
     """Square Graphics Item.
