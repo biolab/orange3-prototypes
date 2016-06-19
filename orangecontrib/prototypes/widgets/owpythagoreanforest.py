@@ -9,7 +9,7 @@ from PyQt4 import QtGui, QtCore
 from PyQt4.QtCore import Qt
 
 from orangecontrib.prototypes.utils.common.owgrid import OWGrid, \
-    SelectableGridItem, ZoomableGridItem
+    SelectableGridItem, ZoomableGridItem, PaddedGridItem
 from orangecontrib.prototypes.utils.tree.skltreeadapter import SklTreeAdapter
 from orangecontrib.prototypes.widgets.pythagorastreeviewer import \
     PythagorasTreeViewer
@@ -74,8 +74,8 @@ class OWPythagoreanForest(OWWidget):
             items=list(zip(*self.SIZE_CALCULATION))[0], contentsLength=8,
             callback=self.size_calc_changed)
         self.ui_depth_slider = gui.hSlider(
-            box_display, self, 'zoom', label='Zoom', ticks=False,
-            callback=self.zoom_changed, createLabel=False)
+            box_display, self, 'zoom', label='Zoom', ticks=False, minValue=10,
+            maxValue=150, callback=self.zoom_changed, createLabel=False)
 
         # Stretch to fit the rest of the unsused area
         gui.rubber(self.controlArea)
@@ -136,9 +136,8 @@ class OWPythagoreanForest(OWWidget):
         pass
 
     def zoom_changed(self):
-        for tree in self.ptrees:
-            tree.setPreferredSize(self._tree_size(tree))
-            tree.update()
+        for item in self.grid_items:
+            item.set_max_size(self.zoom * 5)
 
         if self.grid:
             width = (self.view.width() -
@@ -178,11 +177,6 @@ class OWPythagoreanForest(OWWidget):
     # HELPFUL METHODS
     def _update_main_area(self):
         pass
-
-    def _tree_size(self, tree):
-        scale = 2 * self.zoom / 10.
-        size = QtCore.QSizeF(tree.size()) * scale
-        return size.expandedTo(QtCore.QSizeF(16, 16))
 
     def _get_color_palette(self):
         if self.model.domain.class_var.is_discrete:
@@ -238,7 +232,6 @@ class OWPythagoreanForest(OWWidget):
 
     def commit(self):
         """Commit the selected tree to output."""
-        print('selection changed')
         pass
         model = self.model
         tree = model.skl_model.estimators_[0]
@@ -261,7 +254,8 @@ class OWPythagoreanForest(OWWidget):
         super().resizeEvent(ev)
 
 
-class GridItem(SelectableGridItem, ZoomableGridItem):
+# class GridItem(ZoomableGridItem, SelectableGridItem):
+class GridItem(PaddedGridItem, SelectableGridItem, ZoomableGridItem):
     pass
 
 
