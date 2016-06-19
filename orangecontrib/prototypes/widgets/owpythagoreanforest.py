@@ -8,7 +8,7 @@ from Orange.widgets.widget import OWWidget
 from PyQt4 import QtGui, QtCore
 from PyQt4.QtCore import Qt
 
-from orangecontrib.prototypes.utils.common.owgrid import OWGrid, GridItem
+from orangecontrib.prototypes.utils.common.owgrid import OWGrid
 from orangecontrib.prototypes.utils.tree.skltreeadapter import SklTreeAdapter
 from orangecontrib.prototypes.widgets.pythagorastreeviewer import \
     PythagorasTreeViewer
@@ -90,7 +90,6 @@ class OWPythagoreanForest(OWWidget):
         self.view = QtGui.QGraphicsView(self.scene)
         self.view.setRenderHint(QtGui.QPainter.Antialiasing, True)
         self.view.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
-        self.view.installEventFilter(self)
         self.mainArea.layout().addWidget(self.view)
 
         self.resize(800, 500)
@@ -209,20 +208,19 @@ class OWPythagoreanForest(OWWidget):
         # self.grid.set_items([GridItem(ptree, self.grid)
         #                      for ptree in self.ptrees])
 
-        items = []
-        for _ in range(100):
+        self.items = []
+        for _ in range(5):
             wd = QtGui.QGraphicsWidget(self.grid)
-            wd.setPreferredSize(100, 100)
             QtGui.QGraphicsRectItem(0, 0, 100, 100, wd)
-            items.append(wd)
-        self.grid.set_items(items)
+            wd.sizeHint = lambda *_: QtCore.QSizeF(100, 100)
+            self.items.append(wd)
+        self.grid.set_items(self.items)
 
         if self.grid:
             width = (self.view.width() -
                      self.view.verticalScrollBar().width())
-            # self.grid.reflow(width)
+            self.grid.reflow(width)
             self.grid.setPreferredWidth(width)
-            # self.grid.layout().activate()
 
     def onDeleteWidget(self):
         """When deleting the widget."""
@@ -245,26 +243,12 @@ class OWPythagoreanForest(OWWidget):
     def _update_scene_rect(self):
         self.scene.setSceneRect(self.scene.itemsBoundingRect())
 
-    def eventFilter(self, receiver, event):
-        if receiver is self.view and event.type() == QtCore.QEvent.Resize:
-            width = (self.view.width() - self.view.verticalScrollBar().width())
-            self.grid.reflow(width)
-            self.grid.setPreferredWidth(width)
+    def resizeEvent(self, ev):
+        width = (self.view.width() - self.view.verticalScrollBar().width())
+        self.grid.reflow(width)
+        self.grid.setPreferredWidth(width)
 
-        return super().eventFilter(receiver, event)
-
-    def update_widget_size(self, widget):
-        if widget.size().isValid():
-            size = widget.size()
-            size.scale(self.size, Qt.KeepAspectRatio)
-        else:
-            size = QtCore.QSizeF()
-        return size
-
-    def tree_size(self, widget):
-        scale = 2 * self.zoom / 100.0
-        size = QtCore.QSizeF(widget.size()) * scale
-        return size.expandedTo(QtCore.QSizeF(16, 16))
+        super().resizeEvent(ev)
 
 
 class SklRandomForestAdapter:
