@@ -113,8 +113,6 @@ class OWPythagoreanForest(OWWidget):
             self._update_target_class_combo()
             self._update_depth_slider()
 
-            self._update_main_area()
-
     def clear(self):
         """Clear all relevant data from the widget."""
         self.model = None
@@ -133,7 +131,8 @@ class OWPythagoreanForest(OWWidget):
             tree.set_depth_limit(self.depth_limit)
 
     def target_colors_changed(self):
-        pass
+        for tree in self.ptrees:
+            tree.target_class_has_changed()
 
     def size_calc_changed(self):
         pass
@@ -182,9 +181,6 @@ class OWPythagoreanForest(OWWidget):
     # HELPFUL METHODS
     def _get_max_depth(self):
         return max([tree.tree_adapter.max_depth for tree in self.ptrees])
-
-    def _update_main_area(self):
-        pass
 
     def _get_color_palette(self):
         if self.model.domain.class_var.is_discrete:
