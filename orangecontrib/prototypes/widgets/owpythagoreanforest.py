@@ -1,3 +1,4 @@
+from fontforge import selection
 from math import log, sqrt
 
 import numpy as np
@@ -31,8 +32,7 @@ class OWPythagoreanForest(OWWidget):
     target_class_index = settings.ContextSetting(0)
     size_calc_idx = settings.Setting(0)
     size_log_scale = settings.Setting(2)
-    tooltips_enabled = settings.Setting(True)
-    zoom = settings.Setting(True)
+    zoom = settings.Setting(50)
 
     def __init__(self):
         super().__init__()
@@ -43,7 +43,7 @@ class OWPythagoreanForest(OWWidget):
         self.dataset = None
         self.clf_dataset = None
         # We need to store refernces to the trees and grid items
-        self.ptrees, self.grid_items = [], []
+        self.grid_items = []
 
         self.color_palette = None
 
@@ -119,7 +119,8 @@ class OWPythagoreanForest(OWWidget):
         """Clear all relevant data from the widget."""
         self.model = None
         self.forest_adapter = None
-        self.ptrees = []
+        self.grid_items = []
+        self.grid.clear()
 
         self._clear_info_box()
         self._clear_target_class_combo()
@@ -137,7 +138,7 @@ class OWPythagoreanForest(OWWidget):
 
     def zoom_changed(self):
         for item in self.grid_items:
-            item.set_max_size(self.zoom * 5)
+            item.set_max_size(self._calculate_zoom(self.zoom))
 
         width = (self.view.width() - self.view.verticalScrollBar().width())
         self.grid.reflow(width)
@@ -210,8 +211,9 @@ class OWPythagoreanForest(OWWidget):
             ptree = PythagorasTreeViewer(
                 None, tree, node_color_func=self._get_node_color,
                 interactive=False, padding=100)
-            self.ptrees.append(ptree)
-            self.grid_items.append(GridItem(ptree, self.grid, max_size=250))
+            self.grid_items.append(GridItem(
+                ptree, self.grid, max_size=self._calculate_zoom(self.zoom)
+            ))
 
         self.grid.set_items(self.grid_items)
 
@@ -222,6 +224,11 @@ class OWPythagoreanForest(OWWidget):
             self.grid.reflow(width)
             self.grid.setPreferredWidth(width)
 
+    @staticmethod
+    def _calculate_zoom(zoom_level):
+        """Calculate the max size for grid items from zoom level setting."""
+        return zoom_level * 5
+
     def onDeleteWidget(self):
         """When deleting the widget."""
         super().onDeleteWidget()
@@ -229,13 +236,17 @@ class OWPythagoreanForest(OWWidget):
 
     def commit(self):
         """Commit the selected tree to output."""
-        pass
-        model = self.model
-        tree = model.skl_model.estimators_[0]
+        if len(self.scene.selectedItems()) == 0:
+            self.send('Tree', None)
+            return
+
+        selected_item = self.scene.selectedItems()[0]
+        index = self.grid_items.index(selected_item)
+        tree = self.model.skl_model.estimators_[index]
         clf = TreeClassifier(tree)
-        clf.domain = model.domain
-        clf.instances = model.instances
-        self.send('Tree', clf if self.model is not None else None)
+        clf.domain = self.model.domain
+        clf.instances = self.model.instances
+        self.send('Tree', clf)
 
     def send_report(self):
         self.report_plot()

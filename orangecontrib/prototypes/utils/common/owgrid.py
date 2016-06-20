@@ -246,6 +246,11 @@ class OWGrid(QtGui.QGraphicsWidget):
             grid.addItem(item, i // ncol, i % ncol)
             grid.setAlignment(item, Qt.AlignCenter)
 
+    def clear(self):
+        for item in self._items():
+            self.__layout.removeItem(item)
+            item.setParent(None)
+
     @staticmethod
     def _fit_n_cols(widths, spacing, constraint):
 
