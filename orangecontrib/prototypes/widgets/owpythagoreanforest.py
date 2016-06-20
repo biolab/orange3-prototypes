@@ -1,31 +1,26 @@
-from fontforge import selection
 from math import log, sqrt
 
 import numpy as np
-from Orange.classification.random_forest import RandomForestClassifier
 from Orange.classification.tree import TreeClassifier
+from Orange.data import Table
 from Orange.widgets import gui, settings
 from Orange.widgets.widget import OWWidget
 from PyQt4 import QtGui
 from PyQt4.QtCore import Qt
 
-from orangecontrib.prototypes.utils.common.owgrid import OWGrid, \
-    SelectableGridItem, ZoomableGridItem
+from orangecontrib.prototypes.utils.common.owgrid import (
+    OWGrid,
+    SelectableGridItem,
+    ZoomableGridItem
+)
 from orangecontrib.prototypes.utils.tree.skltreeadapter import SklTreeAdapter
 from orangecontrib.prototypes.widgets.pythagorastreeviewer import \
     PythagorasTreeViewer
 
 
 class OWPythagoreanForest(OWWidget):
-    name = 'Pythagorean forest'
-    description = 'Pythagorean forest for visualising random forests.'
-    priority = 100
-
     # Enable the save as feature
     graph_name = 'scene'
-
-    inputs = [('Random forest', RandomForestClassifier, 'set_rf')]
-    outputs = [('Tree', TreeClassifier)]
 
     # Settings
     depth_limit = settings.ContextSetting(10)
@@ -109,6 +104,15 @@ class OWPythagoreanForest(OWWidget):
             self.forest_adapter = self._get_forest_adapter(self.model)
             self.color_palette = self._get_color_palette()
             self._draw_trees()
+
+            self.dataset = model.instances
+            # this bit is important for the regression classifier
+            if self.dataset is not None and \
+                    self.dataset.domain != model.domain:
+                self.clf_dataset = Table.from_table(
+                    self.model.domain, self.dataset)
+            else:
+                self.clf_dataset = self.dataset
 
             self._update_info_box()
             self._update_target_class_combo()
@@ -218,6 +222,7 @@ class OWPythagoreanForest(OWWidget):
     def _get_forest_adapter(self, model):
         return SklRandomForestAdapter(
             model,
+            model.domain,
             adjust_weight=self.SIZE_CALCULATION[self.size_calc_idx][1],
         )
 
@@ -286,8 +291,10 @@ class GridItem(SelectableGridItem, ZoomableGridItem):
 
 
 class SklRandomForestAdapter:
-    def __init__(self, model, adjust_weight=lambda x: x):
+    def __init__(self, model, domain, adjust_weight=lambda x: x):
         self._adapters = []
+
+        self._domain = domain
 
         self._trees = model.skl_model.estimators_
         self._domain = model.domain
@@ -309,32 +316,6 @@ class SklRandomForestAdapter:
     def num_trees(self):
         return len(self._adapters)
 
-
-def main():
-    import sys
-    import Orange
-    from Orange.classification.random_forest import RandomForestLearner
-
-    argv = sys.argv
-    if len(argv) > 1:
-        filename = argv[1]
-    else:
-        filename = 'iris'
-
-    app = QtGui.QApplication(argv)
-    ow = OWPythagoreanForest()
-    data = Orange.data.Table(filename)
-    clf = RandomForestLearner(n_estimators=100, random_state=42)(data)
-    clf.instances = data
-    ow.set_rf(clf)
-
-    ow.show()
-    ow.raise_()
-    ow.handleNewSignals()
-    app.exec_()
-
-    sys.exit(0)
-
-
-if __name__ == '__main__':
-    main()
+    @property
+    def domain(self):
+        return self._domain
