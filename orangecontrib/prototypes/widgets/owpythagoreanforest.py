@@ -5,11 +5,11 @@ from Orange.classification.random_forest import RandomForestClassifier
 from Orange.classification.tree import TreeClassifier
 from Orange.widgets import gui, settings
 from Orange.widgets.widget import OWWidget
-from PyQt4 import QtGui, QtCore
+from PyQt4 import QtGui
 from PyQt4.QtCore import Qt
 
 from orangecontrib.prototypes.utils.common.owgrid import OWGrid, \
-    SelectableGridItem, ZoomableGridItem, PaddedGridItem
+    SelectableGridItem, ZoomableGridItem
 from orangecontrib.prototypes.utils.tree.skltreeadapter import SklTreeAdapter
 from orangecontrib.prototypes.widgets.pythagorastreeviewer import \
     PythagorasTreeViewer
@@ -251,7 +251,7 @@ class OWPythagoreanForest(OWWidget):
         super().resizeEvent(ev)
 
 
-class GridItem(SelectableGridItem, ZoomableGridItem, PaddedGridItem):
+class GridItem(SelectableGridItem, ZoomableGridItem):
     pass
 
 

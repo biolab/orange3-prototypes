@@ -50,31 +50,11 @@ class SelectableGridItem(GridItem):
             painter.restore()
 
 
-class PaddedGridItem(GridItem):
-    def __init__(self, widget, parent=None, padding=20, **kwargs):
-        self._padding = padding
-
-        super().__init__(widget, parent, **kwargs)
-
-        # Moving the child widget is important in order to keep the bounding
-        # boxes aligned
-        self.widget.moveBy(self._padding, self._padding)
-
-    def boundingRect(self):
-        return QtCore.QRectF(
-            QtCore.QPointF(0, 0),
-            super().boundingRect().adjusted(
-                -self._padding, -self._padding, self._padding, self._padding
-            ).size())
-
-    def sizeHint(self, size_hint, size_constraint=None, *args, **kwargs):
-        return super().sizeHint(size_hint, size_constraint, *args, **kwargs) \
-            + QtCore.QSizeF(2 * self._padding, 2 * self._padding)
-
-
 class ZoomableGridItem(GridItem):
     def __init__(self, widget, parent=None, max_size=150, **kwargs):
         self._max_size = QtCore.QSizeF(max_size, max_size)
+        # We store the offsets from the top left corner to move widget properly
+        self.__offset_x = self.__offset_y = 0
 
         super().__init__(widget, parent, **kwargs)
 
@@ -86,7 +66,6 @@ class ZoomableGridItem(GridItem):
         self._resize_widget()
 
     def _resize_widget(self):
-        # First, resize the widget
         w = self.widget
         own_hint = self.sizeHint(Qt.PreferredSize)
 
@@ -105,28 +84,29 @@ class ZoomableGridItem(GridItem):
         # scale_w = own_hint.width() / full_rect.width()
         scale_w = eff_hint.width() / w.boundingRect().width()
         scale_h = eff_hint.height() / w.boundingRect().height()
-        scale = scale_w if scale_w > scale_h else scale_h
+        scale = scale_w if scale_w < scale_h else scale_h
 
+        # Move the widget back to origin then perfom transformations
+        self.widget.moveBy(-self.__offset_x, -self.__offset_y)
         # Move the tranform origin to top left, so it stays in place when
         # scaling
         w.setTransformOriginPoint(w.childrenBoundingRect().topLeft())
         w.setScale(scale)
         # Then, move the scaled widget to the center of the bounding box
         own_rect = self.boundingRect()
-        self.widget.moveBy(
-            (own_rect.width() - w.boundingRect().width() * scale_w) / 2,
-            (own_rect.height() - w.boundingRect().height() * scale_h) / 2)
+        self.__offset_x = (own_rect.width() - w.boundingRect().width() *
+                           scale) / 2
+        self.__offset_y = (own_rect.height() - w.boundingRect().height() *
+                           scale) / 2
+        self.widget.moveBy(self.__offset_x, self.__offset_y)
         # Finally, tell the world you've changed
         self.updateGeometry()
 
     def boundingRect(self):
-        return QtCore.QRectF(QtCore.QPointF(0, 0),
-                             self.sizeHint(Qt.PreferredSize))
+        return QtCore.QRectF(QtCore.QPointF(0, 0), self._max_size)
 
     def sizeHint(self, size_hint, size_constraint=None, *args, **kwargs):
-        size = super().sizeHint(Qt.PreferredSize)
-        size.scale(self._max_size, Qt.KeepAspectRatio)
-        return size
+        return self._max_size
 
 
 class OWGrid(QtGui.QGraphicsWidget):
