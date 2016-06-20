@@ -135,7 +135,10 @@ class OWPythagoreanForest(OWWidget):
             tree.target_class_has_changed()
 
     def size_calc_changed(self):
-        pass
+        if self.model is not None:
+            self.forest_adapter = self._get_forest_adapter(self.model)
+            self.grid.clear()
+            self._draw_trees()
 
     def zoom_changed(self):
         for item in self.grid_items:
@@ -213,6 +216,8 @@ class OWPythagoreanForest(OWWidget):
         )
 
     def _draw_trees(self):
+        self.grid_items, self.ptrees = [], []
+
         for tree in self.forest_adapter.get_trees():
             ptree = PythagorasTreeViewer(
                 None, tree, node_color_func=self._get_node_color,
