@@ -5,7 +5,22 @@ from PyQt4.QtCore import Qt
 
 
 class GridItem(QtGui.QGraphicsWidget):
-    def __init__(self, widget, parent=None, padding=20, **_):
+    """The base class for grid items, takes care of positioning in grid.
+
+    Parameters
+    ----------
+    widget : QtGui.QGraphicsWidget
+    parent : QtGui.QGraphicsWidget
+
+    See Also
+    --------
+    OWGrid
+    SelectableGridItem
+    ZoomableGridItem
+
+    """
+
+    def __init__(self, widget, parent=None, **_):
         super().__init__(parent)
         # For some reason, the super constructor is not setting the parent
         self.setParent(parent)
@@ -14,8 +29,6 @@ class GridItem(QtGui.QGraphicsWidget):
         if hasattr(self.widget, 'setParent'):
             self.widget.setParentItem(self)
             self.widget.setParent(self)
-
-        self._padding = padding
 
         # Move the child widget to (0, 0) so that bounding rects match up
         # This is needed because the bounding rect is caluclated with the size
@@ -32,6 +45,21 @@ class GridItem(QtGui.QGraphicsWidget):
 
 
 class SelectableGridItem(GridItem):
+    """Makes a grid item selectable.
+
+    Parameters
+    ----------
+    widget : QtGui.QGraphicsWidget
+    parent : QtGui.QgraphicsWidget
+
+    See Also
+    --------
+    OWGrid
+    GridItem
+    ZoomableGridItem
+
+    """
+
     def __init__(self, widget, parent=None, **kwargs):
         super().__init__(widget, parent, **kwargs)
 
@@ -52,6 +80,29 @@ class SelectableGridItem(GridItem):
 
 
 class ZoomableGridItem(GridItem):
+    """Makes a grid item "zoomable" through the `set_max_size` method.
+
+    Notes
+    -----
+    .. Note:: This grid item will override any bounding box or size hint
+        defined in the class hierarchy with its own.
+    .. Note:: This makes the grid item square.
+
+    Parameters
+    ----------
+    widget : QtGui.QGraphicsWidget
+    parent : QtGui.QGraphicsWidget
+    max_size : int
+        The maximum size of the grid item.
+
+    See Also
+    --------
+    OWGrid
+    GridItem
+    SelectableGridItem
+
+    """
+
     def __init__(self, widget, parent=None, max_size=150, **kwargs):
         self._max_size = QtCore.QSizeF(max_size, max_size)
         # We store the offsets from the top left corner to move widget properly
@@ -103,6 +154,36 @@ class ZoomableGridItem(GridItem):
 
 
 class OWGrid(QtGui.QGraphicsWidget):
+    """Responsive grid layout widget.
+
+    Manages grid items for various window sizes.
+
+    Accepts grid items as items.
+
+    Parameters
+    ----------
+    parent : QtGui.QGraphicsWidget
+
+    Examples
+    --------
+    >>> grid = OWGrid()
+
+    It's a good idea to define what you want your grid items to do. For this
+    example, we will make them selectable and zoomable, so we define a class
+    that inherits from both:
+    >>> class MyGridItem(SelectableGridItem, ZoomableGridItem):
+    >>>     pass
+
+    We then take a list of items and wrap them into our new `MyGridItem`
+    instances.
+    >>> items = [QtGui.QGraphicsRectItem(0, 0, 10, 10)]
+    >>> grid_items = [MyGridItem(i, grid) for i in items]
+
+    We can then set the items to be displayed
+    >>> grid.set_items(grid_items)
+
+    """
+
     def __init__(self, parent=None):
         super().__init__(parent)
 
@@ -126,6 +207,17 @@ class OWGrid(QtGui.QGraphicsWidget):
         self.reflow(self.size().width())
 
     def reflow(self, width):
+        """Recalculate the layout and reposition the elements so they fit.
+
+        Parameters
+        ----------
+        width : int
+            The maximum width of the grid.
+
+        Returns
+        -------
+
+        """
         # When setting the geometry when opened, the layout doesn't yet exist
         if self.layout() is None:
             return
