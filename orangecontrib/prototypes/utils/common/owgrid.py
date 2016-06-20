@@ -5,7 +5,7 @@ from PyQt4.QtCore import Qt
 
 
 class GridItem(QtGui.QGraphicsWidget):
-    def __init__(self, widget, parent=None, **_):
+    def __init__(self, widget, parent=None, padding=20, **_):
         super().__init__(parent)
         # For some reason, the super constructor is not setting the parent
         self.setParent(parent)
@@ -15,19 +15,20 @@ class GridItem(QtGui.QGraphicsWidget):
             self.widget.setParentItem(self)
             self.widget.setParent(self)
 
+        self._padding = padding
+
         # Move the child widget to (0, 0) so that bounding rects match up
         # This is needed because the bounding rect is caluclated with the size
         # hint from (0, 0), regardless of any method override
-        rect = self.widget.childrenBoundingRect()
+        rect = self.widget.boundingRect()
         self.widget.moveBy(-rect.topLeft().x(), -rect.topLeft().y())
 
-    def sizeHint(self, size_hint, size_constraint=None, **kwargs):
-        return self.widget.sizeHint(
-            size_hint, size_constraint, **kwargs)
-
     def boundingRect(self):
-        return QtCore.QRectF(
-            QtCore.QPointF(0, 0), self.widget.childrenBoundingRect().size())
+        return QtCore.QRectF(QtCore.QPointF(0, 0),
+                             self.widget.boundingRectoundingRect().size())
+
+    def sizeHint(self, size_hint, size_constraint=None, **kwargs):
+        return self.widget.sizeHint(size_hint, size_constraint, **kwargs)
 
 
 class SelectableGridItem(GridItem):
@@ -74,23 +75,15 @@ class ZoomableGridItem(GridItem):
             self.scene().removeItem(self.rect_)
         self.rect_ = QtGui.QGraphicsRectItem(self.boundingRect(), self)
 
-        # The effective hint for the actual tree with no padding - if padding
-        eff_hint = own_hint
-        if hasattr(self, '_padding'):
-            eff_hint -= QtCore.QSizeF(2 * self._padding, 2 * self._padding)
-            # For proper positioning, move to actual top left corner
-            w.moveBy(-self._padding, -self._padding)
-
-        # scale_w = own_hint.width() / full_rect.width()
-        scale_w = eff_hint.width() / w.boundingRect().width()
-        scale_h = eff_hint.height() / w.boundingRect().height()
+        scale_w = own_hint.width() / w.boundingRect().width()
+        scale_h = own_hint.height() / w.boundingRect().height()
         scale = scale_w if scale_w < scale_h else scale_h
 
         # Move the widget back to origin then perfom transformations
         self.widget.moveBy(-self.__offset_x, -self.__offset_y)
         # Move the tranform origin to top left, so it stays in place when
         # scaling
-        w.setTransformOriginPoint(w.childrenBoundingRect().topLeft())
+        w.setTransformOriginPoint(w.boundingRect().topLeft())
         w.setScale(scale)
         # Then, move the scaled widget to the center of the bounding box
         own_rect = self.boundingRect()

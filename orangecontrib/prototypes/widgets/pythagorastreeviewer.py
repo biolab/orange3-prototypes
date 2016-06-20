@@ -64,7 +64,8 @@ class PythagorasTreeViewer(QtGui.QGraphicsWidget):
 
     """
 
-    def __init__(self, parent=None, adapter=None, depth_limit=0, **kwargs):
+    def __init__(self, parent=None, adapter=None, depth_limit=0, padding=0,
+                 **kwargs):
         super().__init__(parent)
 
         # Instance variables
@@ -72,6 +73,7 @@ class PythagorasTreeViewer(QtGui.QGraphicsWidget):
         self._tree_adapter = None
         # The root tree node instance which is calculated inside the class
         self._tree = None
+        self._padding = padding
 
         self.setSizePolicy(QtGui.QSizePolicy.Expanding,
                            QtGui.QSizePolicy.Expanding)
@@ -288,10 +290,12 @@ class PythagorasTreeViewer(QtGui.QGraphicsWidget):
         self._square_objects.clear()
 
     def boundingRect(self):
-        return self.childrenBoundingRect()
+        return self.childrenBoundingRect().adjusted(
+            -self._padding, -self._padding, self._padding, self._padding)
 
     def sizeHint(self, size_hint, size_constraint=None, *args, **kwargs):
-        return self.boundingRect().size()
+        return self.boundingRect().size() + \
+               QtCore.QSizeF(self._padding, self._padding)
 
 
 class SquareGraphicsItem(QtGui.QGraphicsRectItem):

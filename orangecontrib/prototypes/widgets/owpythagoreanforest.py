@@ -209,7 +209,7 @@ class OWPythagoreanForest(OWWidget):
         for tree in self.forest_adapter.get_trees():
             ptree = PythagorasTreeViewer(
                 None, tree, node_color_func=self._get_node_color,
-                interactive=False)
+                interactive=False, padding=100)
             self.ptrees.append(ptree)
             self.grid_items.append(GridItem(ptree, self.grid, max_size=250))
 
@@ -294,7 +294,7 @@ def main():
     app = QtGui.QApplication(argv)
     ow = OWPythagoreanForest()
     data = Orange.data.Table(filename)
-    clf = RandomForestLearner(n_estimators=5)(data)
+    clf = RandomForestLearner(n_estimators=100)(data)
     clf.instances = data
     ow.set_rf(clf)
 
