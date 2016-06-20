@@ -71,7 +71,7 @@ class OWClassificationPythagorasTree(OWPythagorasTree):
 
     def _get_tooltip(self, node):
         distribution = self.tree_adapter.get_distribution(node.label)[0]
-        total = self.tree_adapter.num_samples(node.label)
+        total = int(np.sum(distribution))
         if self.target_class_index:
             samples = distribution[self.target_class_index - 1]
             text = ''

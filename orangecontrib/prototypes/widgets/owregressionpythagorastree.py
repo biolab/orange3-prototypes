@@ -117,7 +117,8 @@ class OWRegressionPythagorasTree(OWPythagorasTree):
         return self.color_palette[(std - min_mean) / (max_mean - min_mean)]
 
     def _get_tooltip(self, node):
-        total = self.tree_adapter.num_samples(self.tree_adapter.root)
+        total = self.tree_adapter.num_samples(
+            self.tree_adapter.parent(node.label))
         samples = self.tree_adapter.num_samples(node.label)
         ratio = samples / total
 
