@@ -74,7 +74,7 @@ class OWPythagoreanForest(OWWidget):
             items=list(zip(*self.SIZE_CALCULATION))[0], contentsLength=8,
             callback=self.size_calc_changed)
         self.ui_depth_slider = gui.hSlider(
-            box_display, self, 'zoom', label='Zoom', ticks=False, minValue=10,
+            box_display, self, 'zoom', label='Zoom', ticks=False, minValue=20,
             maxValue=150, callback=self.zoom_changed, createLabel=False)
 
         # Stretch to fit the rest of the unsused area
@@ -139,12 +139,9 @@ class OWPythagoreanForest(OWWidget):
         for item in self.grid_items:
             item.set_max_size(self.zoom * 5)
 
-        if self.grid:
-            width = (self.view.width() -
-                     self.view.verticalScrollBar().width())
-
-            self.grid.reflow(width)
-            self.grid.setPreferredWidth(width)
+        width = (self.view.width() - self.view.verticalScrollBar().width())
+        self.grid.reflow(width)
+        self.grid.setPreferredWidth(width)
 
     # MODEL CHANGED METHODS
     def _update_info_box(self):
@@ -297,7 +294,7 @@ def main():
     app = QtGui.QApplication(argv)
     ow = OWPythagoreanForest()
     data = Orange.data.Table(filename)
-    clf = RandomForestLearner(n_estimators=500)(data)
+    clf = RandomForestLearner(n_estimators=5)(data)
     clf.instances = data
     ow.set_rf(clf)
 

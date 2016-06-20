@@ -21,9 +21,6 @@ class GridItem(QtGui.QGraphicsWidget):
         rect = self.widget.childrenBoundingRect()
         self.widget.moveBy(-rect.topLeft().x(), -rect.topLeft().y())
 
-        # TODO Remove this
-        QtGui.QGraphicsRectItem(self.boundingRect(), self)
-
     def sizeHint(self, size_hint, size_constraint=None, **kwargs):
         return self.widget.sizeHint(
             size_hint, size_constraint, **kwargs)
@@ -76,7 +73,7 @@ class PaddedGridItem(GridItem):
 
 
 class ZoomableGridItem(GridItem):
-    def __init__(self, widget, parent=None, max_size=100, **kwargs):
+    def __init__(self, widget, parent=None, max_size=150, **kwargs):
         self._max_size = QtCore.QSizeF(max_size, max_size)
 
         super().__init__(widget, parent, **kwargs)
@@ -92,6 +89,11 @@ class ZoomableGridItem(GridItem):
         # First, resize the widget
         w = self.widget
         own_hint = self.sizeHint(Qt.PreferredSize)
+
+        # TODO Remove this
+        if hasattr(self, 'rect_'):
+            self.scene().removeItem(self.rect_)
+        self.rect_ = QtGui.QGraphicsRectItem(self.boundingRect(), self)
 
         # The effective hint for the actual tree with no padding - if padding
         eff_hint = own_hint
@@ -114,6 +116,8 @@ class ZoomableGridItem(GridItem):
         self.widget.moveBy(
             (own_rect.width() - w.boundingRect().width() * scale_w) / 2,
             (own_rect.height() - w.boundingRect().height() * scale_h) / 2)
+        # Finally, tell the world you've changed
+        self.updateGeometry()
 
     def boundingRect(self):
         return QtCore.QRectF(QtCore.QPointF(0, 0),
@@ -135,7 +139,7 @@ class OWGrid(QtGui.QGraphicsWidget):
 
         self.__layout = QtGui.QGraphicsGridLayout()
         self.__layout.setContentsMargins(0, 0, 0, 0)
-        self.__layout.setSpacing(0)
+        self.__layout.setSpacing(10)
         self.setLayout(self.__layout)
 
     def set_items(self, items):
@@ -159,7 +163,7 @@ class OWGrid(QtGui.QGraphicsWidget):
         width -= left + right
 
         # Get size hints with 32 as the minimum size for each cell
-        widths = [max(32, h.width()) for h in self._hints(Qt.PreferredSize)]
+        widths = [max(64, h.width()) for h in self._hints(Qt.PreferredSize)]
         ncol = self._fit_n_cols(widths, grid.horizontalSpacing(), width)
 
         # The number of columns is already optimal
@@ -175,6 +179,7 @@ class OWGrid(QtGui.QGraphicsWidget):
 
         for i, item in enumerate(items):
             grid.addItem(item, i // ncol, i % ncol)
+            grid.setAlignment(item, Qt.AlignCenter)
 
     @staticmethod
     def _fit_n_cols(widths, spacing, constraint):
