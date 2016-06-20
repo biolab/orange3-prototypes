@@ -123,11 +123,6 @@ class ZoomableGridItem(GridItem):
         w = self.widget
         own_hint = self.sizeHint(Qt.PreferredSize)
 
-        # TODO Remove this
-        # if hasattr(self, 'rect_'):
-        #     self.scene().removeItem(self.rect_)
-        # self.rect_ = QtGui.QGraphicsRectItem(self.boundingRect(), self)
-
         scale_w = own_hint.width() / w.boundingRect().width()
         scale_h = own_hint.height() / w.boundingRect().height()
         scale = scale_w if scale_w < scale_h else scale_h

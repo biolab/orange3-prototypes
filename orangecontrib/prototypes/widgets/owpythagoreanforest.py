@@ -43,7 +43,7 @@ class OWPythagoreanForest(OWWidget):
         self.dataset = None
         self.clf_dataset = None
         # We need to store refernces to the trees and grid items
-        self.grid_items = []
+        self.grid_items, self.ptrees = [], []
 
         self.color_palette = None
 
@@ -73,7 +73,7 @@ class OWPythagoreanForest(OWWidget):
             orientation='horizontal',
             items=list(zip(*self.SIZE_CALCULATION))[0], contentsLength=8,
             callback=self.size_calc_changed)
-        self.ui_depth_slider = gui.hSlider(
+        self.ui_zoom_slider = gui.hSlider(
             box_display, self, 'zoom', label='Zoom', ticks=False, minValue=20,
             maxValue=150, callback=self.zoom_changed, createLabel=False)
 
@@ -119,6 +119,7 @@ class OWPythagoreanForest(OWWidget):
         """Clear all relevant data from the widget."""
         self.model = None
         self.forest_adapter = None
+        self.ptrees = []
         self.grid_items = []
         self.grid.clear()
 
@@ -128,7 +129,8 @@ class OWPythagoreanForest(OWWidget):
 
     # CONTROL AREA CALLBACKS
     def max_depth_changed(self):
-        pass
+        for tree in self.ptrees:
+            tree.set_depth_limit(self.depth_limit)
 
     def target_colors_changed(self):
         pass
@@ -158,7 +160,11 @@ class OWPythagoreanForest(OWWidget):
         self.ui_target_class_combo.addItems(values)
 
     def _update_depth_slider(self):
-        pass
+        self.depth_limit = self._get_max_depth()
+
+        self.ui_depth_slider.setEnabled(True)
+        self.ui_depth_slider.setMaximum(self.depth_limit)
+        self.ui_depth_slider.setValue(self.depth_limit)
 
     # MODEL CLEARED METHODS
     def _clear_info_box(self):
@@ -170,9 +176,13 @@ class OWPythagoreanForest(OWWidget):
         self.ui_target_class_combo.setCurrentIndex(self.target_class_index)
 
     def _clear_depth_slider(self):
-        pass
+        self.ui_depth_slider.setEnabled(False)
+        self.ui_depth_slider.setMaximum(0)
 
     # HELPFUL METHODS
+    def _get_max_depth(self):
+        return max([tree.tree_adapter.max_depth for tree in self.ptrees])
+
     def _update_main_area(self):
         pass
 
@@ -214,6 +224,7 @@ class OWPythagoreanForest(OWWidget):
             self.grid_items.append(GridItem(
                 ptree, self.grid, max_size=self._calculate_zoom(self.zoom)
             ))
+            self.ptrees.append(ptree)
         self.grid.set_items(self.grid_items)
         # This is necessary when adding items for the first time
         if self.grid:

@@ -70,7 +70,7 @@ class PythagorasTreeViewer(QtGui.QGraphicsWidget):
 
         # Instance variables
         # The tree adapter parameter will be handled at the end of init
-        self._tree_adapter = None
+        self.tree_adapter = None
         # The root tree node instance which is calculated inside the class
         self._tree = None
         self._padding = padding
@@ -108,10 +108,10 @@ class PythagorasTreeViewer(QtGui.QGraphicsWidget):
 
         """
         self.clear()
-        self._tree_adapter = tree_adapter
+        self.tree_adapter = tree_adapter
 
-        if self._tree_adapter is not None:
-            self._tree = self._calculate_tree(self._tree_adapter)
+        if self.tree_adapter is not None:
+            self._tree = self._calculate_tree(self.tree_adapter)
             self.set_depth_limit(tree_adapter.max_depth)
             self._draw_tree(self._tree)
 
@@ -172,7 +172,7 @@ class PythagorasTreeViewer(QtGui.QGraphicsWidget):
 
         """
         for square in self._squares():
-            square.setBrush(self._calc_node_color(self._tree_adapter,
+            square.setBrush(self._calc_node_color(self.tree_adapter,
                                                   square.tree_node))
 
     def _update_node_tooltips(self):
@@ -182,7 +182,7 @@ class PythagorasTreeViewer(QtGui.QGraphicsWidget):
 
     def clear(self):
         """Clear the widget state."""
-        self._tree_adapter = None
+        self.tree_adapter = None
         self._tree = None
 
         self._clear_scene()
@@ -263,7 +263,7 @@ class PythagorasTreeViewer(QtGui.QGraphicsWidget):
                     node,
                     parent=self,
                     brush=QtGui.QBrush(
-                        self._calc_node_color(self._tree_adapter, node)
+                        self._calc_node_color(self.tree_adapter, node)
                     ),
                     tooltip=self._get_tooltip(node),
                     zvalue=depth,
