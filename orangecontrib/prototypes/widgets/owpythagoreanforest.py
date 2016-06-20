@@ -33,6 +33,7 @@ class OWPythagoreanForest(OWWidget):
     size_calc_idx = settings.Setting(0)
     size_log_scale = settings.Setting(2)
     zoom = settings.Setting(50)
+    selected_tree_index = settings.ContextSetting(-1)
 
     def __init__(self):
         super().__init__()
@@ -113,6 +114,8 @@ class OWPythagoreanForest(OWWidget):
             self._update_target_class_combo()
             self._update_depth_slider()
 
+            self.selected_tree_index = -1
+
     def clear(self):
         """Clear all relevant data from the widget."""
         self.model = None
@@ -139,6 +142,9 @@ class OWPythagoreanForest(OWWidget):
             self.forest_adapter = self._get_forest_adapter(self.model)
             self.grid.clear()
             self._draw_trees()
+            # Keep the selected item
+            if self.selected_tree_index != -1:
+                self.grid_items[self.selected_tree_index].setSelected(True)
 
     def zoom_changed(self):
         for item in self.grid_items:
@@ -248,11 +254,14 @@ class OWPythagoreanForest(OWWidget):
         """Commit the selected tree to output."""
         if len(self.scene.selectedItems()) == 0:
             self.send('Tree', None)
+            # The selected tree index should only reset when model changes
+            if self.model is None:
+                self.selected_tree_index = -1
             return
 
         selected_item = self.scene.selectedItems()[0]
-        index = self.grid_items.index(selected_item)
-        tree = self.model.skl_model.estimators_[index]
+        self.selected_tree_index = self.grid_items.index(selected_item)
+        tree = self.model.skl_model.estimators_[self.selected_tree_index]
         clf = TreeClassifier(tree)
         clf.domain = self.model.domain
         clf.instances = self.model.instances
