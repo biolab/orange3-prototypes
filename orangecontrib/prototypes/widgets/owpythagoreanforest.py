@@ -214,10 +214,8 @@ class OWPythagoreanForest(OWWidget):
             self.grid_items.append(GridItem(
                 ptree, self.grid, max_size=self._calculate_zoom(self.zoom)
             ))
-
         self.grid.set_items(self.grid_items)
-
-        # TODO check that this is really necessary
+        # This is necessary when adding items for the first time
         if self.grid:
             width = (self.view.width() -
                      self.view.verticalScrollBar().width())
@@ -305,7 +303,7 @@ def main():
     app = QtGui.QApplication(argv)
     ow = OWPythagoreanForest()
     data = Orange.data.Table(filename)
-    clf = RandomForestLearner(n_estimators=100)(data)
+    clf = RandomForestLearner(n_estimators=100, random_state=42)(data)
     clf.instances = data
     ow.set_rf(clf)
 

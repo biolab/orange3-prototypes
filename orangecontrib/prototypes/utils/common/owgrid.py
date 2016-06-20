@@ -66,17 +66,19 @@ class SelectableGridItem(GridItem):
         self.setFlags(QtGui.QGraphicsWidget.ItemIsSelectable)
 
     def paint(self, painter, options, widget=None):
-
         super().paint(painter, options, widget)
+        rect = self.boundingRect()
+        painter.save()
         if self.isSelected():
-            rect = self.boundingRect()
-            painter.save()
-            pen = QtGui.QPen(QtGui.QColor(Qt.black))
-            pen.setWidth(4)
-            pen.setJoinStyle(Qt.MiterJoin)
-            painter.setPen(pen)
-            painter.drawRect(rect.adjusted(2, 2, -2, -2))
-            painter.restore()
+            painter.setPen(QtGui.QPen(QtGui.QColor(125, 162, 206, 192)))
+            painter.setBrush(QtGui.QBrush(QtGui.QColor(217, 232, 252, 192)))
+            painter.drawRoundedRect(QtCore.QRectF(
+                rect.topLeft(), self.geometry().size()), 3, 3)
+        else:
+            painter.setPen(QtGui.QPen(QtGui.QColor('#ebebeb')))
+            painter.drawRoundedRect(QtCore.QRectF(
+                rect.topLeft(), self.geometry().size()), 3, 3)
+        painter.restore()
 
 
 class ZoomableGridItem(GridItem):
@@ -122,9 +124,9 @@ class ZoomableGridItem(GridItem):
         own_hint = self.sizeHint(Qt.PreferredSize)
 
         # TODO Remove this
-        if hasattr(self, 'rect_'):
-            self.scene().removeItem(self.rect_)
-        self.rect_ = QtGui.QGraphicsRectItem(self.boundingRect(), self)
+        # if hasattr(self, 'rect_'):
+        #     self.scene().removeItem(self.rect_)
+        # self.rect_ = QtGui.QGraphicsRectItem(self.boundingRect(), self)
 
         scale_w = own_hint.width() / w.boundingRect().width()
         scale_h = own_hint.height() / w.boundingRect().height()
@@ -189,7 +191,7 @@ class OWGrid(QtGui.QGraphicsWidget):
 
         self.setSizePolicy(QtGui.QSizePolicy.Maximum,
                            QtGui.QSizePolicy.Maximum)
-        self.setContentsMargins(0, 0, 0, 0)
+        self.setContentsMargins(10, 10, 10, 10)
 
         self.__layout = QtGui.QGraphicsGridLayout()
         self.__layout.setContentsMargins(0, 0, 0, 0)
