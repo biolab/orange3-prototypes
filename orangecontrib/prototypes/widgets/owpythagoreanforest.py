@@ -190,7 +190,7 @@ class OWPythagoreanForest(OWWidget):
     # MODEL CHANGED METHODS
     def _update_info_box(self):
         self.ui_info.setText(
-            'Trees: {}'.format(self.forest_adapter.num_trees)
+            'Trees: {}'.format(len(self.forest_adapter.get_trees()))
         )
 
     def _update_depth_slider(self):
@@ -227,15 +227,17 @@ class OWPythagoreanForest(OWWidget):
     def _draw_trees(self):
         self.grid_items, self.ptrees = [], []
 
-        for tree in self.forest_adapter.get_trees():
-            ptree = PythagorasTreeViewer(
-                None, tree,
-                node_color_func=self._type_specific('_get_node_color'),
-                interactive=False, padding=100)
-            self.grid_items.append(GridItem(
-                ptree, self.grid, max_size=self._calculate_zoom(self.zoom)
-            ))
-            self.ptrees.append(ptree)
+        with self.progressBar(len(self.forest_adapter.get_trees())) as prg:
+            for tree in self.forest_adapter.get_trees():
+                ptree = PythagorasTreeViewer(
+                    None, tree,
+                    node_color_func=self._type_specific('_get_node_color'),
+                    interactive=False, padding=100)
+                self.grid_items.append(GridItem(
+                    ptree, self.grid, max_size=self._calculate_zoom(self.zoom)
+                ))
+                self.ptrees.append(ptree)
+                prg.advance()
         self.grid.set_items(self.grid_items)
         # This is necessary when adding items for the first time
         if self.grid:
@@ -405,10 +407,6 @@ class SklRandomForestAdapter:
             for tree in self._trees
         ]
         return self._adapters
-
-    @property
-    def num_trees(self):
-        return len(self._adapters)
 
     @property
     def domain(self):
