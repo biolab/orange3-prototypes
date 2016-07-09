@@ -2,9 +2,13 @@ from math import log, sqrt
 
 import numpy as np
 from Orange.base import RandomForest, Tree
+from Orange.classification.random_forest import RandomForestClassifier
 from Orange.classification.tree import TreeClassifier
 from Orange.data import Table
+from Orange.regression.random_forest import RandomForestRegressor
+from Orange.regression.tree import TreeRegressor
 from Orange.widgets import gui, settings
+from Orange.widgets.utils.colorpalette import ContinuousPaletteGenerator
 from Orange.widgets.widget import OWWidget
 from PyQt4 import QtGui
 from PyQt4.QtCore import Qt
@@ -40,10 +44,12 @@ class OWPythagoreanForest(OWWidget):
     zoom = settings.Setting(50)
     selected_tree_index = settings.ContextSetting(-1)
 
+    CLASSIFICATION, REGRESSION = range(2)
+
     def __init__(self):
         super().__init__()
         # Instance variables
-        # The raw skltree model that was passed to the input
+        self.forest_type = self.CLASSIFICATION
         self.model = None
         self.forest_adapter = None
         self.dataset = None
@@ -58,6 +64,12 @@ class OWPythagoreanForest(OWWidget):
             ('Normal', lambda x: x),
             ('Square root', lambda x: sqrt(x)),
             ('Logarithmic', lambda x: log(x * self.size_log_scale)),
+        ]
+
+        self.REGRESSION_COLOR_CALC = [
+            ('None', lambda _, __: QtGui.QColor(255, 255, 255)),
+            ('Class mean', self._color_class_mean),
+            ('Standard deviation', self._color_stddev),
         ]
 
         # CONTROL AREA
@@ -111,8 +123,15 @@ class OWPythagoreanForest(OWWidget):
         self.model = model
 
         if model is not None:
+            if isinstance(model, RandomForestClassifier):
+                self.forest_type = self.CLASSIFICATION
+            elif isinstance(model, RandomForestRegressor):
+                self.forest_type = self.REGRESSION
+            else:
+                raise RuntimeError('Invalid type of forest.')
+
             self.forest_adapter = self._get_forest_adapter(self.model)
-            self.color_palette = self._get_color_palette()
+            self.color_palette = self._type_specific('_get_color_palette')()
             self._draw_trees()
 
             self.dataset = model.instances
@@ -125,7 +144,7 @@ class OWPythagoreanForest(OWWidget):
                 self.clf_dataset = self.dataset
 
             self._update_info_box()
-            self._update_target_class_combo()
+            self._type_specific('_update_target_class_combo')()
             self._update_depth_slider()
 
             self.selected_tree_index = -1
@@ -174,13 +193,6 @@ class OWPythagoreanForest(OWWidget):
             'Trees: {}'.format(self.forest_adapter.num_trees)
         )
 
-    def _update_target_class_combo(self):
-        self._clear_target_class_combo()
-        self.ui_target_class_combo.addItem('None')
-        values = [c.title() for c in
-                  self.model.domain.class_vars[0].values]
-        self.ui_target_class_combo.addItems(values)
-
     def _update_depth_slider(self):
         self.depth_limit = self._get_max_depth()
 
@@ -205,30 +217,6 @@ class OWPythagoreanForest(OWWidget):
     def _get_max_depth(self):
         return max([tree.tree_adapter.max_depth for tree in self.ptrees])
 
-    def _get_color_palette(self):
-        if self.model.domain.class_var.is_discrete:
-            colors = [QtGui.QColor(*c)
-                      for c in self.model.domain.class_var.colors]
-        else:
-            colors = None
-        return colors
-
-    def _get_node_color(self, adapter, tree_node):
-        # this is taken almost directly from the existing classification tree
-        # viewer
-        colors = self.color_palette
-        distribution = adapter.get_distribution(tree_node.label)[0]
-        total = adapter.num_samples(tree_node.label)
-
-        if self.target_class_index:
-            p = distribution[self.target_class_index - 1] / total
-            color = colors[self.target_class_index - 1].light(200 - 100 * p)
-        else:
-            modus = np.argmax(distribution)
-            p = distribution[modus] / (total or 1)
-            color = colors[int(modus)].light(400 - 300 * p)
-        return color
-
     def _get_forest_adapter(self, model):
         return SklRandomForestAdapter(
             model,
@@ -241,7 +229,8 @@ class OWPythagoreanForest(OWWidget):
 
         for tree in self.forest_adapter.get_trees():
             ptree = PythagorasTreeViewer(
-                None, tree, node_color_func=self._get_node_color,
+                None, tree,
+                node_color_func=self._type_specific('_get_node_color'),
                 interactive=False, padding=100)
             self.grid_items.append(GridItem(
                 ptree, self.grid, max_size=self._calculate_zoom(self.zoom)
@@ -277,10 +266,14 @@ class OWPythagoreanForest(OWWidget):
         selected_item = self.scene.selectedItems()[0]
         self.selected_tree_index = self.grid_items.index(selected_item)
         tree = self.model.skl_model.estimators_[self.selected_tree_index]
-        clf = TreeClassifier(tree)
-        clf.domain = self.model.domain
-        clf.instances = self.model.instances
-        self.send('Tree', clf)
+
+        if self.forest_type == self.CLASSIFICATION:
+            obj = TreeClassifier(tree)
+        else:
+            obj = TreeRegressor(tree)
+        obj.domain = self.model.domain
+        obj.instances = self.model.instances
+        self.send('Tree', obj)
 
     def send_report(self):
         self.report_plot()
@@ -294,6 +287,97 @@ class OWPythagoreanForest(OWWidget):
         self.grid.setPreferredWidth(width)
 
         super().resizeEvent(ev)
+
+    def _type_specific(self, method):
+        """A best effort method getter that somewhat separates logic specific
+        to classification and regression trees.
+        This relies on conventional naming of specific methods, e.g.
+        a method name _get_tooltip would need to be defined like so:
+        _classification_get_tooltip and _regression_get_tooltip, since they are
+        both specific.
+
+        Parameters
+        ----------
+        method : str
+            Method name that we would like to call.
+
+        Returns
+        -------
+        callable or None
+
+        """
+        if self.forest_type == self.CLASSIFICATION:
+            return getattr(self, '_classification' + method)
+        elif self.forest_type == self.REGRESSION:
+            return getattr(self, '_regression' + method)
+        else:
+            return None
+
+    # CLASSIFICATION FOREST SPECIFIC METHODS
+    def _classification_update_target_class_combo(self):
+        self._clear_target_class_combo()
+        self.ui_target_class_combo.addItem('None')
+        values = [c.title() for c in
+                  self.model.domain.class_vars[0].values]
+        self.ui_target_class_combo.addItems(values)
+
+    def _classification_get_color_palette(self):
+        if self.model.domain.class_var.is_discrete:
+            colors = [QtGui.QColor(*c)
+                      for c in self.model.domain.class_var.colors]
+        else:
+            colors = None
+        return colors
+
+    def _classification_get_node_color(self, adapter, tree_node):
+        # this is taken almost directly from the existing classification tree
+        # viewer
+        colors = self.color_palette
+        distribution = adapter.get_distribution(tree_node.label)[0]
+        total = adapter.num_samples(tree_node.label)
+
+        if self.target_class_index:
+            p = distribution[self.target_class_index - 1] / total
+            color = colors[self.target_class_index - 1].light(200 - 100 * p)
+        else:
+            modus = np.argmax(distribution)
+            p = distribution[modus] / (total or 1)
+            color = colors[int(modus)].light(400 - 300 * p)
+        return color
+
+    # REGRESSION FOREST SPECIFIC METHODS
+    def _regression_update_target_class_combo(self):
+        self._clear_target_class_combo()
+        self.ui_target_class_combo.addItems(
+            list(zip(*self.REGRESSION_COLOR_CALC))[0])
+        self.ui_target_class_combo.setCurrentIndex(self.target_class_index)
+
+    def _regression_get_color_palette(self):
+        return ContinuousPaletteGenerator(
+            *self.forest_adapter.domain.class_var.colors)
+
+    def _regression_get_node_color(self, adapter, tree_node):
+        return self.REGRESSION_COLOR_CALC[self.target_class_index][1](
+            adapter, tree_node
+        )
+
+    def _color_class_mean(self, adapter, tree_node):
+        # calculate node colors relative to the mean of the node samples
+        min_mean = np.min(self.clf_dataset.Y)
+        max_mean = np.max(self.clf_dataset.Y)
+        instances = adapter.get_instances_in_nodes(self.clf_dataset, tree_node)
+        mean = np.mean(instances.Y)
+
+        return self.color_palette[(mean - min_mean) / (max_mean - min_mean)]
+
+    def _color_stddev(self, adapter, tree_node):
+        # calculate node colors relative to the standard deviation in the node
+        # samples
+        min_mean, max_mean = 0, np.std(self.clf_dataset.Y)
+        instances = adapter.get_instances_in_nodes(self.clf_dataset, tree_node)
+        std = np.std(instances.Y)
+
+        return self.color_palette[(std - min_mean) / (max_mean - min_mean)]
 
 
 class GridItem(SelectableGridItem, ZoomableGridItem):
