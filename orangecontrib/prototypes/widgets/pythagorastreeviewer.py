@@ -62,6 +62,21 @@ class PythagorasTreeViewer(QtGui.QGraphicsWidget):
         Specify whether the widget should have an interactive display. This
         means special hover effects, selectable boxes. Default is true.
 
+    Notes
+    -----
+    .. Note:: The class contains two clear methods: `clear` and `clear_tree`.
+        Each has  their own use.
+        `clear_tree` will clear out the tree and remove any graphics items.
+        `clear` will, on the other hand, clear everything, all settings
+        (tooltip and color calculation functions.
+
+        This is useful because when we want to change the size calculation of
+        the Pythagora tree, we just want to clear the scene and it would be
+        inconvenient to have to set color and tooltip functions again.
+        On the other hand, when we want to draw a brand new tree, it is best
+        to clear all settings to avoid any strange bugs - we start with a blank
+        slate.
+
     """
 
     def __init__(self, parent=None, adapter=None, depth_limit=0, padding=0,
@@ -81,10 +96,8 @@ class PythagorasTreeViewer(QtGui.QGraphicsWidget):
         # Necessary settings that need to be set from the outside
         self._depth_limit = depth_limit
         # Provide a nice green default in case no color function is provided
-        self._calc_node_color = kwargs.get(
-            'node_color_func',
-            lambda *_: QtGui.QColor('#297A1F'))
-        self._get_tooltip = kwargs.get('tooltip_func', lambda _: 'Tooltip')
+        self.__calc_node_color_func = kwargs.get('node_color_func')
+        self.__get_tooltip_func = kwargs.get('tooltip_func')
         self._interactive = kwargs.get('interactive', True)
 
         self._square_objects = {}
@@ -107,7 +120,7 @@ class PythagorasTreeViewer(QtGui.QGraphicsWidget):
         -------
 
         """
-        self.clear()
+        self.clear_tree()
         self.tree_adapter = tree_adapter
 
         if self.tree_adapter is not None:
@@ -149,10 +162,37 @@ class PythagorasTreeViewer(QtGui.QGraphicsWidget):
         -------
 
         """
-        self._calc_node_color = func
+        if func != self._calc_node_color:
+            self.__calc_node_color_func = func
+            self._update_node_colors()
+
+    def _calc_node_color(self, *args):
+        """Get the node color with a nice default fallback."""
+        if self.__calc_node_color_func is not None:
+            return self.__calc_node_color_func(*args)
+        return QtGui.QColor('#297A1F')
 
     def set_tooltip_func(self, func):
-        self._get_tooltip = func
+        """Set the function that will be used the get the node tooltips.
+
+        Parameters
+        ----------
+        func : Callable
+            func :: label -> str
+
+        Returns
+        -------
+
+        """
+        if func != self._get_tooltip:
+            self.__get_tooltip_func = func
+            self._update_node_tooltips()
+
+    def _get_tooltip(self, *args):
+        """Get the node tooltip with a nice default fallback."""
+        if self.__get_tooltip_func is not None:
+            return self.__get_tooltip_func(*args)
+        return 'Tooltip'
 
     def target_class_has_changed(self):
         self._update_node_colors()
@@ -181,10 +221,15 @@ class PythagorasTreeViewer(QtGui.QGraphicsWidget):
             square.setToolTip(self._get_tooltip(square.tree_node))
 
     def clear(self):
-        """Clear the widget state."""
+        """Clear the entire widget state."""
+        self.__calc_node_color_func = None
+        self.__get_tooltip_func = None
+        self.clear_tree()
+
+    def clear_tree(self):
+        """Clear only the tree, keeping tooltip and color functions."""
         self.tree_adapter = None
         self._tree = None
-
         self._clear_scene()
 
     @staticmethod
