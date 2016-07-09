@@ -49,8 +49,9 @@ from orangecontrib.prototypes.widgets.pythagorastreeviewer import (
 
 
 class OWPythagorasTree(OWWidget):
-    name = 'Pythagoras Tree'
-    description = 'Pythagoras Tree for visualizing trees.'
+    name = 'Pythagorean Tree'
+    description = 'Pythagorean Tree visualization for tree like-structures.'
+    icon = 'icons/PythagoreanTree.svg'
 
     priority = 100
 
