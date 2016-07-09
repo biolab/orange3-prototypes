@@ -262,7 +262,7 @@ class OWPythagorasTree(OWWidget):
         ))
 
     def _update_depth_slider(self):
-        self.depth_slider.setEnabled(True)
+        self.depth_slider.parent().setEnabled(True)
         self.depth_slider.setMaximum(self.tree_adapter.max_depth)
         self._set_max_depth()
 
@@ -282,7 +282,7 @@ class OWPythagorasTree(OWWidget):
         self.info.setText('No tree on input')
 
     def _clear_depth_slider(self):
-        self.depth_slider.setEnabled(False)
+        self.depth_slider.parent().setEnabled(False)
         self.depth_slider.setMaximum(0)
 
     def _clear_target_class_combo(self):
