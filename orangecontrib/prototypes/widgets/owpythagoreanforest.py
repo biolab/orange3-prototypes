@@ -275,6 +275,12 @@ class OWPythagoreanForest(OWWidget):
             obj = TreeRegressor(tree)
         obj.domain = self.model.domain
         obj.instances = self.model.instances
+
+        obj.meta_target_class_index = self.target_class_index
+        obj.meta_size_calc_idx = self.size_calc_idx
+        obj.meta_size_log_scale = self.size_log_scale
+        obj.meta_depth_limit = self.depth_limit
+
         self.send('Tree', obj)
 
     def send_report(self):

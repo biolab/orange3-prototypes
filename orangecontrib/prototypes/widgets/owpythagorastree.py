@@ -188,6 +188,15 @@ class OWPythagorasTree(OWWidget):
             self.tree_adapter = self._get_tree_adapter(self.model)
             self.color_palette = self._tree_specific('_get_color_palette')()
 
+            # Get meta variables describing pythagoras tree if given from
+            # forest.
+            if hasattr(model, 'meta_target_class_index'):
+                self.target_class_index = model.meta_target_class_index
+            if hasattr(model, 'meta_size_calc_idx'):
+                self.size_calc_idx = model.meta_size_calc_idx
+            if hasattr(model, 'meta_size_log_scale'):
+                self.size_log_scale = model.meta_size_log_scale
+
             self.ptree.clear()
             self.ptree.set_tree(self.tree_adapter)
             self.ptree.set_tooltip_func(self._tree_specific('_get_tooltip'))
@@ -200,6 +209,10 @@ class OWPythagorasTree(OWWidget):
 
             self._update_info_box()
             self._update_depth_slider()
+            # The depth can be passed from the meta properties as well
+            if hasattr(model, 'meta_depth_limit'):
+                self.depth_limit = model.meta_depth_limit
+
             self._tree_specific('_update_target_class_combo')()
 
             self._update_main_area()
