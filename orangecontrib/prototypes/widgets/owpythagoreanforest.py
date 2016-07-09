@@ -196,7 +196,7 @@ class OWPythagoreanForest(OWWidget):
     def _update_depth_slider(self):
         self.depth_limit = self._get_max_depth()
 
-        self.ui_depth_slider.setEnabled(True)
+        self.ui_depth_slider.parent().setEnabled(True)
         self.ui_depth_slider.setMaximum(self.depth_limit)
         self.ui_depth_slider.setValue(self.depth_limit)
 
@@ -210,7 +210,7 @@ class OWPythagoreanForest(OWWidget):
         self.ui_target_class_combo.setCurrentIndex(self.target_class_index)
 
     def _clear_depth_slider(self):
-        self.ui_depth_slider.setEnabled(False)
+        self.ui_depth_slider.parent().setEnabled(False)
         self.ui_depth_slider.setMaximum(0)
 
     # HELPFUL METHODS
