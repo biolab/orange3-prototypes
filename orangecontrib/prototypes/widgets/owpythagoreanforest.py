@@ -1,6 +1,7 @@
 from math import log, sqrt
 
 import numpy as np
+from Orange.base import RandomForest, Tree
 from Orange.classification.tree import TreeClassifier
 from Orange.data import Table
 from Orange.widgets import gui, settings
@@ -19,6 +20,15 @@ from orangecontrib.prototypes.widgets.pythagorastreeviewer import \
 
 
 class OWPythagoreanForest(OWWidget):
+    name = 'Pythagorean forest'
+    description = 'Pythagorean forest for visualising random forests.'
+    icon = 'icons/PythagoreanForest.svg'
+
+    priority = 100
+
+    inputs = [('Random forest', RandomForest, 'set_rf')]
+    outputs = [('Tree', Tree)]
+
     # Enable the save as feature
     graph_name = 'scene'
 
@@ -184,7 +194,7 @@ class OWPythagoreanForest(OWWidget):
 
     def _clear_target_class_combo(self):
         self.ui_target_class_combo.clear()
-        self.ui_target_class_index = 0
+        self.target_class_index = 0
         self.ui_target_class_combo.setCurrentIndex(self.target_class_index)
 
     def _clear_depth_slider(self):
