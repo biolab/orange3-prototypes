@@ -212,6 +212,7 @@ class OWPythagorasTree(OWWidget):
             # The depth can be passed from the meta properties as well
             if hasattr(model, 'meta_depth_limit'):
                 self.depth_limit = model.meta_depth_limit
+                self.update_depth()
 
             self._tree_specific('_update_target_class_combo')()
 
