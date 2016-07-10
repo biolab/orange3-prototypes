@@ -190,8 +190,6 @@ class OWPythagorasTree(OWWidget):
 
             # Get meta variables describing pythagoras tree if given from
             # forest.
-            if hasattr(model, 'meta_target_class_index'):
-                self.target_class_index = model.meta_target_class_index
             if hasattr(model, 'meta_size_calc_idx'):
                 self.size_calc_idx = model.meta_size_calc_idx
             if hasattr(model, 'meta_size_log_scale'):
@@ -215,6 +213,10 @@ class OWPythagorasTree(OWWidget):
                 self.update_depth()
 
             self._tree_specific('_update_target_class_combo')()
+            # The target class can also be passed from the meta properties
+            if hasattr(model, 'meta_target_class_index'):
+                self.target_class_index = model.meta_target_class_index
+                self.update_colors()
 
             self._update_main_area()
 
