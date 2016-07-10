@@ -400,12 +400,15 @@ class OWPythagorasTree(OWWidget):
         self.legend.setVisible(self.show_legend)
         self.scene.addItem(self.legend)
 
+    def _classification_get_color_palette(self):
+        return [QtGui.QColor(*c) for c in self.model.domain.class_var.colors]
+
     def _classification_get_node_color(self, adapter, tree_node):
         # this is taken almost directly from the existing classification tree
         # viewer
         colors = self.color_palette
         distribution = adapter.get_distribution(tree_node.label)[0]
-        total = adapter.num_samples(tree_node.label)
+        total = np.sum(distribution)
 
         if self.target_class_index:
             p = distribution[self.target_class_index - 1] / total
@@ -415,14 +418,6 @@ class OWPythagorasTree(OWWidget):
             p = distribution[modus] / (total or 1)
             color = colors[int(modus)].light(400 - 300 * p)
         return color
-
-    def _classification_get_color_palette(self):
-        if self.model.domain.class_var.is_discrete:
-            colors = [QtGui.QColor(*c)
-                      for c in self.model.domain.class_var.colors]
-        else:
-            colors = None
-        return colors
 
     def _classification_get_tooltip(self, node):
         distribution = self.tree_adapter.get_distribution(node.label)[0]

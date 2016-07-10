@@ -178,6 +178,7 @@ class OWPythagoreanForest(OWWidget):
             # Keep the selected item
             if self.selected_tree_index != -1:
                 self.grid_items[self.selected_tree_index].setSelected(True)
+            self.max_depth_changed()
 
     def zoom_changed(self):
         for item in self.grid_items:
@@ -330,19 +331,14 @@ class OWPythagoreanForest(OWWidget):
         self.ui_target_class_combo.addItems(values)
 
     def _classification_get_color_palette(self):
-        if self.model.domain.class_var.is_discrete:
-            colors = [QtGui.QColor(*c)
-                      for c in self.model.domain.class_var.colors]
-        else:
-            colors = None
-        return colors
+        return [QtGui.QColor(*c) for c in self.model.domain.class_var.colors]
 
     def _classification_get_node_color(self, adapter, tree_node):
         # this is taken almost directly from the existing classification tree
         # viewer
         colors = self.color_palette
         distribution = adapter.get_distribution(tree_node.label)[0]
-        total = adapter.num_samples(tree_node.label)
+        total = np.sum(distribution)
 
         if self.target_class_index:
             p = distribution[self.target_class_index - 1] / total
