@@ -31,6 +31,7 @@ class SklTreeAdapter(TreeAdapter):
 
     ROOT_PARENT = -1
     NO_CHILD = -1
+    FEATURE_UNDEFINED = -2
 
     def __init__(self, tree, domain, adjust_weight=lambda x: x):
         self._tree = tree
@@ -169,7 +170,9 @@ class SklTreeAdapter(TreeAdapter):
             return []
 
     def attribute(self, node):
-        return self.domain.attributes[self.splitting_attribute(node)]
+        feature_idx = self.splitting_attribute(node)
+        if feature_idx != self.FEATURE_UNDEFINED:
+            return self.domain.attributes[self.splitting_attribute(node)]
 
     def splitting_attribute(self, node):
         return self._tree.feature[node]
