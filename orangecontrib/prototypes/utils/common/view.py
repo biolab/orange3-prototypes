@@ -72,7 +72,7 @@ class ZoomableGraphicsView(QtGui.QGraphicsView):
             padding = list(repeat(padding, 4))
         elif isinstance(padding, list) or isinstance(padding, tuple):
             if len(padding) == 2:
-                padding = (*padding, *padding)
+                padding = tuple(padding * 2)
         else:
             padding = 0, 0, 0, 0
 
