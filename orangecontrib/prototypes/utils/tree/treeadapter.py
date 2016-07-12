@@ -12,6 +12,7 @@ class TreeAdapter(metaclass=ABCMeta):
 
     ROOT_PARENT = -1
     NO_CHILD = -1
+    FEATURE_UNDEFINED = -2
 
     @abstractmethod
     def weight(self, node):
