@@ -1,9 +1,11 @@
 import numpy as np
-from sklearn.neighbors import DistanceMetric
+
 from PyQt4.QtCore import Qt
 from PyQt4.QtGui import QApplication
 
 from Orange.data import Table
+from Orange.distance import (Euclidean, Manhattan, Cosine, Jaccard, SpearmanR,
+                             SpearmanRAbsolute, PearsonR, PearsonRAbsolute)
 from Orange.widgets import gui
 from Orange.widgets.settings import Setting
 from Orange.widgets.widget import OWWidget
@@ -11,71 +13,90 @@ from Orange.widgets.widget import OWWidget
 
 class OWNeighbours(OWWidget):
     name = "Neighbours"
-    description = "Compute a matrix of pairwise distances."
+    description = "Compute nearest neighbours in data according to reference."
     icon = "icons/Neighbours.svg"
 
-    inputs = [("Data", Table, "set_data"), ("Seed", Table, "set_seed")]
-    outputs = [("Data", Table)]
+    inputs = [("Data", Table, "set_data"), ("Reference", Table, "set_ref")]
+    outputs = [("Neighbors", Table)]
 
-    k = Setting(10)
-    autocommit = Setting(True)
+    n_neighbors = Setting(10)
+    distance_index = Setting(0)
+    exclude_reference = Setting(True)
+    auto_apply = Setting(True)
 
     want_main_area = False
     buttons_area_orientation = Qt.Vertical
 
-    data_info_default = "No data on input."
-    seed_info_default = "No seed on input."
+    _data_info_default = "No data."
+    _ref_info_default = "No reference."
+
+    DISTANCES = [Euclidean, Manhattan, Cosine, Jaccard, SpearmanR,
+                 SpearmanRAbsolute, PearsonR, PearsonRAbsolute]
 
     def __init__(self):
         super().__init__()
 
         self.data = None
-        self.seed = None
+        self.reference = None
         box = gui.vBox(self.controlArea, "Info")
-        self.data_info_label = gui.widgetLabel(box, self.data_info_default)
-        self.seed_info_label = gui.widgetLabel(box, self.seed_info_default)
+        self.data_info_label = gui.widgetLabel(box, self._data_info_default)
+        self.ref_info_label = gui.widgetLabel(box, self._ref_info_default)
 
-        box = gui.vBox(self.controlArea, "Outputing k instances")
-        self.k_spin = gui.spin(box, self, "k", label="k:", step=1,
-                               spinType=int, minv=0, maxv=100,
-                               callback=self.k_changed)
+        box = gui.vBox(self.controlArea, "Settings")
+        self.distance_combo = gui.comboBox(
+            box, self, "distance_index", orientation=Qt.Horizontal,
+            label="Distance: ", items=[d.name for d in self.DISTANCES],
+            callback=self.settings_changed)
 
-        box = gui.auto_commit(self.buttonsArea, self, "autocommit", "Apply",
-                              box=False, checkbox_label="Apply automatically")
-        box.layout().insertSpacing(1, 8)
-        self.layout().setSizeConstraint(self.layout().SetFixedSize)
+        check_box = gui.hBox(box)
+        self.exclude_ref_label = gui.label(
+            check_box, self, "Exclude references:")
+        self.exclude_ref_check = gui.checkBox(
+            check_box, self, "exclude_reference", label="",
+            callback=self.settings_changed)
+
+        box = gui.vBox(self.controlArea, "Output")
+        self.nn_spin = gui.spin(
+            box, self, "n_neighbors", label="Neighbors:", step=1, spinType=int,
+            minv=0, maxv=100, callback=self.settings_changed)
+
+        box = gui.hBox(self.controlArea, True)
+        self.apply_button = gui.auto_commit(box, self, "auto_apply", "&Apply",
+                                            box=False, commit=self.apply)
 
     def set_data(self, data):
-        text = self.data_info_default if data is None \
+        text = self._data_info_default if data is None \
             else "{} data instances on input.".format(len(data))
         self.data = data
         self.data_info_label.setText(text)
-        self.commit()
+        self.apply()
 
-    def set_seed(self, seed):
-        text = self.seed_info_default if seed is None \
-            else "{} seed instances on input.".format(len(seed))
-        self.seed = seed
-        self.seed_info_label.setText(text)
-        self.commit()
+    def set_ref(self, reference):
+        text = self._ref_info_default if reference is None \
+            else "{} reference instances on input.".format(len(reference))
+        self.reference = reference
+        self.ref_info_label.setText(text)
+        self.apply()
 
-    def k_changed(self):
-        self.commit()
+    def settings_changed(self):
+        self.apply()
 
-    def commit(self):
-        if self.data is None or self.seed is None:
-            self.send("Data", None)
+    def apply(self):
+        if self.data is None or self.reference is None:
+            self.send("Neighbors", None)
             return
-        dist = DistanceMetric.get_metric('euclidean')
-        new = dist.pairwise(np.vstack((self.data, self.seed)))[:len(self.data),
+        distance = self.DISTANCES[self.distance_index]
+        new = distance(np.vstack((self.data, self.reference)))[:len(self.data),
               len(self.data):]
         l = list(np.argsort(new.flatten()))[::-1]
         s = set()
-        while len(l) > 0 and len(s) < self.k:
-            s.add(int(l.pop() / len(self.seed)))
-        print(s)
+        while len(l) > 0 and len(s) < self.n_neighbors:
+            i = int(l.pop() / len(self.reference))
+            if self.data[i] not in self.reference or not self.exclude_reference:
+                s.add(i)
+        print(distance.name, s)
         neighbours = self.data[list(s)]
-        self.send("Data", neighbours)
+        self.send("Neighbors", neighbours)
 
 
 if __name__ == "__main__":
@@ -83,7 +104,6 @@ if __name__ == "__main__":
     ow = OWNeighbours()
     ow.show()
     ow.set_data(Table("iris"))
-    ow.set_seed(Table("iris")[:10])
+    ow.set_ref(Table("iris")[:10])
     ow.raise_()
     a.exec_()
-    ow.saveSettings()
