@@ -86,16 +86,16 @@ class OWNeighbours(OWWidget):
             self.send("Neighbors", None)
             return
         distance = self.DISTANCES[self.distance_index]
-        new = distance(np.vstack((self.data, self.reference)))[:len(self.data),
-              len(self.data):]
-        l = list(np.argsort(new.flatten()))[::-1]
-        s = set()
-        while len(l) > 0 and len(s) < self.n_neighbors:
-            i = int(l.pop() / len(self.reference))
-            if self.data[i] not in self.reference or not self.exclude_reference:
-                s.add(i)
-        print(distance.name, s)
-        neighbours = self.data[list(s)]
+        dist = distance(np.vstack((self.data, self.reference)))[:len(self.data),
+               len(self.data):]
+        sorted_indices = list(np.argsort(dist.flatten()))[::-1]
+        indices = []
+        while len(sorted_indices) > 0 and len(indices) < self.n_neighbors:
+            index = int(sorted_indices.pop() / len(self.reference))
+            if (self.data[index] not in self.reference or
+                    not self.exclude_reference) and index not in indices:
+                indices.append(index)
+        neighbours = self.data[indices]
         self.send("Neighbors", neighbours)
 
 
