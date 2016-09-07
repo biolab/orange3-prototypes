@@ -35,6 +35,7 @@ class OWNWebcamCapture(widget.OWWidget):
     def __init__(self):
         super().__init__()
         self.cap = None
+        self.snapshot_flash = 0
         self.IMAGE_DIR = tempfile.mkdtemp(prefix='Orange-WebcamCapture-')
 
         self.setSizePolicy(QSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum))
@@ -82,6 +83,9 @@ class OWNWebcamCapture(widget.OWWidget):
             return
         else:
             self.Error.no_webcam.clear()
+        if self.snapshot_flash > 0:
+            np.clip(frame.astype(np.int16) + self.snapshot_flash, 0, 255, out=frame)
+            self.snapshot_flash -= 15
         image = QImage(frame if self.avatar_filter else self.bgr2rgb(frame),
                        frame.shape[1], frame.shape[0], QImage.Format_RGB888)
         pix = QPixmap.fromImage(image).scaled(self.imageLabel.size(),
@@ -116,6 +120,7 @@ class OWNWebcamCapture(widget.OWWidget):
         table = Table.from_numpy(Domain([], metas=[StringVariable('name'), image_var]),
                                  np.empty((1, 0)), metas=np.array([[full_name, path]]))
         self.send(self.OUTPUT, table)
+        self.snapshot_flash = 80
 
     def __del__(self):
         shutil.rmtree(self.IMAGE_DIR, ignore_errors=True)
