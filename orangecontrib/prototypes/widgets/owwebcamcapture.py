@@ -24,8 +24,8 @@ class OWNWebcamCapture(widget.OWWidget):
 
     want_main_area = False
 
-    full_name = settings.Setting('')
     avatar_filter = settings.Setting(False)
+    full_name = ''
 
     DEFAULT_NAME = 'One Happy Orange'
 
@@ -39,20 +39,19 @@ class OWNWebcamCapture(widget.OWWidget):
 
         self.setSizePolicy(QSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum))
         box = self.controlArea
-        self.name_edit = line_edit = gui.lineEdit(
-            box, self, 'full_name', 'Name:',
-            orientation=Qt.Horizontal,
-            # select all text on focus for easy editing
-            focusInCallback=lambda: QTimer.singleShot(1, lambda: self.name_edit.selectAll()))
-        line_edit.setPlaceholderText(self.DEFAULT_NAME)
         image = self.imageLabel = QLabel(
             margin=0,
             sizePolicy=QSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.MinimumExpanding))
+        box.layout().addWidget(image, 100)
+
+        self.name_edit = line_edit = gui.lineEdit(
+            box, self, 'full_name', 'Name:', orientation=Qt.Horizontal)
+        line_edit.setPlaceholderText(self.DEFAULT_NAME)
+
         hbox = gui.hBox(box)
         gui.checkBox(hbox, self, 'avatar_filter', 'Avatar filter')
         button = self.capture_button = QPushButton('Capture', self,
                                                    clicked=self.capture_image)
-        box.layout().addWidget(image, 100)
         hbox.layout().addWidget(button, 1000)
         box.layout().addWidget(hbox)
 
@@ -103,7 +102,7 @@ class OWNWebcamCapture(widget.OWWidget):
             return ''.join(ch for ch in unicodedata.normalize('NFD', name.replace(' ', '_'))
                            if unicodedata.category(ch) in 'LuLlPcPd')
 
-        full_name = self.full_name or self.DEFAULT_NAME
+        full_name, self.full_name = self.full_name or self.DEFAULT_NAME, ''
         path = os.path.join(
             self.IMAGE_DIR, '{name}_{ts}.png'.format(
                 name=normalize(full_name),
