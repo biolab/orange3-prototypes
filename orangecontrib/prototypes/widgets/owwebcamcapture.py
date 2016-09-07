@@ -25,6 +25,7 @@ class OWNWebcamCapture(widget.OWWidget):
     want_main_area = False
 
     full_name = settings.Setting('')
+    avatar_filter = settings.Setting(False)
 
     DEFAULT_NAME = 'One Happy Orange'
 
@@ -47,10 +48,13 @@ class OWNWebcamCapture(widget.OWWidget):
         image = self.imageLabel = QLabel(
             margin=0,
             sizePolicy=QSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.MinimumExpanding))
-        button = self.capture_button = QPushButton('Capture', self)
-        button.clicked.connect(self.capture_image)
+        hbox = gui.hBox(box)
+        gui.checkBox(hbox, self, 'avatar_filter', 'Avatar filter')
+        button = self.capture_button = QPushButton('Capture', self,
+                                                   clicked=self.capture_image)
         box.layout().addWidget(image, 100)
-        box.layout().addWidget(button)
+        hbox.layout().addWidget(button, 1000)
+        box.layout().addWidget(hbox)
 
         timer = QTimer(self, interval=40)
         timer.timeout.connect(self.update_webcam_image)
@@ -79,7 +83,7 @@ class OWNWebcamCapture(widget.OWWidget):
             return
         else:
             self.Error.no_webcam.clear()
-        image = QImage(self.bgr2rgb(frame),
+        image = QImage(frame if self.avatar_filter else self.bgr2rgb(frame),
                        frame.shape[1], frame.shape[0], QImage.Format_RGB888)
         pix = QPixmap.fromImage(image).scaled(self.imageLabel.size(),
                                              Qt.KeepAspectRatio | Qt.SmoothTransformation)
@@ -104,7 +108,9 @@ class OWNWebcamCapture(widget.OWWidget):
             self.IMAGE_DIR, '{name}_{ts}.png'.format(
                 name=normalize(full_name),
                 ts=datetime.now().strftime('%Y%m%d%H%M%S')))
-        cv2.imwrite(path, self.bgr2rgb(frame))
+        cv2.imwrite(path,
+                    # imwrite expects original bgr image, so this is reversed
+                    self.bgr2rgb(frame) if self.avatar_filter else frame)
 
         image_var = StringVariable('image')
         image_var.attributes['type'] = 'image'
