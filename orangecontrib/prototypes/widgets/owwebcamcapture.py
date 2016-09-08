@@ -8,10 +8,12 @@ import cv2
 import numpy as np
 
 from PyQt4.QtCore import Qt, QTimer, QSize
-from PyQt4.QtGui import QLabel, QPushButton, QImage, QPixmap, QSizePolicy, QLineEdit
+from PyQt4.QtGui import QLabel, QPushButton, QImage, QPixmap, QSizePolicy
 
 from Orange.data import Table, Domain, StringVariable
 from Orange.widgets import gui, widget, settings
+
+from orangecontrib.prototypes.widgets.owface import face_cascade_classifier
 
 
 class OWNWebcamCapture(widget.OWWidget):
@@ -19,8 +21,14 @@ class OWNWebcamCapture(widget.OWWidget):
     description = "Capture a still image using the first detected webcam."
     icon = "icons/WebcamCapture.svg"
 
-    OUTPUT = 'Selfie'
-    outputs = [(OUTPUT, Table)]
+    class Output:
+        SNAPSHOT = 'Selfie'
+        SNAPSHOT_ASPECT = 'Selfie (4:5)'
+
+    outputs = [
+        (Output.SNAPSHOT, Table),
+        (Output.SNAPSHOT_ASPECT, Table),
+    ]
 
     want_main_area = False
 
@@ -92,6 +100,39 @@ class OWNWebcamCapture(widget.OWWidget):
                                              Qt.KeepAspectRatio | Qt.SmoothTransformation)
         self.imageLabel.setPixmap(pix)
 
+    @staticmethod
+    def clip_aspect_frame(frame):
+        """Get the best 4:5 rect around the first face or center of the image"""
+        ASPECT_RATIO = 4 / 5
+
+        faces = face_cascade_classifier.detectMultiScale(
+            cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY))
+        fh, fw = frame.shape[:2]
+        if len(faces):
+            x, y, w, h = faces[0]
+            cx, cy = x + w // 2, y + h // 2
+        else:
+            cx, cy = fw // 2, fh // 2
+
+        clip_width = fw / fh > ASPECT_RATIO
+
+        if clip_width:
+            w, h = int(np.round(fh * ASPECT_RATIO)), fh
+            x, y = cx - w // 2, 0
+            if x < 0:
+                x = 0
+            if cx + w // 2 > fw:
+                x -= cx + w // 2 - fw
+        else:  # clip height
+            w, h = fw, int(np.round(fw / ASPECT_RATIO))
+            x, y = 0, cy - h // 2
+            if y < 0:
+                y = 0
+            if cy + h // 2 > fh:
+                y -= cy + h // 2 - fh
+
+        return frame[y:y + h, x:x + w, :]
+
     def capture_image(self):
         cap = self.cap
         for i in range(3):  # Need some warmup time; use the last frame
@@ -107,19 +148,24 @@ class OWNWebcamCapture(widget.OWWidget):
                            if unicodedata.category(ch) in 'LuLlPcPd')
 
         full_name, self.full_name = self.full_name or self.DEFAULT_NAME, ''
-        path = os.path.join(
-            self.IMAGE_DIR, '{name}_{ts}.png'.format(
-                name=normalize(full_name),
-                ts=datetime.now().strftime('%Y%m%d%H%M%S')))
-        cv2.imwrite(path,
-                    # imwrite expects original bgr image, so this is reversed
-                    self.bgr2rgb(frame) if self.avatar_filter else frame)
+        timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
+        normed_name = normalize(full_name)
 
-        image_var = StringVariable('image')
-        image_var.attributes['type'] = 'image'
-        table = Table.from_numpy(Domain([], metas=[StringVariable('name'), image_var]),
-                                 np.empty((1, 0)), metas=np.array([[full_name, path]]))
-        self.send(self.OUTPUT, table)
+        for image, suffix, output in (
+                (frame, '', self.Output.SNAPSHOT),
+                (self.clip_aspect_frame(frame), '_aspect', self.Output.SNAPSHOT_ASPECT)):
+            path = os.path.join(
+                self.IMAGE_DIR, '{normed_name}_{timestamp}{suffix}.png'.format(**locals()))
+            cv2.imwrite(path,
+                        # imwrite expects original bgr image, so this is reversed
+                        self.bgr2rgb(image) if self.avatar_filter else image)
+
+            image_var = StringVariable('image')
+            image_var.attributes['type'] = 'image'
+            table = Table.from_numpy(Domain([], metas=[StringVariable('name'), image_var]),
+                                     np.empty((1, 0)), metas=np.array([[full_name, path]]))
+            self.send(output, table)
+
         self.snapshot_flash = 80
 
     def __del__(self):

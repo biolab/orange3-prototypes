@@ -10,6 +10,10 @@ from Orange.widgets.settings import Setting
 from Orange.widgets import gui
 
 
+face_cascade_classifier = cv2.CascadeClassifier(
+    os.path.join(os.path.dirname(__file__), 'data', 'haarcascade_frontalface_default.xml'))
+
+
 class OWFace(widget.OWWidget):
     name = "Face Detector"
     description = "Detect and extract a face from an image."
@@ -26,15 +30,13 @@ class OWFace(widget.OWWidget):
         self.data = None
         self.faces = None
 
-        haarcascade = os.path.join(os.path.dirname(__file__), 'data/haarcascade_frontalface_default.xml')
-        self.face_cascade = cv2.CascadeClassifier(haarcascade)
         gui.auto_commit(self.controlArea, self, "auto_run", "Run",
                         checkbox_label="Run after any change",
                         orientation="horizontal")
 
     def find_face(self, file_path, face_path):
         img = cv2.imread(file_path, cv2.IMREAD_GRAYSCALE)
-        faces = self.face_cascade.detectMultiScale(img)
+        faces = face_cascade_classifier.detectMultiScale(img)
         if len(faces) != 1:
             return False
         x, y, w, h = faces[0]
