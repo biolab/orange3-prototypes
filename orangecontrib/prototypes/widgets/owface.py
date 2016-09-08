@@ -28,6 +28,7 @@ class OWFace(widget.OWWidget):
     def __init__(self):
         super().__init__()
         self.data = None
+        self.img_attr = None
         self.faces = None
 
         gui.auto_commit(self.controlArea, self, "auto_run", "Run",
@@ -50,13 +51,16 @@ class OWFace(widget.OWWidget):
             os.unlink(fname)
 
     def commit(self):
+        if self.img_attr is None:
+            self.send("Data", self.data)
+            return
         face_var = StringVariable("face")
         face_var.attributes["type"] = "image"
         domain = Domain([], metas=[face_var])
         faces_list = []
         tmp_files = []
         for row in self.data:
-            file_abs = str(row["image"])
+            file_abs = str(row[self.img_attr])
             file_path, file_name = os.path.split(file_abs)
             file_name, file_ext = os.path.splitext(file_name)
             with tempfile.NamedTemporaryFile(suffix=file_ext, delete=False) as f:
@@ -79,5 +83,8 @@ class OWFace(widget.OWWidget):
         self.faces = None
         if not self.data:
             self.send("Data", None)
-        elif self.auto_run:
+            return
+        atts = [a for a in data.domain.metas if a.attributes.get("type") == "image"]
+        self.img_attr = atts[0] if atts else None
+        if self.auto_run:
             self.commit()
