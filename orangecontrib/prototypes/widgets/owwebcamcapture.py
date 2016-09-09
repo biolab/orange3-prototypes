@@ -22,8 +22,8 @@ class OWNWebcamCapture(widget.OWWidget):
     icon = "icons/WebcamCapture.svg"
 
     class Output:
-        SNAPSHOT = 'Selfie'
-        SNAPSHOT_ASPECT = 'Selfie (4:5)'
+        SNAPSHOT = 'Snapshot'
+        SNAPSHOT_ASPECT = 'Snapshot (4:5)'
 
     outputs = [
         (Output.SNAPSHOT, Table),
@@ -33,9 +33,9 @@ class OWNWebcamCapture(widget.OWWidget):
     want_main_area = False
 
     avatar_filter = settings.Setting(False)
-    full_name = ''
+    image_title = ''
 
-    DEFAULT_NAME = 'One Happy Orange'
+    DEFAULT_TITLE = 'Snapshot'
 
     class Error(widget.OWWidget.Error):
         no_webcam = widget.Msg("Couldn't acquire webcam")
@@ -54,8 +54,8 @@ class OWNWebcamCapture(widget.OWWidget):
         box.layout().addWidget(image, 100)
 
         self.name_edit = line_edit = gui.lineEdit(
-            box, self, 'full_name', 'Name:', orientation=Qt.Horizontal)
-        line_edit.setPlaceholderText(self.DEFAULT_NAME)
+            box, self, 'image_title', 'Title:', orientation=Qt.Horizontal)
+        line_edit.setPlaceholderText(self.DEFAULT_TITLE)
 
         hbox = gui.hBox(box)
         gui.checkBox(hbox, self, 'avatar_filter', 'Avatar filter')
@@ -147,9 +147,9 @@ class OWNWebcamCapture(widget.OWWidget):
             return ''.join(ch for ch in unicodedata.normalize('NFD', name.replace(' ', '_'))
                            if unicodedata.category(ch) in 'LuLlPcPd')
 
-        full_name, self.full_name = self.full_name or self.DEFAULT_NAME, ''
-        timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
-        normed_name = normalize(full_name)
+        timestamp = datetime.now().strftime('%Y%m%d%H%M%S.%f')
+        image_title, self.image_title = self.image_title or self.DEFAULT_TITLE, ''
+        normed_name = normalize(image_title)
 
         for image, suffix, output in (
                 (frame, '', self.Output.SNAPSHOT),
@@ -163,7 +163,7 @@ class OWNWebcamCapture(widget.OWWidget):
             image_var = StringVariable('image')
             image_var.attributes['type'] = 'image'
             table = Table.from_numpy(Domain([], metas=[StringVariable('name'), image_var]),
-                                     np.empty((1, 0)), metas=np.array([[full_name, path]]))
+                                     np.empty((1, 0)), metas=np.array([[image_title, path]]))
             self.send(output, table)
 
         self.snapshot_flash = 80
