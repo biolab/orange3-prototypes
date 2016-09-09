@@ -2,7 +2,10 @@ import os
 import tempfile
 
 import atexit
+import urllib
+
 import cv2
+import numpy as np
 
 from Orange.data import Table, Domain, StringVariable
 from Orange.widgets import widget
@@ -35,9 +38,31 @@ class OWFace(widget.OWWidget):
                         checkbox_label="Run after any change",
                         orientation="horizontal")
 
+    def get_ext(self, file_path):
+        """Find the extension of a file or url."""
+        if not os.path.isfile(file_path):
+            file_path = urllib.parse.urlparse(file_path).path
+        return os.path.splitext(file_path)[1].strip().lower()
+
+    def read_img(self, file_path):
+        """Read an image from file or url and convert it to grayscale."""
+        try:
+            if os.path.isfile(file_path):
+                img = cv2.imread(file_path, cv2.IMREAD_GRAYSCALE)
+            else:
+                res = urllib.request.urlopen(file_path)
+                arr = np.asarray(bytearray(res.read()), dtype=np.uint8)
+                img = cv2.imdecode(arr, cv2.IMREAD_GRAYSCALE)
+            return img
+        except:
+            return None
+
     def find_face(self, file_path, face_path):
-        img = cv2.imread(file_path, cv2.IMREAD_GRAYSCALE)
-        faces = face_cascade_classifier.detectMultiScale(img)
+        """Find the face in image file_path and store it in face_path."""
+        img = self.read_img(file_path)
+        if img is None:
+            return False
+        faces = self.face_cascade.detectMultiScale(img)
         if len(faces) != 1:
             return False
         x, y, w, h = faces[0]
@@ -61,8 +86,7 @@ class OWFace(widget.OWWidget):
         tmp_files = []
         for row in self.data:
             file_abs = str(row[self.img_attr])
-            file_path, file_name = os.path.split(file_abs)
-            file_name, file_ext = os.path.splitext(file_name)
+            file_ext = self.get_ext(file_abs)
             with tempfile.NamedTemporaryFile(suffix=file_ext, delete=False) as f:
                 face_abs = f.name
                 tmp_files.append(face_abs)
