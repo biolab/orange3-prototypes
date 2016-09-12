@@ -3,7 +3,7 @@ import numpy as np
 from PyQt4.QtCore import Qt
 from PyQt4.QtGui import QApplication
 
-from Orange.data import Table
+from Orange.data import Table, Domain, ContinuousVariable
 from Orange.distance import (Euclidean, Manhattan, Cosine, Jaccard, SpearmanR,
                              SpearmanRAbsolute, PearsonR, PearsonRAbsolute)
 from Orange.widgets import gui
@@ -88,6 +88,7 @@ class OWNeighbours(OWWidget):
         distance = self.DISTANCES[self.distance_index]
         dist = distance(np.vstack((self.data, self.reference)))[:len(self.data),
                len(self.data):]
+        data = self._add_similarity(self.data, dist)
         sorted_indices = list(np.argsort(dist.flatten()))[::-1]
         indices = []
         while len(sorted_indices) > 0 and len(indices) < self.n_neighbors:
@@ -95,8 +96,16 @@ class OWNeighbours(OWWidget):
             if (self.data[index] not in self.reference or
                     not self.exclude_reference) and index not in indices:
                 indices.append(index)
-        neighbours = self.data[indices]
+        neighbours = data[indices]
         self.send("Neighbors", neighbours)
+
+    @staticmethod
+    def _add_similarity(data, dist):
+        dist = np.min(dist, axis=1)[:, None]
+        metas = data.domain.metas + (ContinuousVariable("similarity"),)
+        domain = Domain(data.domain.attributes, data.domain.class_vars, metas)
+        data_metas = np.hstack((data.metas, 100 * (1 - dist / np.max(dist))))
+        return Table(domain, data.X, data.Y, data_metas)
 
 
 if __name__ == "__main__":

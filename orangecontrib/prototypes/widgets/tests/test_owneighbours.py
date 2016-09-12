@@ -83,3 +83,16 @@ class TestOWNeighbours(WidgetTest):
         neighbors = self.get_output("Neighbors")
         for inst in reference:
             self.assertIn(inst, neighbors)
+
+    def test_similarity(self):
+        reference = self.iris[:10]
+        self.send_signal("Data", self.iris)
+        self.send_signal("Reference", reference)
+        self.widget.apply_button.button.click()
+        neighbors = self.get_output("Neighbors")
+        self.assertEqual(self.iris.domain.attributes,
+                         neighbors.domain.attributes)
+        self.assertEqual(self.iris.domain.class_vars,
+                         neighbors.domain.class_vars)
+        self.assertIn("similarity", neighbors.domain)
+        self.assertTrue(all(100 >= ins["similarity"] >= 0 for ins in neighbors))
