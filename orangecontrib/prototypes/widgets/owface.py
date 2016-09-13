@@ -120,5 +120,7 @@ class OWFace(widget.OWWidget):
         self.img_attr = atts[0] if atts else None
         if not self.img_attr:
             self.info.setText("No image attribute.")
+        else:
+            self.info.setText("Image attribute: %s" % str(self.img_attr))
         if self.auto_run:
             self.commit()
