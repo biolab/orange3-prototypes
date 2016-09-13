@@ -34,6 +34,12 @@ class OWFace(widget.OWWidget):
         self.img_attr = None
         self.faces = None
 
+        haarcascade = os.path.join(os.path.dirname(__file__), 'data/haarcascade_frontalface_default.xml')
+        self.face_cascade = cv2.CascadeClassifier(haarcascade)
+
+        box = gui.vBox(self.controlArea, "Info")
+        self.info = gui.widgetLabel(box, "No data.")
+
         gui.auto_commit(self.controlArea, self, "auto_run", "Run",
                         checkbox_label="Run after any change",
                         orientation="horizontal")
@@ -63,7 +69,7 @@ class OWFace(widget.OWWidget):
         if img is None:
             return False
         faces = self.face_cascade.detectMultiScale(img)
-        if len(faces) != 1:
+        if len(faces) == 0:
             return False
         x, y, w, h = faces[0]
         face = img[y:y+h, x:x+w]
@@ -84,6 +90,7 @@ class OWFace(widget.OWWidget):
         domain = Domain([], metas=[face_var])
         faces_list = []
         tmp_files = []
+        n_faces = 0
         for row in self.data:
             file_abs = str(row[self.img_attr])
             file_ext = self.get_ext(file_abs)
@@ -92,13 +99,13 @@ class OWFace(widget.OWWidget):
                 tmp_files.append(face_abs)
             if self.find_face(file_abs, face_abs):
                 faces_list.append([face_abs])
+                n_faces += 1
             else:
                 faces_list.append([""])
         atexit.register(self.cleanup, tmp_files)
-        self.faces = Table.from_list(domain, faces_list)
-        self.send_data()
+        self.info.setText("Detected %d faces." % n_faces)
 
-    def send_data(self):
+        self.faces = Table.from_list(domain, faces_list)
         comb = Table.concatenate([self.data, self.faces])
         self.send("Data", comb)
 
@@ -106,9 +113,12 @@ class OWFace(widget.OWWidget):
         self.data = data
         self.faces = None
         if not self.data:
+            self.info.setText("No data.")
             self.send("Data", None)
             return
         atts = [a for a in data.domain.metas if a.attributes.get("type") == "image"]
         self.img_attr = atts[0] if atts else None
+        if not self.img_attr:
+            self.info.setText("No image attribute.")
         if self.auto_run:
             self.commit()
