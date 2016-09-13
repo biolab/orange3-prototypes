@@ -75,7 +75,7 @@ class OWFace(widget.OWWidget):
         faces = self.face_cascade.detectMultiScale(img)
         if len(faces) == 0:
             return False
-        x, y, w, h = faces[0]
+        x, y, w, h = max(faces, key=lambda xywh: xywh[2] * xywh[3])
         face = img[y:y+h, x:x+w]
         cv2.imwrite(face_path, face)
         return True
