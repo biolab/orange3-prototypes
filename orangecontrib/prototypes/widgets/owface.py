@@ -6,6 +6,7 @@ import urllib
 
 import cv2
 import numpy as np
+import sys
 
 from Orange.data import Table, Domain, StringVariable
 from Orange.widgets import widget
@@ -68,6 +69,9 @@ class OWFace(widget.OWWidget):
         img = self.read_img(file_path)
         if img is None:
             return False
+        # downscale to a reasonable size (long edge <= 1024)
+        f = min(1024/img.shape[0], 1024/img.shape[1], 1)
+        img = cv2.resize(img, None, fx=f, fy=f)
         faces = self.face_cascade.detectMultiScale(img)
         if len(faces) == 0:
             return False
