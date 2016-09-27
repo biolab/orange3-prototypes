@@ -82,7 +82,11 @@ class OWNWebcamCapture(widget.OWWidget):
                 self.cap = None
             return
         if self.cap is None:
-            self.cap = cv2.VideoCapture(0)
+            # Try capture devices in LIFO order
+            for dev in range(5, -1, -1):
+                cap = self.cap = cv2.VideoCapture(dev)
+                if cap.isOpened():
+                    break
         cap = self.cap
         self.capture_button.setDisabled(not cap.isOpened())
         success, frame = cap.read()
