@@ -181,8 +181,7 @@ class OWLookalike(OWWidget):
         self.uni_logo_item = None
         self.orange_logo_item = None
 
-        #self.setFixedSize(950, 630)
-        self.setFixedSize(1050, 630)
+        self.setMinimumSize(1050, 630)
         box = gui.vBox(self.controlArea, "Neighbors")
         self.neighbors_model = PyListModel()
         self.neighbors_model = PyTableModel()
