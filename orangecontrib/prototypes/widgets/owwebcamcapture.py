@@ -46,11 +46,13 @@ class OWNWebcamCapture(widget.OWWidget):
         self.snapshot_flash = 0
         self.IMAGE_DIR = tempfile.mkdtemp(prefix='Orange-WebcamCapture-')
 
-        self.setSizePolicy(QSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum))
+        self.setSizePolicy(QSizePolicy.MinimumExpanding,
+                           QSizePolicy.MinimumExpanding)
         box = self.controlArea
         image = self.imageLabel = QLabel(
             margin=0,
-            sizePolicy=QSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.MinimumExpanding))
+            alignment=Qt.AlignCenter,
+            sizePolicy=QSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored))
         box.layout().addWidget(image, 100)
 
         self.name_edit = line_edit = gui.lineEdit(
@@ -69,7 +71,7 @@ class OWNWebcamCapture(widget.OWWidget):
         timer.start()
 
     def sizeHint(self):
-        return QSize(640, 550)
+        return QSize(160, 210)
 
     @staticmethod
     def bgr2rgb(frame):
@@ -82,7 +84,11 @@ class OWNWebcamCapture(widget.OWWidget):
                 self.cap = None
             return
         if self.cap is None:
-            self.cap = cv2.VideoCapture(0)
+            # Try capture devices in LIFO order
+            for dev in range(5, -1, -1):
+                cap = self.cap = cv2.VideoCapture(dev)
+                if cap.isOpened():
+                    break
         cap = self.cap
         self.capture_button.setDisabled(not cap.isOpened())
         success, frame = cap.read()
@@ -97,7 +103,7 @@ class OWNWebcamCapture(widget.OWWidget):
         image = QImage(frame if self.avatar_filter else self.bgr2rgb(frame),
                        frame.shape[1], frame.shape[0], QImage.Format_RGB888)
         pix = QPixmap.fromImage(image).scaled(self.imageLabel.size(),
-                                             Qt.KeepAspectRatio | Qt.SmoothTransformation)
+                                              Qt.KeepAspectRatio | Qt.FastTransformation)
         self.imageLabel.setPixmap(pix)
 
     @staticmethod
