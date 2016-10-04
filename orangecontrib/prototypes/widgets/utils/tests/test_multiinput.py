@@ -2,6 +2,7 @@ import unittest
 from unittest.mock import MagicMock
 
 from Orange.data import Table
+from Orange.widgets.widget import OWWidget
 
 from ..multiinput import MultiInputMixin, InputTypes
 
@@ -54,6 +55,25 @@ class OtherContinuous:
 
     def simple_method(self, *args):
         pass
+
+
+# Test class with class hierarchy
+class BaseWidget:
+    LEARNER = None
+
+
+class Learner(BaseWidget, MultiInputMixin):
+    pass
+
+
+@Learner.data_handler(target_type=InputTypes.DISCRETE)
+class DiscreteLearner:
+    LEARNER = 'discrete'
+
+
+@Learner.data_handler(target_type=InputTypes.CONTINUOUS)
+class ContinuousLearner:
+    LEARNER = 'continuous'
 
 
 # Test class
@@ -158,6 +178,19 @@ class TestMultiInput(unittest.TestCase):
         obj.target_type = InputTypes.CONTINUOUS
         self.assertEqual(obj.my_property, 1)
 
+    def test_overriding_properties_in_class_hierarchy(self):
+        obj = Learner()
+
+        obj.target_type = InputTypes.DISCRETE
+        self.assertEqual(obj.LEARNER, 'discrete')
+
+        obj.target_type = InputTypes.CONTINUOUS
+        self.assertEqual(obj.LEARNER, 'continuous')
+
 
 class TestMultiInputWidgetIntegration(unittest.TestCase):
-    pass
+    def test_calling_reserved_properties_calls_base_class_properties(self):
+        """Some properties should always be taken from the base class and
+        ignored in the handler class."""
+        obj = Widget()
+        self.assertEqual(obj.__class__, Widget)

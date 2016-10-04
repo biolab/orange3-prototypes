@@ -20,7 +20,7 @@ class MultiInputMixinMeta(type):
         cls.trigger = 'set_data'
 
 
-class MultiInputMixin(metaclass=MultiInputMixinMeta):
+class MultiInputMixin:
 
     def __init__(self):
         super().__init__()
@@ -53,6 +53,12 @@ class MultiInputMixin(metaclass=MultiInputMixinMeta):
     def __getattribute__(self, item):
         ga = super().__getattribute__
 
+        # Some properties exist on both the handler and the base class, but the
+        # base class property should be used
+        reserved = ['__class__']
+        if item in reserved:
+            return ga(item)
+
         # Handle trigger functions
         trigger = ga('trigger')
         if item == trigger:
@@ -63,7 +69,8 @@ class MultiInputMixin(metaclass=MultiInputMixinMeta):
 
         # Handle any handler functions
         handlers = ga('handlers')
-        target_type = ga('target_type')
+        # target_type = ga('target_type')
+        target_type = InputTypes.CONTINUOUS
         # If the target type has a registered handler, use the accessed
         # property of the handler instead, if it exists
         if target_type in handlers and hasattr(handlers[target_type], item):
