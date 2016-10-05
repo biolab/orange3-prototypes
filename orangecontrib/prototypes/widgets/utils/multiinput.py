@@ -1,17 +1,23 @@
 from enum import Enum
 
 from Orange.data import Table
+from Orange.widgets.widget import WidgetMetaClass
 
 
 class InputTypes(Enum):
     NONE, DISCRETE, CONTINUOUS = range(3)
 
 
-class MultiInputMixin:
+class MultiInputMixinMeta(WidgetMetaClass):
+    def __new__(mcs, *args, **kwargs):
+        mcs.name = False
+        cls = super().__new__(mcs, *args, **kwargs)
+        cls.handlers = {}
+        cls.trigger = 'set_data'
+        return cls
 
-    handlers = {}
-    trigger = 'set_data'
-    target_type = InputTypes.NONE
+
+class MultiInputMixin(metaclass=MultiInputMixinMeta):
 
     @classmethod
     def data_handler(cls, **kwargs):
@@ -55,10 +61,11 @@ class MultiInputMixin:
         handler.
 
         """
+        reserved = ['handlers', 'trigger']
         attrs = set()
         for htype in self.handlers:
             handler_attrs = (p for p in self.handlers[htype].__dict__.keys()
-                             if not p.startswith('__'))
+                             if not p.startswith('__') and p not in reserved)
             attrs = attrs.union(handler_attrs)
         return attrs
 

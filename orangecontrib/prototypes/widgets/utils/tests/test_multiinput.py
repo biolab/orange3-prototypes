@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, Mock
 
 from Orange.data import Table
 from Orange.widgets.tests.base import WidgetTest
@@ -10,10 +10,6 @@ from ..multiinput import MultiInputMixin, InputTypes
 
 # First test class
 class Widget(MultiInputMixin):
-    handlers = {}
-    trigger = 'set_data'
-    target_type = InputTypes.NONE
-
     my_property = 1
     attribute = 'none'
 
@@ -42,10 +38,6 @@ class Continuous:
 
 # Other test class to make sure things don't collide
 class OtherWidget(MultiInputMixin):
-    handlers = {}
-    trigger = 'set_data'
-    target_type = InputTypes.NONE
-
     def set_data(self, data):
         pass
 
@@ -72,10 +64,6 @@ class BaseWidget:
 
 
 class Learner(BaseWidget, MultiInputMixin):
-    handlers = {}
-    trigger = 'set_data'
-    target_type = InputTypes.NONE
-
     LEARNER = 'general'
 
     def set_data(self, data):
