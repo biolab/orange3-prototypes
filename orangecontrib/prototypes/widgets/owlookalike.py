@@ -1,4 +1,5 @@
 import os
+import time
 import smtplib
 import urllib
 import urllib.request
@@ -331,8 +332,7 @@ class OWLookalike(OWWidget):
         image = self._get_image_from_scene()
         self.send_image(image, self.send_dialog.email_address)
         if self.send_dialog.fb_share:
-            name = self.send_dialog.email_address.rsplit("@")[0]
-            self.share_image(image, name + str(id(name)))
+            self.share_image(image, str(time.time()).replace(".", ""))
 
     def set_smtp(self):
         if not self.smtp_dialog.exec_():
