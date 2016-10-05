@@ -7,24 +7,11 @@ class InputTypes(Enum):
     NONE, DISCRETE, CONTINUOUS = range(3)
 
 
-class MultiInputMixinMeta(type):
-    """Ensure that each subclass of the `MultiInput` has their own registry of
-    data handlers."""
-
-    def __new__(mcs, *args, **kwargs):
-        return super().__new__(mcs, *args, **kwargs)
-
-    def __init__(cls, name, bases, attrs):
-        super().__init__(name, bases, attrs)
-        cls.handlers = {}
-        cls.trigger = 'set_data'
-
-
 class MultiInputMixin:
 
-    def __init__(self):
-        super().__init__()
-        self.target_type = InputTypes.NONE
+    handlers = {}
+    trigger = 'set_data'
+    target_type = InputTypes.NONE
 
     @classmethod
     def data_handler(cls, **kwargs):
@@ -41,47 +28,67 @@ class MultiInputMixin:
     def register(cls, target_type, handler):
         cls.handlers[target_type] = handler
 
+    @classmethod
+    def on_input_change(cls):
+        pass
+
     def handle_new_data(self, data):
-        if not isinstance(data, Table):
+        if not isinstance(data, Table) and data is not None:
             raise Exception('Should only be used with Orange.data.Table')
 
-        if data.domain.has_discrete_class:
+        # Determine the target type of the new data
+        if data is None:
+            self.target_type = InputTypes.NONE
+        elif data.domain.has_discrete_class:
             self.target_type = InputTypes.DISCRETE
         elif data.domain.has_continuous_class:
             self.target_type = InputTypes.CONTINUOUS
 
+        self.bind_handler_attributes()
+
+    def get_attrs_to_override(self):
+        """Get a list of attributes that the handlers override.
+
+        Since handlers can inherit from their base widget, we don't want to
+        override properties that are inherited from the base class. We only
+        want to override properties that need to be changed when changing the
+        handler.
+
+        """
+        attrs = set()
+        for htype in self.handlers:
+            handler_attrs = (p for p in self.handlers[htype].__dict__.keys()
+                             if not p.startswith('__'))
+            attrs = attrs.union(handler_attrs)
+        return attrs
+
+    def bind_handler_attributes(self):
+        if self.target_type in self.handlers:
+            # If the target_type contains a handler, use that
+            handler = self.handlers[self.target_type]
+        else:
+            # Otherwise, we need to reset the methods to the original class
+            handler = self.__class__
+
+        # Replace the instance methods with the handler methods
+        for attr_name in self.get_attrs_to_override():
+            attr = getattr(handler, attr_name)
+            # If the attribute is a method, we need to bind it to the
+            # instance first
+            if callable(attr):
+                attr = attr.__get__(self)
+            setattr(self, attr_name, attr)
+
     def __getattribute__(self, item):
         ga = super().__getattribute__
-
-        # Some properties exist on both the handler and the base class, but the
-        # base class property should be used
-        reserved = ['__class__']
-        if item in reserved:
-            return ga(item)
 
         # Handle trigger functions
         trigger = ga('trigger')
         if item == trigger:
             def wrapped(data):
                 ga('handle_new_data')(data)
-                ga('set_data')(data)
+                ga(trigger)(data)
             return wrapped
-
-        # Handle any handler functions
-        handlers = ga('handlers')
-        # target_type = ga('target_type')
-        target_type = InputTypes.CONTINUOUS
-        # If the target type has a registered handler, use the accessed
-        # property of the handler instead, if it exists
-        if target_type in handlers and hasattr(handlers[target_type], item):
-            # Get the attribute from the handler class
-            attr = getattr(handlers[target_type], item)
-            if callable(attr):
-                # Bind the current object to the function `self` parameter
-                bound_method = attr.__get__(self)
-                return bound_method
-            else:
-                return attr
 
         # If not a trigger function or handler function was not found
         return ga(item)
