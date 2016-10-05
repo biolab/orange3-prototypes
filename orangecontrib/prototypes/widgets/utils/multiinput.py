@@ -10,8 +10,13 @@ class InputTypes(Enum):
 
 class MultiInputMixinMeta(WidgetMetaClass):
     def __new__(mcs, *args, **kwargs):
+        # WidgetMetaClass checks for a `name` attribute to assert whether or
+        # not its dealing with a widget
         mcs.name = False
         cls = super().__new__(mcs, *args, **kwargs)
+        # Add attributes that every class inheriting the mixin.
+        # Every class should store their own handlers, and this saves having
+        # to declare these attributes in every class inheriting the mixin
         cls.handlers = {}
         cls.trigger = 'set_data'
         return cls
@@ -70,21 +75,26 @@ class MultiInputMixin(metaclass=MultiInputMixinMeta):
         return attrs
 
     def bind_handler_attributes(self):
+        # If the target_type contains a handler, use that
         if self.target_type in self.handlers:
-            # If the target_type contains a handler, use that
             handler = self.handlers[self.target_type]
+        # Otherwise, we need to reset the methods to the original class
         else:
-            # Otherwise, we need to reset the methods to the original class
             handler = self.__class__
 
         # Replace the instance methods with the handler methods
         for attr_name in self.get_attrs_to_override():
-            attr = getattr(handler, attr_name)
-            # If the attribute is a method, we need to bind it to the
-            # instance first
-            if callable(attr):
-                attr = attr.__get__(self)
-            setattr(self, attr_name, attr)
+            # If the handler the attr defined, replace the attribute
+            if hasattr(handler, attr_name):
+                attr = getattr(handler, attr_name)
+                # If the attribute is a method, we need to bind it to the
+                # instance first
+                if callable(attr):
+                    attr = attr.__get__(self)
+                setattr(self, attr_name, attr)
+            # If the handler does not have the attribute, delete it
+            else:
+                delattr(self, attr_name)
 
     def __getattribute__(self, item):
         ga = super().__getattribute__

@@ -82,6 +82,10 @@ class ContinuousLearner:
 
 # Test class
 class TestMultiInput(unittest.TestCase):
+    def setUp(self):
+        self.iris = Table('iris')
+        self.housing = Table('housing')
+
     def test_each_subclass_of_MultiInput_has_their_own_handlers(self):
         """Each subclass of `MultiInput` should have their own lookup table of
         handlers for each input type."""
@@ -101,7 +105,7 @@ class TestMultiInput(unittest.TestCase):
         data = [1, 2, 3]
 
         obj = Widget()
-        obj.handle_new_data = MagicMock()
+        obj.handle_new_data = Mock()
 
         obj.set_data(data)
 
@@ -111,7 +115,7 @@ class TestMultiInput(unittest.TestCase):
         """Calling a function that is not a registered trigger function should
         not cause the class to update its handler selection parameters."""
         obj = Widget()
-        obj.handle_new_data = MagicMock()
+        obj.handle_new_data = Mock()
 
         obj.dummy_method()
 
@@ -119,25 +123,23 @@ class TestMultiInput(unittest.TestCase):
 
     def test_handle_new_data_with_discrete_target(self):
         obj = Widget()
-        data = Table('iris')
 
-        obj.handle_new_data(data)
+        obj.handle_new_data(self.iris)
 
         self.assertEqual(obj.target_type, InputTypes.DISCRETE)
 
     def test_handle_new_data_with_continuous_target(self):
         obj = Widget()
-        data = Table('housing')
 
-        obj.handle_new_data(data)
+        obj.handle_new_data(self.housing)
 
         self.assertEqual(obj.target_type, InputTypes.CONTINUOUS)
 
     def test_calling_continuous_handler_method(self):
         """Calling a method with a defined continuous handler should call the
         method on that handler class."""
-        Discrete.simple_method.__get__ = MagicMock()
-        Continuous.simple_method.__get__ = MagicMock()
+        Discrete.simple_method.__get__ = Mock()
+        Continuous.simple_method.__get__ = Mock()
 
         obj = Widget()
         obj.set_data(Table('housing'))
@@ -150,11 +152,11 @@ class TestMultiInput(unittest.TestCase):
     def test_calling_discrete_handler_method(self):
         """Calling a method with a defined discrete handler should call the
         method on that handler class."""
-        Discrete.simple_method.__get__ = MagicMock()
-        Continuous.simple_method.__get__ = MagicMock()
+        Discrete.simple_method.__get__ = Mock()
+        Continuous.simple_method.__get__ = Mock()
 
         obj = Widget()
-        obj.set_data(Table('iris'))
+        obj.set_data(self.iris)
 
         obj.simple_method()
 
@@ -166,10 +168,10 @@ class TestMultiInput(unittest.TestCase):
         from the appropriate handler."""
         obj = Widget()
 
-        obj.set_data(Table('housing'))
+        obj.set_data(self.housing)
         self.assertEqual(obj.attribute, Continuous.attribute)
 
-        obj.set_data(Table('iris'))
+        obj.set_data(self.iris)
         self.assertEqual(obj.attribute, Discrete.attribute)
 
     def test_accessing_non_handler_property_takes_base_class_property(self):
@@ -185,10 +187,10 @@ class TestMultiInput(unittest.TestCase):
     def test_overriding_properties_in_class_hierarchy(self):
         obj = Learner()
 
-        obj.set_data(Table('iris'))
+        obj.set_data(self.iris)
         self.assertEqual(obj.LEARNER, 'discrete')
 
-        obj.set_data(Table('housing'))
+        obj.set_data(self.housing)
         self.assertEqual(obj.LEARNER, 'continuous')
 
     def test_calling_reserved_properties_calls_base_class_properties(self):
@@ -197,16 +199,21 @@ class TestMultiInput(unittest.TestCase):
         obj = Widget()
         self.assertEqual(obj.__class__, Widget)
 
+    def test_delete_attr_from_class_when_not_present_in_base_class(self):
+        """If the data is set to None, and the handler added a method that was
+        not initially present on the base class, then in order to restore the
+        base class, we need to delete the attribute from the instance."""
+        obj = Widget()
+        # Bind a method that the base class does not have
+        obj.set_data(self.iris)
+
+        obj.set_data(None)
+        self.assertFalse(hasattr(obj, 'simple_method'))
+
 
 # Test integration with Orange widgets
 class OWMulti(OWWidget, MultiInputMixin):
-    handlers = {}
-    trigger = 'set_data'
-    target_type = InputTypes.NONE
-
-    def __init__(self):
-        super().__init__()
-        MultiInputMixin.__init__(self)
+    pass
 
 
 class TestMultiInputWidgetIntegration(WidgetTest):
