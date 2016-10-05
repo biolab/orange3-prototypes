@@ -2,6 +2,7 @@ import unittest
 from unittest.mock import MagicMock
 
 from Orange.data import Table
+from Orange.widgets.tests.base import WidgetTest
 from Orange.widgets.widget import OWWidget
 
 from ..multiinput import MultiInputMixin, InputTypes
@@ -9,6 +10,10 @@ from ..multiinput import MultiInputMixin, InputTypes
 
 # First test class
 class Widget(MultiInputMixin):
+    handlers = {}
+    trigger = 'set_data'
+    target_type = InputTypes.NONE
+
     my_property = 1
     attribute = 'none'
 
@@ -37,6 +42,10 @@ class Continuous:
 
 # Other test class to make sure things don't collide
 class OtherWidget(MultiInputMixin):
+    handlers = {}
+    trigger = 'set_data'
+    target_type = InputTypes.NONE
+
     def set_data(self, data):
         pass
 
@@ -63,7 +72,14 @@ class BaseWidget:
 
 
 class Learner(BaseWidget, MultiInputMixin):
-    pass
+    handlers = {}
+    trigger = 'set_data'
+    target_type = InputTypes.NONE
+
+    LEARNER = 'general'
+
+    def set_data(self, data):
+        pass
 
 
 @Learner.data_handler(target_type=InputTypes.DISCRETE)
@@ -114,7 +130,7 @@ class TestMultiInput(unittest.TestCase):
         obj.handle_new_data.assert_not_called()
 
     def test_handle_new_data_with_discrete_target(self):
-        obj = MultiInputMixin()
+        obj = Widget()
         data = Table('iris')
 
         obj.handle_new_data(data)
@@ -122,7 +138,7 @@ class TestMultiInput(unittest.TestCase):
         self.assertEqual(obj.target_type, InputTypes.DISCRETE)
 
     def test_handle_new_data_with_continuous_target(self):
-        obj = MultiInputMixin()
+        obj = Widget()
         data = Table('housing')
 
         obj.handle_new_data(data)
@@ -132,11 +148,11 @@ class TestMultiInput(unittest.TestCase):
     def test_calling_continuous_handler_method(self):
         """Calling a method with a defined continuous handler should call the
         method on that handler class."""
-        obj = Widget()
-        obj.target_type = InputTypes.CONTINUOUS
-
         Discrete.simple_method.__get__ = MagicMock()
         Continuous.simple_method.__get__ = MagicMock()
+
+        obj = Widget()
+        obj.set_data(Table('housing'))
 
         obj.simple_method()
 
@@ -146,11 +162,11 @@ class TestMultiInput(unittest.TestCase):
     def test_calling_discrete_handler_method(self):
         """Calling a method with a defined discrete handler should call the
         method on that handler class."""
-        obj = Widget()
-        obj.target_type = InputTypes.DISCRETE
-
         Discrete.simple_method.__get__ = MagicMock()
         Continuous.simple_method.__get__ = MagicMock()
+
+        obj = Widget()
+        obj.set_data(Table('iris'))
 
         obj.simple_method()
 
@@ -162,10 +178,10 @@ class TestMultiInput(unittest.TestCase):
         from the appropriate handler."""
         obj = Widget()
 
-        obj.target_type = InputTypes.CONTINUOUS
+        obj.set_data(Table('housing'))
         self.assertEqual(obj.attribute, Continuous.attribute)
 
-        obj.target_type = InputTypes.DISCRETE
+        obj.set_data(Table('iris'))
         self.assertEqual(obj.attribute, Discrete.attribute)
 
     def test_accessing_non_handler_property_takes_base_class_property(self):
@@ -181,16 +197,33 @@ class TestMultiInput(unittest.TestCase):
     def test_overriding_properties_in_class_hierarchy(self):
         obj = Learner()
 
-        obj.target_type = InputTypes.DISCRETE
+        obj.set_data(Table('iris'))
         self.assertEqual(obj.LEARNER, 'discrete')
 
-        obj.target_type = InputTypes.CONTINUOUS
+        obj.set_data(Table('housing'))
         self.assertEqual(obj.LEARNER, 'continuous')
 
-
-class TestMultiInputWidgetIntegration(unittest.TestCase):
     def test_calling_reserved_properties_calls_base_class_properties(self):
         """Some properties should always be taken from the base class and
         ignored in the handler class."""
         obj = Widget()
         self.assertEqual(obj.__class__, Widget)
+
+
+# Test integration with Orange widgets
+class OWMulti(OWWidget, MultiInputMixin):
+    handlers = {}
+    trigger = 'set_data'
+    target_type = InputTypes.NONE
+
+    def __init__(self):
+        super().__init__()
+        MultiInputMixin.__init__(self)
+
+
+class TestMultiInputWidgetIntegration(WidgetTest):
+    def setUp(self):
+        self.widget = self.create_widget(OWMulti)
+
+    def test_is_instantiable(self):
+        self.assertIsInstance(self.widget, OWMulti)
