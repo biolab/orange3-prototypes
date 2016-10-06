@@ -103,8 +103,9 @@ class MultiInputMixin:
             if hasattr(handler, attr_name):
                 attr = getattr(handler, attr_name)
                 # If the attribute is a method, we need to bind it to the
-                # instance first
-                if callable(attr):
+                # instance first, make sure to ignore classes, which can also
+                # be callable
+                if callable(attr) and not inspect.isclass(attr):
                     attr = attr.__get__(self)
                 setattr(self, attr_name, attr)
             # If the handler does not have the attribute, delete it
