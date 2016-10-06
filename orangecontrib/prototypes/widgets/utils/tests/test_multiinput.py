@@ -1,11 +1,41 @@
 import unittest
-from unittest.mock import MagicMock, Mock
+from unittest.mock import Mock
 
 from Orange.data import Table
 from Orange.widgets.tests.base import WidgetTest
 from Orange.widgets.widget import OWWidget
 
-from ..multiinput import MultiInputMixin, InputTypes
+from ..multiinput import MultiInputMixin, InputTypes, ClassRegistry
+
+
+class ClassRegistryDescriptorTest(unittest.TestCase):
+
+    class Class1:
+        registry = ClassRegistry()
+
+    class Class2:
+        registry = ClassRegistry()
+
+    def test_registry_returns_dict_by_default(self):
+        obj = self.Class1()
+        self.assertEqual(obj.registry, {})
+
+    def test_registry_returns_separate_dicts_for_different_classes(self):
+        obj1 = self.Class1()
+        obj2 = self.Class2()
+        # Can't be the same dict object
+        self.assertIsNot(obj1.registry, obj2.registry)
+
+        obj1.registry['foo'] = 1
+        obj2.registry['foo'] = 2
+        self.assertEqual(obj1.registry['foo'], 1)
+        self.assertEqual(obj2.registry['foo'], 2)
+
+    def test_setting_the_value(self):
+        obj = self.Class1()
+        obj.registry = 1
+
+        self.assertEqual(obj.registry, 1)
 
 
 # First test class

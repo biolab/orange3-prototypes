@@ -1,28 +1,43 @@
+import inspect
 from enum import Enum
 
 from Orange.data import Table
-from Orange.widgets.widget import WidgetMetaClass
 
 
 class InputTypes(Enum):
     NONE, DISCRETE, CONTINUOUS = range(3)
 
 
-class MultiInputMixinMeta(WidgetMetaClass):
-    def __new__(mcs, *args, **kwargs):
-        # WidgetMetaClass checks for a `name` attribute to assert whether or
-        # not its dealing with a widget
-        mcs.name = False
-        cls = super().__new__(mcs, *args, **kwargs)
-        # Add attributes that every class inheriting the mixin.
-        # Every class should store their own handlers, and this saves having
-        # to declare these attributes in every class inheriting the mixin
-        cls.handlers = {}
-        cls.trigger = 'set_data'
-        return cls
+class ClassRegistry:
+    default = dict
+
+    def __init__(self):
+        self.registry = {}
+
+    def __get__(self, instance, owner):
+        if owner not in self.registry:
+            if callable(self.default):
+                initial = self.default()
+            else:
+                initial = self.default
+            self.registry[owner] = initial
+        return self.registry[owner]
+
+    def __set__(self, instance, value):
+        self.registry[instance.__class__] = value
 
 
-class MultiInputMixin(metaclass=MultiInputMixinMeta):
+class Handlers(ClassRegistry):
+    pass
+
+
+class Trigger(ClassRegistry):
+    default = 'set_data'
+
+
+class MultiInputMixin:
+    handlers = Handlers()
+    trigger = Trigger()
 
     @classmethod
     def data_handler(cls, **kwargs):
