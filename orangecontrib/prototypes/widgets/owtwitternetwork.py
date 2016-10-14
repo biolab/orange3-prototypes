@@ -1,11 +1,68 @@
 import twitter
 import networkx as nx
-import orangecontrib.network as network
-
 from Orange.widgets import widget, gui
-from PyQt4 import QtGui
+from Orange.widgets.credentials import CredentialManager
+import orangecontrib.network as network
+from orangecontrib.text import twitter as txt_twitter
+from PyQt4 import QtGui, QtCore
 
 class OWTwitterNetwork(widget.OWWidget):
+    class APICredentialsDialog(widget.OWWidget):
+        name = "Twitter API Credentials"
+        want_main_area = False
+        resizing_enabled = False
+
+        cm_key = CredentialManager('Twitter API Key')
+        cm_secret = CredentialManager('Twitter API Secret')
+
+        key_input = ''
+        secret_input = ''
+
+        class Error(widget.OWWidget.Error):
+            invalid_credentials = widget.Msg('These credentials are invalid.')
+
+        def __init__(self, parent):
+            super().__init__()
+            self.parent = parent
+            self.credentials = None
+
+            form = QtGui.QFormLayout()
+            form.setMargin(5)
+            self.key_edit = gui.lineEdit(self, self, 'key_input', controlWidth=400)
+            form.addRow('Key:', self.key_edit)
+            self.secret_edit = gui.lineEdit(self, self, 'secret_input', controlWidth=400)
+            form.addRow('Secret:', self.secret_edit)
+            self.controlArea.layout().addLayout(form)
+
+            self.submit_button = gui.button(self.controlArea, self, "OK", self.accept)
+
+            self.load_credentials()
+
+        def load_credentials(self):
+            self.key_edit.setText(self.cm_key.key)
+            self.secret_edit.setText(self.cm_secret.key)
+
+        def save_credentials(self):
+            self.cm_key.key = self.key_input
+            self.cm_secret.key = self.secret_input
+
+        def check_credentials(self):
+            c = txt_twitter.Credentials(self.key_input, self.secret_input)
+            if self.credentials != c:
+                if c.valid:
+                    self.save_credentials()
+                else:
+                    c = None
+                self.credentials = c
+
+        def accept(self, silent=False):
+            if not silent: self.Error.invalid_credentials.clear()
+            self.check_credentials()
+            if self.credentials and self.credentials.valid:
+                super().accept()
+            elif not silent:
+                self.Error.invalid_credentials()
+
     name = "Twitter User Graph"
     description = "Create a graph of Twitter users."
     icon = "icons/Twitter.svg"
@@ -23,15 +80,16 @@ class OWTwitterNetwork(widget.OWWidget):
         self.n_all = 0
         self.n_followers = 0
         self.n_following = 0
+        self.on_rate_limit = None
+        self.api_dlg = self.APICredentialsDialog(self)
 
         # GUI
+        # Set API key button.
+        key_dialog_button = gui.button(self.controlArea, self, 'Twitter API Key',
+                                       callback=self.open_key_dialog,
+                                       tooltip="Set the API key for this widget.")
+        key_dialog_button.setFocusPolicy(QtCore.Qt.NoFocus)
         box = gui.widgetBox(self.controlArea, "Info")
-        self.consumer_key = QtGui.QLineEdit()
-        box.layout().addWidget(QtGui.QLabel("Key:"))
-        box.layout().addWidget(self.consumer_key)
-        self.consumer_secret = QtGui.QLineEdit()
-        box.layout().addWidget(QtGui.QLabel("Secret:"))
-        box.layout().addWidget(self.consumer_secret)
         box.layout().addWidget(QtGui.QLabel("Users:"))
         self.users = QtGui.QTextEdit()
         box.layout().addWidget(self.users)
@@ -40,9 +98,12 @@ class OWTwitterNetwork(widget.OWWidget):
                              'All: %(n_all)d')
         self.button = gui.button(box, self, "Create graph", self.fetch_users)
 
+    def open_key_dialog(self):
+        self.api_dlg.exec_()
+
     def fetch_users(self):
-        CONSUMER_KEY = self.consumer_key.text()
-        CONSUMER_SECRET = self.consumer_secret.text()
+        CONSUMER_KEY = CredentialManager('Twitter API Key').key
+        CONSUMER_SECRET = CredentialManager('Twitter API Secret').key
         OAUTH_TOKEN = ''
         OAUTH_TOKEN_SECRET = ''
         auth = twitter.oauth.OAuth(OAUTH_TOKEN, OAUTH_TOKEN_SECRET, CONSUMER_KEY, CONSUMER_SECRET)
