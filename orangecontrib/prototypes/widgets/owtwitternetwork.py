@@ -1,10 +1,13 @@
 import twitter
 import networkx as nx
 from Orange.widgets import widget, gui
+from Orange.data import Domain, StringVariable, Table
+import numpy as np
 from Orange.widgets.credentials import CredentialManager
 import orangecontrib.network as network
 from orangecontrib.text import twitter as txt_twitter
 from PyQt4 import QtGui, QtCore
+from collections import defaultdict
 
 class OWTwitterNetwork(widget.OWWidget):
     class APICredentialsDialog(widget.OWWidget):
@@ -114,35 +117,106 @@ class OWTwitterNetwork(widget.OWWidget):
         all_users = nx.Graph()
 
         users = self.users.toPlainText().split("\n")
+        mapping = defaultdict(list)
+        fwers_id = 0
+        fwing_id = 0
+        all_id = 0
+
+        fwers_names=[]
+        fwing_names=[]
+        all_names=[]
 
         for user in users:
             result = t.users.show(screen_name=user)
             id = result["id"]
-            followers_graph.add_node(id)
-            following_graph.add_node(id)
-            all_users.add_node(id)
+
+            if id in mapping.keys():
+                user_fwer_id, user_fwing_id, user_all_id = mapping[id][2:5]
+                fwers_names[user_fwer_id] = [user, user]
+                fwing_names[user_fwing_id] = [user, user]
+                all_names[user_all_id] = [user, user]
+            else:
+                mapping[id].extend([id, user, fwers_id, fwing_id, all_id])
+                user_fwer_id, user_fwing_id, user_all_id = fwers_id, fwing_id, all_id
+                fwers_id += 1
+                fwing_id += 1
+                all_id += 1
+                fwers_names.append([user, user])
+                fwing_names.append([user, user])
+                all_names.append([user, user])
+            followers_graph.add_node(user_fwer_id)
+            following_graph.add_node(user_fwing_id)
+            all_users.add_node(user_all_id)
+
             cursor = -1
             while cursor != 0:
                 response = t.followers.ids(screen_name=user, cursor=cursor)
                 for f_id in response['ids']:
-                    followers_graph.add_edge(id, f_id)
-                    all_users.add_edge(id, f_id)
+                    if f_id in mapping.keys():
+                        followers_graph.add_edge(user_fwer_id, mapping[f_id][2])
+                        all_users.add_edge(user_all_id, mapping[f_id][4])
+                    else:
+                        mapping[f_id].extend([f_id, "", fwers_id, None, all_id])
+                        followers_graph.add_edge(user_fwer_id, fwers_id)
+                        all_users.add_edge(user_all_id, all_id)
+                        #result = t.users.show(id=f_id)
+                        #name = result["screen_name"]
+                        name = str(f_id)
+                        fwers_names.append(["", name])
+                        #fwing_names.append(["", name])
+                        all_names.append(["", name])
+                        fwers_id += 1
+                        all_id += 1
                 cursor = response['next_cursor']
             cursor = -1
             while cursor != 0:
                 response = t.friends.ids(screen_name=user, cursor=cursor)
                 for f_id in response['ids']:
-                    following_graph.add_edge(id, f_id)
-                    all_users.add_edge(id, f_id)
+                    if f_id in mapping.keys():
+                        if not mapping[f_id][3]:
+                            mapping[f_id][3] = fwing_id
+                            fwing_names.append(["", name])
+                            fwing_id += 1
+                        following_graph.add_edge(user_fwing_id, mapping[f_id][3])
+                        all_users.add_edge(user_all_id, mapping[f_id][4])
+                    else:
+                        mapping[f_id].extend([f_id, "", fwers_id, fwing_id, all_id])
+                        following_graph.add_edge(user_fwing_id, fwing_id)
+                        all_users.add_edge(user_all_id, all_id)
+                        #result = t.users.show(id=f_id)
+                        #name = result["screen_name"]
+                        name = str(f_id)
+                        #fwers_names.append(["", name])
+                        fwing_names.append(["", name])
+                        all_names.append(["", name])
+                        fwing_id += 1
+                        all_id += 1
                 cursor = response['next_cursor']
 
         all_users = network.readwrite._wrap(all_users)
         followers = network.readwrite._wrap(followers_graph)
         following = network.readwrite._wrap(following_graph)
+
+        meta_vars = [StringVariable('Starting users'), StringVariable('All users')]
+        domain = Domain([], metas=meta_vars)
+
+        table_fwers = Table.from_numpy(domain,
+                                 np.array([[] for _ in range(len(fwers_names))]),
+                                 metas=np.array(fwers_names, dtype=str))
+        followers.set_items(table_fwers)
+        table_fwing = Table.from_numpy(domain,
+                                 np.array([[] for _ in range(len(fwing_names))]),
+                                 metas=np.array(fwing_names, dtype=str))
+        following.set_items(table_fwing)
+        table_all = Table.from_numpy(domain,
+                                 np.array([[] for _ in range(len(all_names))]),
+                                 metas=np.array(all_names, dtype=str))
+        all_users.set_items(table_all)
+
         self.send("Followers", followers)
         self.send("Following", following)
         self.send("All", all_users)
-
+        
         self.n_all = len(all_users)
         self.n_followers = len(followers)
         self.n_following = len(following)
