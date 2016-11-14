@@ -921,6 +921,8 @@ class OWFreeViz(widget.OWWidget):
             update_freeviz(self.maxiter, interval, anchors))
         self.start_button.setText("Stop")
         self.progressBarInit(processEvents=False)
+        self.setBlocking(True)
+        self.setStatusMessage("Optimizing")
 
     def __reset_initialization(self):
         """
@@ -1004,6 +1006,8 @@ class OWFreeViz(widget.OWWidget):
     def __freeviz_finished(self):
         # Projection optimization has finished
         self.start_button.setText("Optimize")
+        self.setStatusMessage("")
+        self.setBlocking(False)
         self.progressBarFinished(processEvents=False)
         self.commit()
 
