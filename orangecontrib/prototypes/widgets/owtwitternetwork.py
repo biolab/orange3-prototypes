@@ -216,7 +216,7 @@ class OWTwitterNetwork(widget.OWWidget):
         self.send("Followers", followers)
         self.send("Following", following)
         self.send("All", all_users)
-        
+
         self.n_all = len(all_users)
         self.n_followers = len(followers)
         self.n_following = len(following)
