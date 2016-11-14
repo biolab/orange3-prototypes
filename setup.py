@@ -34,6 +34,11 @@ if __name__ == '__main__':
         },
         install_requires=[
             'Orange3',
+            'numpy',
+            'scipy',
+            'scikit-learn',
+            'pyqtgraph',
+            'AnyQt'
         ],
         entry_points=ENTRY_POINTS,
         namespace_packages=['orangecontrib'],
