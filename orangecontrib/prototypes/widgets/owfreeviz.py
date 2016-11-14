@@ -285,7 +285,7 @@ class OWFreeViz(widget.OWWidget):
     name = "FreeViz"
     description = "FreeViz Visualization"
     icon = "icons/LinearProjection.svg"
-    inputs = [("Data", Orange.data.Table, "set_data"),
+    inputs = [("Data", Orange.data.Table, "set_data", widget.Default),
               ("Data Subset", Orange.data.Table, "set_data_subset")]
     outputs = [("Data", Orange.data.Table, widget.Default),
                ("Selected Data", Orange.data.Table),
