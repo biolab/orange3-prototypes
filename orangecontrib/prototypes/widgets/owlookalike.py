@@ -29,12 +29,13 @@ DIR_SEND_LATER = "send_later/"
 FILE_SEND_LATER = "send_later.txt"
 
 
-class MailSettingDialog(QDialog):
+class MailSettingDialog(QDialog, gui.OWComponent):
     from_email_address = ""
     smtp_server_name = ""
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, parent):
+        QDialog.__init__(self, parent)
+        gui.OWComponent.__init__(self, parent)
         self.setWindowTitle("SMTP server settings")
         self.setFixedSize(340, 110)
 
@@ -62,12 +63,13 @@ class MailSettingDialog(QDialog):
         self.reject()
 
 
-class SendDialog(QDialog):
+class SendDialog(QDialog, gui.OWComponent):
     email_address = ""
     fb_share = False
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, parent):
+        QDialog.__init__(self, parent)
+        gui.OWComponent.__init__(self, parent)
         self.setWindowTitle("Send")
         self.setFixedSize(260, 130)
 
@@ -218,8 +220,8 @@ class OWLookalike(OWWidget):
         self.image_view = QGraphicsView(self.scene, self)
         self.mainArea.layout().addWidget(self.image_view)
 
-        self.send_dialog = SendDialog()
-        self.smtp_dialog = MailSettingDialog()
+        self.send_dialog = SendDialog(self)
+        self.smtp_dialog = MailSettingDialog(self)
         self._initialize()
 
     def _initialize(self):
