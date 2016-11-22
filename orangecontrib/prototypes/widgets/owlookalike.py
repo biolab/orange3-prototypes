@@ -206,7 +206,7 @@ class OWLookalike(OWWidget):
         self.neighbors_view.setModel(self.neighbors_model)
         self.neighbors_view.selectionModel().selectionChanged.connect(
             self._neighbor_changed)
-        self.neighbors_view.setMaximumWidth(202)
+        self.neighbors_view.setMaximumWidth(207)
         box.layout().addWidget(self.neighbors_view)
 
         box = gui.vBox(self.controlArea, True)
@@ -259,7 +259,7 @@ class OWLookalike(OWWidget):
         self.neighbors_view.selectionModel().select(
             selection, QItemSelectionModel.ClearAndSelect)
         self.neighbors_view.setColumnWidth(0, 160)
-        self.neighbors_view.setColumnWidth(1, 40)
+        self.neighbors_view.setColumnWidth(1, 45)
         self.apply()
 
     def set_reference(self, reference):
@@ -326,7 +326,7 @@ class OWLookalike(OWWidget):
         widget.setPos(0, 60)
         self.scene.addItem(widget)
 
-        title = QGraphicsSimpleTextItem("I am {:.3}% {}".format(
+        title = QGraphicsSimpleTextItem("I am {:.1f}% {}".format(
             self.neighbors_model[self.neighbor_index][1],
             self.neighbors_model[self.neighbor_index][0]))
         title.setFont(QFont("Garamond", 25))
