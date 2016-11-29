@@ -43,6 +43,7 @@ class OWGoogleSheets(widget.OWWidget):
     resizing_enabled = False
 
     recent = settings.Setting([])
+    reload_idx = settings.Setting(0)
     autocommit = settings.Setting(True)
 
     def __init__(self):
@@ -52,7 +53,8 @@ class OWGoogleSheets(widget.OWWidget):
         timer = QTimer(self,
                        singleShot=True,
                        timeout=self.load_url)
-        hb = gui.widgetBox(self.controlArea, 'Google Sheets', orientation='horizontal')
+        vb = gui.vBox(self.controlArea, 'Google Sheets')
+        hb = gui.hBox(vb)
         self.combo = combo = URLComboBox(
             hb, self.recent, editable=True, minimumWidth=400,
             insertPolicy=QComboBox.InsertAtTop,
@@ -61,6 +63,30 @@ class OWGoogleSheets(widget.OWWidget):
         hb.layout().addWidget(QLabel('URL:', hb))
         hb.layout().addWidget(combo)
         hb.layout().setStretch(1, 2)
+
+        RELOAD_TIMES = (
+            ('No reload',),
+            ('5 s', 5000),
+            ('10 s', 10000),
+            ('30 s', 30000),
+            ('1 min', 60*1000),
+            ('2 min', 2*60*1000),
+            ('5 min', 5*60*1000),
+        )
+
+        reload_timer = QTimer(self, timeout=lambda: self.load_url(from_reload=True))
+
+        def _on_reload_changed():
+            if self.reload_idx == 0:
+                reload_timer.stop()
+                return
+            reload_timer.start(RELOAD_TIMES[self.reload_idx][1])
+
+        gui.comboBox(vb, self, 'reload_idx', label='Reload every:',
+                     orientation=Qt.Horizontal,
+                     items=[i[0] for i in RELOAD_TIMES],
+                     callback=_on_reload_changed)
+
         box = gui.widgetBox(self.controlArea, "Info", addSpace=True)
         info = self.data_info = gui.widgetLabel(box, '')
         info.setWordWrap(True)
@@ -82,10 +108,11 @@ class OWGoogleSheets(widget.OWWidget):
                            "access permissions; rectangular, top-left-aligned "
                            "sheet data ...")
 
-    def load_url(self):
+    def load_url(self, from_reload=False):
         url = self.combo.currentText()
         if not url:
             return
+        prev_table = self.table
         try:
             with self.progressBar(3) as progress:
                 progress.advance()
@@ -100,7 +127,14 @@ class OWGoogleSheets(widget.OWWidget):
             self.table = table
             self.combo.setTitleFor(self.combo.currentIndex(), table.name)
         self.set_info()
-        self.commit()
+
+        def _equal(data1, data2):
+            NAN = float('nan')
+            return (try_(lambda: data1.checksum(), NAN) ==
+                    try_(lambda: data2.checksum(), NAN))
+
+        if not (from_reload and _equal(prev_table, self.table)):
+            self.commit()
 
     def set_info(self):
         data = self.table
