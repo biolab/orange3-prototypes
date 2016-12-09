@@ -78,7 +78,7 @@ class OWDBSCAN(widget.OWWidget):
 
     def adjustSize(self):
         self.ensurePolished()
-        self.resize(self.leftWidgetPart.sizeHint())
+        self.resize(self.controlArea.sizeHint())
 
     def check_data_size(self):
         if len(self.data) < 2:
