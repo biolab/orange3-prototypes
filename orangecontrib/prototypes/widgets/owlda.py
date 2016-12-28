@@ -41,7 +41,7 @@ class LDA(OWWidget):
 
     def apply(self):
         transformed = components = None
-        if self.data:
+        if self.data is not None:
             self.data = Continuize(Impute(self.data))
             lda = skl_lda.LDA(solver='eigen', n_components=2)
             X = lda.fit_transform(self.data.X, self.data.Y)
