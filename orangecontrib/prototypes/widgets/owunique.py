@@ -42,6 +42,7 @@ class OWUnique(widget.OWWidget):
 
     model_attrs = settings.ContextSetting(([], []))
     tiebreaker = settings.Setting(next(iter(TIEBREAKERS)))
+    autocommit = settings.Setting(True)
 
     def __init__(self):
         hbox = gui.hBox(self.controlArea)
@@ -53,11 +54,11 @@ class OWUnique(widget.OWWidget):
                            selectionBehavior=QListView.SelectRows,
                            showDropIndicator=True,
                            acceptDrops=True)
-        listview_avail = DnDListView(self.commit, self, **_properties)
+        listview_avail = DnDListView(lambda: self.commit(), self, **_properties)
         self.model_avail = model = VariableListModel(parent=self, enable_dnd=True)
         listview_avail.setModel(model)
 
-        listview_key = DnDListView(self.commit, self, **_properties)
+        listview_key = DnDListView(lambda: self.commit(), self, **_properties)
         self.model_key = model = VariableListModel(parent=self, enable_dnd=True)
         listview_key.setModel(model)
 
@@ -68,8 +69,10 @@ class OWUnique(widget.OWWidget):
 
         gui.comboBox(self.controlArea, self, 'tiebreaker',
                      label='On instance ties, select:', items=tuple(self.TIEBREAKERS.keys()),
-                     callback=self.commit,
+                     callback=lambda: self.commit(),
                      sendSelectedValue=True)
+        gui.auto_commit(self.controlArea, self, 'autocommit', 'Commit',
+                        orientation=Qt.Horizontal)
 
     def set_data(self, data):
         self.data = data
