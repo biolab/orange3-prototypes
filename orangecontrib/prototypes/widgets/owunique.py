@@ -68,7 +68,8 @@ class OWUnique(widget.OWWidget):
         box.layout().addWidget(listview_key)
 
         gui.comboBox(self.controlArea, self, 'tiebreaker',
-                     label='On instance ties, select:', items=tuple(self.TIEBREAKERS.keys()),
+                     label='Which instance to select in each group:',
+                     items=tuple(self.TIEBREAKERS.keys()),
                      callback=lambda: self.commit(),
                      sendSelectedValue=True)
         gui.auto_commit(self.controlArea, self, 'autocommit', 'Commit',
