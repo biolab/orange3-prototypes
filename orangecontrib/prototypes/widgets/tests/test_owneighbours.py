@@ -1,6 +1,7 @@
 # Test methods with long descriptive names can omit docstrings
 # pylint: disable=missing-docstring
-import Orange.widgets
+import numpy as np
+
 from Orange.data import Table
 from orangecontrib.prototypes.widgets.owneighbours import OWNeighbours
 from Orange.widgets.tests.base import WidgetTest, ParameterMapping
@@ -96,3 +97,12 @@ class TestOWNeighbours(WidgetTest):
                          neighbors.domain.class_vars)
         self.assertIn("similarity", neighbors.domain)
         self.assertTrue(all(100 >= ins["similarity"] >= 0 for ins in neighbors))
+
+    def test_missing_values(self):
+        data = Table("iris")
+        reference = data[:3]
+        data.X[0:10, 0] = np.nan
+        self.send_signal("Data", self.iris)
+        self.send_signal("Reference", reference)
+        self.widget.apply_button.button.click()
+        self.assertIsNotNone(self.get_output("Neighbors"))
