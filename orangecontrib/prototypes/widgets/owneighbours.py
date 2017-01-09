@@ -101,6 +101,7 @@ class OWNeighbours(OWWidget):
                     not self.exclude_reference) and index not in indices:
                 indices.append(index)
         neighbours = data[indices]
+        neighbours.attributes = self.data.attributes
         self.send("Neighbors", neighbours)
 
     @staticmethod
