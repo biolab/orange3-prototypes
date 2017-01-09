@@ -4,6 +4,7 @@ from PyQt4.QtCore import Qt
 from PyQt4.QtGui import QApplication
 
 from Orange.data import Table, Domain, ContinuousVariable
+from Orange.preprocess import RemoveNaNColumns, Impute
 from Orange.distance import (Euclidean, Manhattan, Cosine, Jaccard, SpearmanR,
                              SpearmanRAbsolute, PearsonR, PearsonRAbsolute)
 from Orange.widgets import gui
@@ -86,8 +87,11 @@ class OWNeighbours(OWWidget):
             self.send("Neighbors", None)
             return
         distance = self.DISTANCES[self.distance_index]
-        dist = distance(np.vstack((self.data, self.reference)))[:len(self.data),
-               len(self.data):]
+        n_data, n_ref = len(self.data), len(self.reference)
+        all_data = Table.concatenate([self.reference, self.data], 0)
+        pp_all_data = Impute()(RemoveNaNColumns()(all_data))
+        pp_data, pp_reference = pp_all_data[n_ref:], pp_all_data[:n_ref]
+        dist = distance(np.vstack((pp_data, pp_reference)))[:n_data, n_data:]
         data = self._add_similarity(self.data, dist)
         sorted_indices = list(np.argsort(dist.flatten()))[::-1]
         indices = []
