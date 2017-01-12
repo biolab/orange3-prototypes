@@ -30,7 +30,8 @@ import Orange
 from Orange.widgets import widget, gui, settings
 from Orange.widgets.utils import itemmodels, colorpalette
 from Orange.widgets.visualize.owscatterplotgraph import LegendItem, legend_anchor_pos
-from Orange.widgets.io import FileFormat
+
+from .utils.axisitem import AxisItem
 
 
 class DnDVariableListModel(itemmodels.VariableListModel):
@@ -103,76 +104,6 @@ class ScatterPlotItem(pg.ScatterPlotItem):
             painter.setRenderHint(QtGui.QPainter.Antialiasing, True)
 
         super().paint(painter, option, widget)
-
-
-class AxisItem(pg.GraphicsObject):
-    def __init__(self, parent=None, line=None, label=None, **kwargs):
-        super().__init__(parent, **kwargs)
-        self.setFlag(pg.GraphicsObject.ItemHasNoContents)
-
-        if line is None:
-            line = QLineF(0, 0, 1, 0)
-
-        self._spine = QGraphicsLineItem(line, self)
-        angle = QLineF(0, 0, 1, 0).angleTo(line)
-        angle = (180 - angle) % 360
-        dx = line.x2() - line.x1()
-        dy = line.y2() - line.y1()
-        rad = numpy.arctan2(dy, dx)
-        angle = (rad * 180 / numpy.pi) % 360
-
-        self._arrow = pg.ArrowItem(parent=self, angle=180 - angle)
-        self._arrow.setPos(self._spine.line().p2())
-
-        self._label = pg.TextItem(text=label, color=(10, 10, 10))
-        self._label.setParentItem(self)
-        self._label.setPos(self._spine.line().p2())
-
-    def setLabel(self, label):
-        if label != self._label:
-            self._label = label
-            self._label.setText(label)
-
-    def setPen(self, pen):
-        self._spine.setPen(pen)
-
-    def paint(self, painter, option, widget):
-        pass
-
-    def boundingRect(self):
-        return QRectF()
-
-    def viewTransformChanged(self):
-        self.__updateLabelPos()
-
-    def __updateLabelPos(self):
-        T = self.viewTransform()
-        if T is not None:
-            Tinv, ok = T.inverted()
-        else:
-            Tinv, ok = None, False
-        if not ok:
-            T = Tinv = QtGui.QTransform()
-
-        # map the axis spine to viewbox coord. system
-        viewbox_line = Tinv.map(self._spine.line())
-        angle = viewbox_line.angle()
-        # note in Qt the y axis is inverted (90 degree angle 'points' down)
-        left_quad = 270 <= angle <= 360 or -0.0 <= angle < 90
-
-        # position the text label along the viewbox_line
-        label_pos = viewbox_line.pointAt(0.90)
-
-        if left_quad:
-            anchor = (0.5, -0.1)
-        else:
-            anchor = (0.5, 1.1)
-
-        pos = T.map(label_pos)
-        self._label.setPos(pos)
-        self._label.anchor = pg.Point(*anchor)
-        self._label.updateText()
-        self._label.setRotation(angle if left_quad else angle - 180)
 
 
 class LegendItem(LegendItem):
@@ -807,7 +738,8 @@ class OWLinearProjection(widget.OWWidget):
         self._axes = []
         for i, axis in enumerate(axes.T):
             axis_item = AxisItem(line=QLineF(0, 0, axis[0], axis[1]),
-                                 label=variables[i].name)
+                                 text=variables[i].name)
+            axis_item.setPen(pg.mkPen((100, 100, 100)))
             self.viewbox.addItem(axis_item)
             dist = distance.euclidean((0, 0), (axis[0], axis[1]))
             self._axes.append([axis_item, dist])
