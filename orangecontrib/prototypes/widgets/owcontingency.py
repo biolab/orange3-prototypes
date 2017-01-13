@@ -84,7 +84,7 @@ class OWContingencyTable(widget.OWWidget):
         ))
 
 
-def contingency_table(data, rows, columns):
+def contingency_table(data, columns, rows):
     ct = contingency.get_contingency(data, columns, rows)
     metavar = StringVariable(rows.name)
     metas = [[str(val)] for val in rows.values]
