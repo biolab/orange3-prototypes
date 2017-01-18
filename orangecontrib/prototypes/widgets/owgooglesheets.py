@@ -6,7 +6,7 @@ from PyQt4.QtGui import QApplication, QComboBox, QLabel
 from Orange.util import try_
 from Orange.widgets.utils.itemmodels import PyListModel
 from Orange.widgets import widget, gui, settings
-from Orange.data.table import Table
+from Orange.data import Table
 
 log = logging.getLogger(__name__)
 
