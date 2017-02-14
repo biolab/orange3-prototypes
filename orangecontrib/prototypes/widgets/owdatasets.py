@@ -201,14 +201,11 @@ class OWDataSets(widget.OWWidget):
         except Exception as er:
             log = logging.getLogger(__name__)
             log.exception("Error while fetching updated index")
-            exc_text = format_exception(er)
             if not allinfolocal:
-                self.error("Could not fetch data set list: {}"
-                           .format(exc_text))
+                self.error("Could not fetch data set list")
             else:
                 self.warning("Could not fetch data sets list, only local "
-                             "cached data sets are shown ({})"
-                             .format(exc_text))
+                             "cached data sets are shown")
             res = {}
 
         allinforemote = res  # type: Dict[Tuple[str, str], dict]
