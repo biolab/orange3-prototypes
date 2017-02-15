@@ -38,8 +38,14 @@ if __name__ == '__main__':
             'scipy',
             'scikit-learn',
             'pyqtgraph',
-            'AnyQt'
+            'AnyQt>=0.0.8',
+            'serverfiles',
         ],
+        extras_require={
+            ':python_version<"3.5"': [
+                "typing"
+            ]
+        },
         entry_points=ENTRY_POINTS,
         namespace_packages=['orangecontrib'],
         include_package_data=True,
