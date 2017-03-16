@@ -28,7 +28,7 @@ class CorrelationType(IntEnum):
 
     @staticmethod
     def items():
-        return ["Pairwise Pearson correlation", "Pairwise Spearman correlation"]
+        return ["Pearson correlation", "Spearman correlation"]
 
 
 class KMeansCorrelationHeuristic:
