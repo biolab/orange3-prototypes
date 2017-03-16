@@ -2,8 +2,7 @@ from enum import IntEnum
 from operator import attrgetter
 
 import numpy as np
-from Orange.widgets.utils.signals import Input, Output
-from scipy.stats import spearmanr
+from scipy.stats import spearmanr, pearsonr
 
 from AnyQt.QtCore import Qt, QItemSelectionModel, QItemSelection, QSize
 from AnyQt.QtGui import QStandardItem
@@ -14,8 +13,11 @@ from Orange.preprocess import SklImpute
 from Orange.widgets import gui
 from Orange.widgets.settings import Setting, ContextSetting, \
     DomainContextHandler
+from Orange.widgets.utils.signals import Input, Output
 from Orange.widgets.visualize.utils import VizRankDialogAttrPair
 from Orange.widgets.widget import OWWidget, AttributeList, Msg
+
+NAN = 2
 
 
 class CorrelationType(IntEnum):
@@ -36,15 +38,16 @@ class CorrelationRank(VizRankDialogAttrPair):
 
     def compute_score(self, state):
         (a1, a2), corr_type = state, self.master.correlation_type
-        if corr_type == CorrelationType.PEARSON:
-            return -np.corrcoef(self.master.cont_data.X[:, [a1, a2]].T)[0, 1]
-        else:
-            return -spearmanr(self.master.cont_data.X[:, [a1, a2]])[0]
+        X = self.master.cont_data.X
+        corr = pearsonr if corr_type == CorrelationType.PEARSON else spearmanr
+        result = -corr(X[:, a1], X[:, a2])[0]
+        return result if not np.isnan(result) else NAN
 
     def row_for_state(self, score, state):
         attrs = sorted((self.attrs[x] for x in state), key=attrgetter("name"))
         attr_1_item = QStandardItem(attrs[0].name)
         attr_2_item = QStandardItem(attrs[1].name)
+        score = np.nan if score == NAN else score
         correlation_item = QStandardItem(str(round(-score, 3)))
         attr_1_item.setData(attrs, self._AttrRole)
         attr_2_item.setData(attrs, self._AttrRole)
