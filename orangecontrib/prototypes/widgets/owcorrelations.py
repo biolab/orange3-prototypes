@@ -1,8 +1,10 @@
 from enum import IntEnum
 from operator import attrgetter
+from itertools import combinations, groupby, chain
 
 import numpy as np
 from scipy.stats import spearmanr, pearsonr
+from sklearn.cluster import KMeans
 
 from AnyQt.QtCore import Qt, QItemSelectionModel, QItemSelection, QSize
 from AnyQt.QtGui import QStandardItem
@@ -18,6 +20,7 @@ from Orange.widgets.visualize.utils import VizRankDialogAttrPair
 from Orange.widgets.widget import OWWidget, AttributeList, Msg
 
 NAN = 2
+SIZE_LIMIT = 1000000
 
 
 class CorrelationType(IntEnum):
@@ -28,6 +31,30 @@ class CorrelationType(IntEnum):
         return ["Pairwise Pearson correlation", "Pairwise Spearman correlation"]
 
 
+class KMeansCorrelationHeuristic:
+    n_clusters = 10
+
+    def __init__(self, data):
+        self.n_attributes = len(data.domain.attributes)
+        self.X = Normalize()(data).X.T
+        self.states = None
+
+    def _get_clusters_of_attributes(self):
+        kmeans = KMeans(n_clusters=self.n_clusters, random_state=0).fit(self.X)
+        labels_attrs = sorted([(l, i) for i, l in enumerate(kmeans.labels_)])
+        for cluster, group in groupby(labels_attrs, key=lambda x: x[0]):
+            group = list(group)
+            if len(group) > 1:
+                yield list(pair[1] for pair in group)
+
+    def get_states(self, initial_state):
+        if self.states is not None:
+            return chain([initial_state], self.states)
+        self.states = chain.from_iterable(combinations(inds, 2) for inds in
+                                          self._get_clusters_of_attributes())
+        return self.states
+
+
 class CorrelationRank(VizRankDialogAttrPair):
     def initialize(self):
         super().initialize()
@@ -35,6 +62,7 @@ class CorrelationRank(VizRankDialogAttrPair):
         self.attrs = data and data.domain.attributes
         self.model_proxy.setFilterKeyColumn(-1)
         self.rank_table.horizontalHeader().setStretchLastSection(False)
+        self.heuristic = KMeansCorrelationHeuristic(data) if data else None
 
     def compute_score(self, state):
         (a1, a2), corr_type = state, self.master.correlation_type
@@ -57,6 +85,17 @@ class CorrelationRank(VizRankDialogAttrPair):
 
     def check_preconditions(self):
         return self.master.cont_data is not None
+
+    def iterate_states(self, initial_state):
+        data = self.master.cont_data
+        # use heuristic if data is too big
+        n_attrs = len(data.domain.attributes)
+        use_heuristic = len(self.attrs) > KMeansCorrelationHeuristic.n_clusters
+        use_heuristic = use_heuristic and len(data) * n_attrs ** 2 > SIZE_LIMIT
+        if use_heuristic:
+            return self.heuristic.get_states(initial_state)
+        else:
+            return super().iterate_states(initial_state)
 
 
 class OWCorrelations(OWWidget):
