@@ -8,7 +8,6 @@ from sklearn.cluster import KMeans
 
 from AnyQt.QtCore import Qt, QItemSelectionModel, QItemSelection, QSize
 from AnyQt.QtGui import QStandardItem, QColor
-from AnyQt.QtWidgets import QHeaderView
 
 from Orange.data import Table, Domain, ContinuousVariable, StringVariable
 from Orange.preprocess import SklImpute, Normalize
@@ -64,7 +63,6 @@ class CorrelationRank(VizRankDialogAttrPair):
         data = self.master.cont_data
         self.attrs = data and data.domain.attributes
         self.model_proxy.setFilterKeyColumn(-1)
-        self.rank_table.horizontalHeader().setStretchLastSection(False)
         self.heuristic = KMeansCorrelationHeuristic(data) if data else None
 
     def compute_score(self, state):
@@ -201,9 +199,6 @@ class OWCorrelations(OWWidget):
         if self.cont_data is not None:
             # this triggers self.commit() by changing vizrank selection
             self.vizrank.toggle()
-            header = self.vizrank.rank_table.horizontalHeader()
-            header.setStretchLastSection(True)
-            header.setSectionResizeMode(QHeaderView.ResizeToContents)
         else:
             self.commit()
 
