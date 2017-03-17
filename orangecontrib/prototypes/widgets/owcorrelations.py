@@ -134,6 +134,7 @@ class OWCorrelations(OWWidget):
 
         self.vizrank, _ = CorrelationRank.add_vizrank(
             None, self, None, self._vizrank_selection_changed)
+        self.vizrank.progressBar = self.progressBar
 
         gui.separator(box)
         box.layout().addWidget(self.vizrank.filter)
