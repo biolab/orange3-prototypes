@@ -23,7 +23,7 @@ class TestOWCorrelations(WidgetTest):
         """Check correlation table for dataset with continuous attributes"""
         self.send_signal("Data", self.data_cont)
         n_attrs = len(self.data_cont.domain.attributes)
-        self.assertEqual(self.widget.vizrank.rank_model.columnCount(), 3)
+        self.assertEqual(self.widget.vizrank.rank_model.columnCount(), 2)
         self.assertEqual(self.widget.vizrank.rank_model.rowCount(),
                          n_attrs * (n_attrs - 1) / 2)
         self.send_signal("Data", None)
@@ -43,7 +43,7 @@ class TestOWCorrelations(WidgetTest):
         self.send_signal("Data", self.data_mixed)
         domain = self.data_mixed.domain
         n_attrs = len([a for a in domain.attributes if a.is_continuous])
-        self.assertEqual(self.widget.vizrank.rank_model.columnCount(), 3)
+        self.assertEqual(self.widget.vizrank.rank_model.columnCount(), 2)
         self.assertEqual(self.widget.vizrank.rank_model.rowCount(),
                          n_attrs * (n_attrs - 1) / 2)
 

@@ -7,11 +7,11 @@ from scipy.stats import spearmanr, pearsonr
 from sklearn.cluster import KMeans
 
 from AnyQt.QtCore import Qt, QItemSelectionModel, QItemSelection, QSize
-from AnyQt.QtGui import QStandardItem
+from AnyQt.QtGui import QStandardItem, QColor
 from AnyQt.QtWidgets import QHeaderView
 
 from Orange.data import Table, Domain, ContinuousVariable, StringVariable
-from Orange.preprocess import SklImpute
+from Orange.preprocess import SklImpute, Normalize
 from Orange.widgets import gui
 from Orange.widgets.settings import Setting, ContextSetting, \
     DomainContextHandler
@@ -56,6 +56,9 @@ class KMeansCorrelationHeuristic:
 
 
 class CorrelationRank(VizRankDialogAttrPair):
+    NEGATIVE_COLOR = QColor(70, 190, 250)
+    POSITIVE_COLOR = QColor(170, 242, 43)
+
     def initialize(self):
         super().initialize()
         data = self.master.cont_data
@@ -73,14 +76,16 @@ class CorrelationRank(VizRankDialogAttrPair):
 
     def row_for_state(self, score, state):
         attrs = sorted((self.attrs[x] for x in state), key=attrgetter("name"))
-        attr_1_item = QStandardItem(attrs[0].name)
-        attr_2_item = QStandardItem(attrs[1].name)
-        correlation_item = QStandardItem("{:.3f}".format(score[1]))
-        attr_1_item.setData(attrs, self._AttrRole)
-        attr_2_item.setData(attrs, self._AttrRole)
-        correlation_item.setData(attrs)
-        correlation_item.setData(Qt.AlignCenter, Qt.TextAlignmentRole)
-        return [attr_1_item, attr_2_item, correlation_item]
+        attrs_item = QStandardItem(
+            "{}, {}".format(attrs[0].name, attrs[1].name))
+        attrs_item.setData(attrs, self._AttrRole)
+        attrs_item.setData(Qt.AlignLeft + Qt.AlignTop, Qt.TextAlignmentRole)
+        correlation_item = QStandardItem("{:+.3f}".format(score[1], 3))
+        correlation_item.setData(attrs, self._AttrRole)
+        correlation_item.setData(
+            self.NEGATIVE_COLOR if score[1] < 0 else self.POSITIVE_COLOR,
+            gui.TableBarItem.BarColorRole)
+        return [correlation_item, attrs_item]
 
     def check_preconditions(self):
         return self.master.cont_data is not None
@@ -95,6 +100,10 @@ class CorrelationRank(VizRankDialogAttrPair):
             return self.heuristic.get_states(initial_state)
         else:
             return super().iterate_states(initial_state)
+
+    @staticmethod
+    def bar_length(score):
+        return abs(score[1])
 
 
 class OWCorrelations(OWWidget):
@@ -156,10 +165,12 @@ class OWCorrelations(OWWidget):
     def _vizrank_select(self):
         model = self.vizrank.rank_table.model()
         selection = QItemSelection()
+        names = sorted(x.name for x in self.selection)
         for i in range(model.rowCount()):
-            if model.data(model.index(i, 0)) == self.selection[0].name and \
-                    model.data(model.index(i, 1)) == self.selection[1].name:
-                selection.select(model.index(i, 0), model.index(i, 2))
+            if sorted(x.name for x in model.data(model.index(i, 0),
+                                                 CorrelationRank._AttrRole)) \
+                    == names:
+                selection.select(model.index(i, 0), model.index(i, 1))
                 self.vizrank.rank_table.selectionModel().select(
                     selection, QItemSelectionModel.ClearAndSelect)
                 break
@@ -206,11 +217,12 @@ class OWCorrelations(OWWidget):
         metas = [StringVariable("Feature 1"), StringVariable("Feature 2")]
         domain = Domain([ContinuousVariable("Correlation")], metas=metas)
         model = self.vizrank.rank_model
-        x = np.array([[float(model.data(model.index(row, 2)))] for row
+        x = np.array([[float(model.data(model.index(row, 0)))] for row
                       in range(model.rowCount())])
-        m = np.array([[model.data(model.index(row, 0)),
-                       model.data(model.index(row, 1))] for row
-                      in range(model.rowCount())], dtype=object)
+        m = np.array([[attr.name
+                       for attr in model.data(
+                            model.index(row, 0), CorrelationRank._AttrRole)]
+                       for row in range(model.rowCount())], dtype=object)
         corr_table = Table(domain, x, metas=m)
         corr_table.name = "Correlations"
 
