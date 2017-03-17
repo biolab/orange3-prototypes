@@ -68,15 +68,14 @@ class CorrelationRank(VizRankDialogAttrPair):
         (a1, a2), corr_type = state, self.master.correlation_type
         X = self.master.cont_data.X
         corr = pearsonr if corr_type == CorrelationType.PEARSON else spearmanr
-        result = -corr(X[:, a1], X[:, a2])[0]
-        return result if not np.isnan(result) else NAN
+        result = corr(X[:, a1], X[:, a2])[0]
+        return -abs(result) if not np.isnan(result) else NAN, result
 
     def row_for_state(self, score, state):
         attrs = sorted((self.attrs[x] for x in state), key=attrgetter("name"))
         attr_1_item = QStandardItem(attrs[0].name)
         attr_2_item = QStandardItem(attrs[1].name)
-        score = np.nan if score == NAN else score
-        correlation_item = QStandardItem(str(round(-score, 3)))
+        correlation_item = QStandardItem("{:.3f}".format(score[1]))
         attr_1_item.setData(attrs, self._AttrRole)
         attr_2_item.setData(attrs, self._AttrRole)
         correlation_item.setData(attrs)
