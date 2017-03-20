@@ -1,3 +1,6 @@
+"""
+Correlations widget
+"""
 from enum import IntEnum
 from operator import attrgetter
 from itertools import combinations, groupby, chain
@@ -23,53 +26,94 @@ SIZE_LIMIT = 1000000
 
 
 class CorrelationType(IntEnum):
+    """
+    Correlation type enumerator. Possible correlations: Pearson, Spearman.
+    """
     PEARSON, SPEARMAN = 0, 1
 
     @staticmethod
     def items():
+        """
+        Texts for correlation types. Can be used in gui controls (eg. combobox).
+        """
         return ["Pearson correlation", "Spearman correlation"]
 
 
 class KMeansCorrelationHeuristic:
+    """
+    Heuristic to obtain the most promising attribute pairs, when there are to
+    many attributes to calculate correlations for all possible pairs.
+    """
     n_clusters = 10
 
     def __init__(self, data):
         self.n_attributes = len(data.domain.attributes)
-        self.X = Normalize()(data).X.T
+        self.data = data
         self.states = None
 
-    def _get_clusters_of_attributes(self):
-        kmeans = KMeans(n_clusters=self.n_clusters, random_state=0).fit(self.X)
+    def get_clusters_of_attributes(self):
+        """
+        Generates groupes of attribute IDs, grouped by cluster. Clusters are
+        obtained by KMeans algorithm.
+
+        :return: generator of attributes grouped by cluster
+        """
+        data = Normalize()(self.data).X.T
+        kmeans = KMeans(n_clusters=self.n_clusters, random_state=0).fit(data)
         labels_attrs = sorted([(l, i) for i, l in enumerate(kmeans.labels_)])
-        for cluster, group in groupby(labels_attrs, key=lambda x: x[0]):
+        for _, group in groupby(labels_attrs, key=lambda x: x[0]):
             group = list(group)
             if len(group) > 1:
                 yield list(pair[1] for pair in group)
 
     def get_states(self, initial_state):
+        """
+        Generates the most promising states (attribute pairs).
+
+        :param initial_state: initial state; None if this is the first call
+        :return: generator of tuples of states
+        """
         if self.states is not None:
             return chain([initial_state], self.states)
         self.states = chain.from_iterable(combinations(inds, 2) for inds in
-                                          self._get_clusters_of_attributes())
+                                          self.get_clusters_of_attributes())
         return self.states
 
 
 class CorrelationRank(VizRankDialogAttrPair):
+    """
+    Correlations rank widget.
+    """
     NEGATIVE_COLOR = QColor(70, 190, 250)
     POSITIVE_COLOR = QColor(170, 242, 43)
+
+    def __init__(self, *args):
+        super().__init__(*args)
+        self.heuristic = None
+        self.use_heuristic = False
 
     def initialize(self):
         super().initialize()
         data = self.master.cont_data
         self.attrs = data and data.domain.attributes
         self.model_proxy.setFilterKeyColumn(-1)
-        self.heuristic = KMeansCorrelationHeuristic(data) if data else None
+        self.rank_table.horizontalHeader().setStretchLastSection(False)
+        self.heuristic = None
+        self.use_heuristic = False
+        if data:
+            # use heuristic if data is too big
+            n_attrs = len(self.attrs)
+            use_heuristic = n_attrs > KMeansCorrelationHeuristic.n_clusters
+            self.use_heuristic = use_heuristic and \
+                len(data) * n_attrs ** 2 > SIZE_LIMIT
+            if self.use_heuristic:
+                self.heuristic = KMeansCorrelationHeuristic(data)
 
     def compute_score(self, state):
-        (a1, a2), corr_type = state, self.master.correlation_type
-        X = self.master.cont_data.X
+        (attr1, attr2), corr_type = state, self.master.correlation_type
+        data = self.master.cont_data.X
         corr = pearsonr if corr_type == CorrelationType.PEARSON else spearmanr
-        result = corr(X[:, a1], X[:, a2])[0]
+        result = corr(data[:, attr1], data[:, attr2])[0]
         return -abs(result) if not np.isnan(result) else NAN, result
 
     def row_for_state(self, score, state):
@@ -78,7 +122,7 @@ class CorrelationRank(VizRankDialogAttrPair):
             "{}, {}".format(attrs[0].name, attrs[1].name))
         attrs_item.setData(attrs, self._AttrRole)
         attrs_item.setData(Qt.AlignLeft + Qt.AlignTop, Qt.TextAlignmentRole)
-        correlation_item = QStandardItem("{:+.3f}".format(score[1], 3))
+        correlation_item = QStandardItem("{:+.3f}".format(score[1]))
         correlation_item.setData(attrs, self._AttrRole)
         correlation_item.setData(
             self.NEGATIVE_COLOR if score[1] < 0 else self.POSITIVE_COLOR,
@@ -89,15 +133,19 @@ class CorrelationRank(VizRankDialogAttrPair):
         return self.master.cont_data is not None
 
     def iterate_states(self, initial_state):
-        data = self.master.cont_data
-        # use heuristic if data is too big
-        n_attrs = len(data.domain.attributes)
-        use_heuristic = len(self.attrs) > KMeansCorrelationHeuristic.n_clusters
-        use_heuristic = use_heuristic and len(data) * n_attrs ** 2 > SIZE_LIMIT
-        if use_heuristic:
+        if self.use_heuristic:
             return self.heuristic.get_states(initial_state)
         else:
             return super().iterate_states(initial_state)
+
+    def state_count(self):
+        if self.use_heuristic:
+            n_clusters = KMeansCorrelationHeuristic.n_clusters
+            n_avg_attrs = len(self.attrs) / n_clusters
+            return n_clusters * n_avg_attrs * (n_avg_attrs - 1) / 2
+        else:
+            n_attrs = len(self.attrs)
+            return n_attrs * (n_attrs - 1) / 2
 
     @staticmethod
     def bar_length(score):
@@ -199,6 +247,8 @@ class OWCorrelations(OWWidget):
         if self.cont_data is not None:
             # this triggers self.commit() by changing vizrank selection
             self.vizrank.toggle()
+            header = self.vizrank.rank_table.horizontalHeader()
+            header.setStretchLastSection(True)
         else:
             self.commit()
 
@@ -215,9 +265,9 @@ class OWCorrelations(OWWidget):
         x = np.array([[float(model.data(model.index(row, 0)))] for row
                       in range(model.rowCount())])
         m = np.array([[attr.name
-                       for attr in model.data(
-                            model.index(row, 0), CorrelationRank._AttrRole)]
-                       for row in range(model.rowCount())], dtype=object)
+                       for attr in model.data(model.index(row, 0),
+                                              CorrelationRank._AttrRole)]
+                      for row in range(model.rowCount())], dtype=object)
         corr_table = Table(domain, x, metas=m)
         corr_table.name = "Correlations"
 

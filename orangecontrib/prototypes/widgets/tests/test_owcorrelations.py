@@ -2,10 +2,10 @@
 # pylint: disable=missing-docstring
 from Orange.data import Table
 from Orange.widgets.visualize.owscatterplot import OWScatterPlot
-from orangecontrib.prototypes.widgets.owcorrelations import OWCorrelations, \
-    KMeansCorrelationHeuristic
 from Orange.widgets.tests.base import WidgetTest
 from Orange.widgets.widget import AttributeList
+from orangecontrib.prototypes.widgets.owcorrelations import OWCorrelations, \
+    KMeansCorrelationHeuristic
 
 
 class TestOWCorrelations(WidgetTest):
@@ -94,17 +94,18 @@ class TestOWCorrelations(WidgetTest):
         self.assertIs(scatterplot_widget.attr_x, self.data_cont.domain[2])
         self.assertIs(scatterplot_widget.attr_y, self.data_cont.domain[3])
 
-    def test_KMeansCorrelationHeuristic(self):
+    def test_heuristic(self):
         """Check attribute pairs got by heuristic"""
-        h = KMeansCorrelationHeuristic(self.data_cont)
-        h.n_clusters = 2
-        self.assertListEqual(list(h.get_states(None)), [(0, 2), (0, 3), (2, 3)])
+        heuristic = KMeansCorrelationHeuristic(self.data_cont)
+        heuristic.n_clusters = 2
+        self.assertListEqual(list(heuristic.get_states(None)),
+                             [(0, 2), (0, 3), (2, 3)])
 
-    def test_KMeansCorrelationHeuristic_get_states(self):
+    def test_heuristic_get_states(self):
         """Check attribute pairs after the widget has been paused"""
-        h = KMeansCorrelationHeuristic(self.data_cont)
-        h.n_clusters = 2
-        states = h.get_states(None)
+        heuristic = KMeansCorrelationHeuristic(self.data_cont)
+        heuristic.n_clusters = 2
+        states = heuristic.get_states(None)
         _ = next(states)
-        self.assertListEqual(list(h.get_states(next(states))), [(0, 3), (2, 3)])
-
+        self.assertListEqual(list(heuristic.get_states(next(states))),
+                             [(0, 3), (2, 3)])
