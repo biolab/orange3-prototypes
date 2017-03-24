@@ -1,5 +1,6 @@
 # Test methods with long descriptive names can omit docstrings
 # pylint: disable=missing-docstring
+import time
 from Orange.data import Table
 from Orange.widgets.visualize.owscatterplot import OWScatterPlot
 from Orange.widgets.tests.base import WidgetTest
@@ -22,6 +23,7 @@ class TestOWCorrelations(WidgetTest):
     def test_input_data_cont(self):
         """Check correlation table for dataset with continuous attributes"""
         self.send_signal("Data", self.data_cont)
+        time.sleep(0.1)
         n_attrs = len(self.data_cont.domain.attributes)
         self.assertEqual(self.widget.vizrank.rank_model.columnCount(), 2)
         self.assertEqual(self.widget.vizrank.rank_model.rowCount(),
@@ -43,6 +45,7 @@ class TestOWCorrelations(WidgetTest):
         self.send_signal("Data", self.data_mixed)
         domain = self.data_mixed.domain
         n_attrs = len([a for a in domain.attributes if a.is_continuous])
+        time.sleep(0.1)
         self.assertEqual(self.widget.vizrank.rank_model.columnCount(), 2)
         self.assertEqual(self.widget.vizrank.rank_model.rowCount(),
                          n_attrs * (n_attrs - 1) / 2)
@@ -66,11 +69,16 @@ class TestOWCorrelations(WidgetTest):
     def test_output_data(self):
         """Check dataset on output"""
         self.send_signal("Data", self.data_cont)
+        time.sleep(0.1)
+        self.widget.commit()
         self.assertEqual(self.data_cont, self.get_output("Data"))
 
     def test_output_features(self):
         """Check features on output"""
         self.send_signal("Data", self.data_cont)
+        time.sleep(0.1)
+        attrs = self.widget.cont_data.domain.attributes
+        self.widget._vizrank_selection_changed(attrs[0], attrs[1])
         features = self.get_output("Features")
         self.assertIsInstance(features, AttributeList)
         self.assertEqual(len(features), 2)
@@ -78,6 +86,8 @@ class TestOWCorrelations(WidgetTest):
     def test_output_correlations(self):
         """Check correlation table on on output"""
         self.send_signal("Data", self.data_cont)
+        time.sleep(0.1)
+        self.widget.commit()
         correlations = self.get_output("Correlations")
         self.assertIsInstance(correlations, Table)
         self.assertEqual(len(correlations), 6)
