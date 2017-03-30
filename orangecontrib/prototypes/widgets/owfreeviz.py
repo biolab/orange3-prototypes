@@ -18,6 +18,8 @@ import Orange.projection
 
 from Orange.widgets import widget, gui, settings
 from Orange.widgets.utils import classdensity
+from Orange.widgets.utils.annotated_data import (create_annotated_table,
+                                                 ANNOTATED_DATA_SIGNAL_NAME)
 from Orange.widgets.utils.plot import OWPlotGUI
 from Orange.widgets.visualize import owlinearprojection as linproj
 from Orange.widgets.unsupervised.owmds import mdsplotutils as plotutils
@@ -288,8 +290,8 @@ class OWFreeViz(widget.OWWidget):
     icon = "icons/LinearProjection.svg"
     inputs = [("Data", Orange.data.Table, "set_data", widget.Default),
               ("Data Subset", Orange.data.Table, "set_data_subset")]
-    outputs = [("Data", Orange.data.Table, widget.Default),
-               ("Selected Data", Orange.data.Table),
+    outputs = [("Selected Data", Orange.data.Table, widget.Default),
+               (ANNOTATED_DATA_SIGNAL_NAME, Orange.data.Table),
                ("Components", Orange.data.Table)]
 
     settingsHandler = settings.DomainContextHandler()
@@ -978,6 +980,7 @@ class OWFreeViz(widget.OWWidget):
         Commit/send the widget output signals.
         """
         data = subset = components = None
+        selectedindices = []
         if self.data is not None:
             coords = self.plotdata.embedding_coords
             valid = self.plotdata.validmask
@@ -1020,8 +1023,9 @@ class OWFreeViz(widget.OWWidget):
                 metas=metas)
             components.name = 'components'
 
-        self.send("Data", data)
         self.send("Selected Data", subset)
+        self.send(ANNOTATED_DATA_SIGNAL_NAME,
+                  create_annotated_table(data, selectedindices))
         self.send("Components", components)
 
     def sizeHint(self):
