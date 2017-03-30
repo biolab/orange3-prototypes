@@ -416,7 +416,7 @@ class OWFreeViz(widget.OWWidget):
         box = gui.widgetBox(self.controlArea, "Hide anchors")
         rslider = gui.hSlider(
             box, self, "min_anchor_radius", minValue=0, maxValue=100,
-            step=5, label="Hide radius", createLabel=False, ticks=True,
+            step=5, label="Radius", createLabel=False, ticks=True,
             callback=self._update_anchor_visibility)
         rslider.setTickInterval(0)
         rslider.setPageStep(10)
@@ -429,8 +429,9 @@ class OWFreeViz(widget.OWWidget):
         hlayout.addWidget(toolbox.button(PlotToolBox.SelectTool))
         hlayout.addWidget(toolbox.button(PlotToolBox.ZoomTool))
         hlayout.addWidget(toolbox.button(PlotToolBox.PanTool))
-        hlayout.addSpacing(2)
+        hlayout.addSpacing(4)
         hlayout.addWidget(toolbox.button(PlotToolBox.ZoomReset))
+        hlayout.addStretch()
         toolbox.standardAction(PlotToolBox.ZoomReset).triggered.connect(
             lambda: self.plot.setRange(QtCore.QRectF(-1.05, -1.05, 2.1, 2.1))
         )
@@ -565,6 +566,8 @@ class OWFreeViz(widget.OWWidget):
         valid = ~mask
         X = X[valid, :]
         Y = Y[valid]
+        if not len(X):
+            return
 
         if self.data.domain.class_var.is_discrete:
             Y = Y.astype(int)

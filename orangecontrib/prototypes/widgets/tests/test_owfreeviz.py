@@ -2,7 +2,7 @@
 # pylint: disable=missing-docstring
 from Orange.data import Table
 from orangecontrib.prototypes.widgets.owfreeviz import OWFreeViz
-from Orange.widgets.tests.base import WidgetTest
+from Orange.widgets.tests.base import WidgetTest, datasets
 
 
 class TestOWFreeViz(WidgetTest):
@@ -20,3 +20,8 @@ class TestOWFreeViz(WidgetTest):
         self.assertEqual(len(self.widget.controls.attr_shape.model()), 11)
         self.assertEqual(len(self.widget.controls.attr_size.model()), 8)
         self.assertEqual(len(self.widget.controls.attr_label.model()), 17)
+
+    def test_ugly_datasets(self):
+        self.send_signal("Data", Table(datasets.path("testing_dataset_cls")))
+        self.send_signal("Data", Table(datasets.path("testing_dataset_reg")))
+
