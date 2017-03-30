@@ -17,12 +17,13 @@ import Orange.data
 import Orange.projection
 
 from Orange.widgets import widget, gui, settings
-from Orange.widgets.utils import colorpalette, itemmodels, classdensity
+from Orange.widgets.utils import classdensity
+from Orange.widgets.utils.plot import OWPlotGUI
 from Orange.widgets.visualize import owlinearprojection as linproj
 from Orange.widgets.unsupervised.owmds import mdsplotutils as plotutils
 
-from ..projection.freeviz import freeviz
-from .utils.axisitem import AxisItem
+from orangecontrib.prototypes.projection.freeviz import freeviz
+from orangecontrib.prototypes.widgets.utils.axisitem import AxisItem
 
 
 class AsyncUpdateLoop(QObject):
@@ -329,13 +330,13 @@ class OWFreeViz(widget.OWWidget):
     embedding_domain_role = settings.Setting(Meta)
     autocommit = settings.Setting(True)
 
-    color_var = settings.ContextSetting("", exclude_metas=False)
-    shape_var = settings.ContextSetting("", exclude_metas=False)
-    size_var = settings.ContextSetting("", exclude_metas=False)
-    label_var = settings.ContextSetting("", exclude_metas=False)
+    attr_color = settings.ContextSetting(None, exclude_metas=False)
+    attr_label = settings.ContextSetting(None, exclude_metas=False)
+    attr_shape = settings.ContextSetting(None, exclude_metas=False)
+    attr_size = settings.ContextSetting(None, exclude_metas=False)
 
-    opacity = settings.Setting(255)
-    point_size = settings.Setting(5)
+    point_width = settings.Setting(10)
+    alpha_value = settings.Setting(128)
     jitter = settings.Setting(0)
     class_density = settings.Setting(False)
 
@@ -345,6 +346,15 @@ class OWFreeViz(widget.OWWidget):
         self.data = None
         self.data_subset = None
         self.plotdata = None
+
+        self.plot = pg.PlotWidget(enableMouse=False, enableMenu=False)
+        self.plot.setFrameStyle(QtGui.QFrame.StyledPanel)
+        self.plot.plotItem.hideAxis("bottom")
+        self.plot.plotItem.hideAxis("left")
+        self.plot.plotItem.hideButtons()
+        self.plot.setAspectLocked(True)
+        self.plot.scene().installEventFilter(self)
+        self.replot = self.plot.replot
 
         box = gui.widgetBox(self.controlArea, "Optimization", spacing=10)
         form = QtGui.QFormLayout(
@@ -380,10 +390,9 @@ class OWFreeViz(widget.OWWidget):
         self.start_button = gui.button(
             box, self, "Optimize", self._toogle_start)
 
-        self.color_varmodel = itemmodels.VariableListModel(parent=self)
-        self.shape_varmodel = itemmodels.VariableListModel(parent=self)
-        self.size_varmodel = itemmodels.VariableListModel(parent=self)
-        self.label_varmodel = itemmodels.VariableListModel(parent=self)
+        g = OWPlotGUI(self)
+        g.point_properties_box(self.controlArea)
+        self.models = g.points_models
 
         box = gui.widgetBox(self.controlArea, "Plot")
         form = QtGui.QFormLayout(
@@ -393,44 +402,9 @@ class OWFreeViz(widget.OWWidget):
             spacing=8,
         )
         box.layout().addLayout(form)
-        color_cb = gui.comboBox(
-            box, self, "color_var", sendSelectedValue=True,
-            emptyString="(Same color)", contentsLength=10,
-            callback=self._update_color)
-
-        color_cb.setModel(self.color_varmodel)
-        form.addRow("Color", color_cb)
-        opacity_slider = gui.hSlider(
-            box, self, "opacity", minValue=50, maxValue=255, ticks=True,
-            createLabel=False, callback=self._update_color)
-        opacity_slider.setTickInterval(0)
-        opacity_slider.setPageStep(10)
-        form.addRow("Opacity", opacity_slider)
-
-        shape_cb = gui.comboBox(
-            box, self, "shape_var", contentsLength=10, sendSelectedValue=True,
-            emptyString="(Same shape)", callback=self._update_shape)
-        shape_cb.setModel(self.shape_varmodel)
-        form.addRow("Shape", shape_cb)
-
-        size_cb = gui.comboBox(
-            box, self, "size_var", contentsLength=10, sendSelectedValue=True,
-            emptyString="(Same size)", callback=self._update_size)
-        size_cb.setModel(self.size_varmodel)
-        form.addRow("Size", size_cb)
-        size_slider = gui.hSlider(
-            box, self, "point_size", minValue=3, maxValue=20, ticks=True,
-            createLabel=False, callback=self._update_size)
-        form.addRow(None, size_slider)
-
-        label_cb = gui.comboBox(
-            box, self, "label_var", contentsLength=10, sendSelectedValue=True,
-            emptyString="(No labels)", callback=self._update_labels)
-        label_cb.setModel(self.label_varmodel)
-        form.addRow("Label", label_cb)
 
         form.addRow(
-            "Jitter",
+            "Jittering",
             gui.comboBox(box, self, "jitter",
                          items=[text for text, _ in self.JitterAmount],
                          callback=self._update_xy)
@@ -480,14 +454,6 @@ class OWFreeViz(widget.OWWidget):
         gui.auto_commit(box, self, "autocommit", "Commit", box=False,
                         callback=self.commit)
 
-        self.plot = pg.PlotWidget(enableMouse=False, enableMenu=False)
-        self.plot.setFrameStyle(QtGui.QFrame.StyledPanel)
-        self.plot.plotItem.hideAxis("bottom")
-        self.plot.plotItem.hideAxis("left")
-        self.plot.plotItem.hideButtons()
-        self.plot.setAspectLocked(True)
-        self.plot.scene().installEventFilter(self)
-
         self.legend = linproj.LegendItem()
         self.legend.setParentItem(self.plot.getViewBox())
         self.legend.anchor((1, 0), (1, 0))
@@ -514,11 +480,14 @@ class OWFreeViz(widget.OWWidget):
         self._clear_plot()
         self._loop.cancel()
 
-        self.color_varmodel[:] = ["(Same color)"]
-        self.shape_varmodel[:] = ["(Same shape)"]
-        self.size_varmodel[:] = ["(Same size)"]
-        self.label_varmodel[:] = ["(No labels)"]
-        self.color_var = self.shape_var = self.size_var = self.label_var = ""
+    def init_attr_values(self):
+        domain = self.data and self.data.domain
+        for model in self.models:
+            model.set_domain(domain)
+        self.attr_color = domain and self.data.domain.class_var or None
+        self.attr_shape = None
+        self.attr_size = None
+        self.attr_label = None
 
     def set_data(self, data):
         """
@@ -538,46 +507,10 @@ class OWFreeViz(widget.OWWidget):
                 data = None
 
         self.data = data
+        self.init_attr_values()
         self.error(0, error_msg)
         if data is not None:
-            separator = itemmodels.VariableListModel.Separator
-            domain = data.domain
-            colorvars = ["(Same color)"] + list(domain)
-            colorvars_meta = [var for var in domain.metas
-                              if var.is_primitive()]
-            if colorvars_meta:
-                colorvars += [separator] + colorvars_meta
-            self.color_varmodel[:] = colorvars
-            self.color_var = domain.class_var.name
-
-            def is_discrete(var): return var.is_discrete
-            def is_continuous(var): return var.is_continuous
-            def is_string(var): return var.is_string
-            def filter_(func, iterable): return list(filter(func, iterable))
-            maxsymbols = len(linproj.ScatterPlotItem.Symbols) - 1
-            def can_be_shape(var):
-                return is_discrete(var) and len(var.values) < maxsymbols
-
-            shapevars = ["(Same shape)"] + filter_(can_be_shape, domain)
-            shapevars_meta = filter_(can_be_shape, domain.metas)
-            if shapevars_meta:
-                shapevars += [separator] + shapevars_meta
-            self.shape_varmodel[:] = shapevars
-
-            sizevars = ["(Same size)"] + filter_(is_continuous, domain)
-            sizevars_meta = filter_(is_continuous, domain.metas)
-            if sizevars_meta:
-                sizevars += [separator] + sizevars_meta
-            self.size_varmodel[:] = sizevars
-
-            labelvars = ["(No labels)"]
-            labelvars_meta = filter_(is_string, domain.metas)
-            if labelvars_meta:
-                labelvars += [separator] + labelvars_meta
-
-            self.label_varmodel[:] = labelvars
-
-            self.class_density_cb.setEnabled(domain.has_discrete_class)
+            self.class_density_cb.setEnabled(data.domain.has_discrete_class)
             self.openContext(data)
 
     def set_data_subset(self, data):
@@ -651,28 +584,23 @@ class OWFreeViz(widget.OWWidget):
         jittervec *= 0.01
         _, jitterfactor = self.JitterAmount[self.jitter]
 
-        colorvar = self._color_var()
-        shapevar = self._shape_var()
-        sizevar = self._size_var()
-        labelvar = self._label_var()
-
-        if colorvar is not None:
-            colors = plotutils.color_data(self.data, colorvar)[valid]
+        if self.attr_color is not None:
+            colors = plotutils.color_data(self.data, self.attr_color)[valid]
         else:
             colors = numpy.array([[192, 192, 192]])
             colors = numpy.tile(colors, (X.shape[0], 1))
 
         pendata = plotutils.pen_data(colors * 0.8)
         colors = numpy.hstack(
-            [colors, numpy.full((colors.shape[0], 1), float(self.opacity))])
+            [colors, numpy.full((colors.shape[0], 1), float(self.alpha_value))])
         brushdata = plotutils.brush_data(colors)
 
-        shapedata = plotutils.shape_data(self.data, shapevar)[valid]
+        shapedata = plotutils.shape_data(self.data, self.attr_shape)[valid]
         sizedata = size_data(
-            self.data, sizevar, pointsize=self.point_size)[valid]
-        if labelvar is not None:
-            labeldata = plotutils.column_data(self.data, labelvar, valid)
-            labeldata = [labelvar.str_val(val) for val in labeldata]
+            self.data, self.attr_size, pointsize=self.point_width)[valid]
+        if self.attr_label is not None:
+            labeldata = plotutils.column_data(self.data, self.attr_label, valid)
+            labeldata = [self.attr_label.str_val(val) for val in labeldata]
         else:
             labeldata = None
 
@@ -739,21 +667,14 @@ class OWFreeViz(widget.OWWidget):
         self._update_labels()
         self._update_density()
 
-    def _color_var(self):
-        if self.color_var != "":
-            return self.data.domain[self.color_var]
-        else:
-            return None
-
     def _update_color(self):
         if self.plotdata is None:
             return
 
-        colorvar = self._color_var()
         validmask = self.plotdata.validmask
         selectionmask = self.plotdata.selectionmask
-        if colorvar is not None:
-            colors = plotutils.color_data(self.data, colorvar)[validmask]
+        if self.attr_color is not None:
+            colors = plotutils.color_data(self.data, self.attr_color)[validmask]
         else:
             colors = numpy.array([[192, 192, 192]])
             colors = numpy.tile(colors, (self.plotdata.X.shape[0], 1))
@@ -764,7 +685,7 @@ class OWFreeViz(widget.OWWidget):
 
         pendata = plotutils.pen_data(colors * 0.8, pointstyle)
         colors = numpy.hstack(
-            [colors, numpy.full((colors.shape[0], 1), float(self.opacity))])
+            [colors, numpy.full((colors.shape[0], 1), float(self.alpha_value))])
 
         brushdata = plotutils.brush_data(colors, )
         if self.plotdata.subsetmask is not None:
@@ -778,55 +699,34 @@ class OWFreeViz(widget.OWWidget):
 
         self._update_legend()
 
-    def _shape_var(self):
-        if self.shape_var != "":
-            return self.data.domain[self.shape_var]
-        else:
-            return None
-
     def _update_shape(self):
         if self.plotdata is None:
             return
-        shapevar = self._shape_var()
         validmask = self.plotdata.validmask
-        shapedata = plotutils.shape_data(self.data, shapevar)
+        shapedata = plotutils.shape_data(self.data, self.attr_shape)
         shapedata = shapedata[validmask]
         self.plotdata.shapedata = shapedata
         self.plotdata.mainitem.setSymbol(shapedata)
         self._update_legend()
 
-    def _size_var(self):
-        if self.size_var != "":
-            return self.data.domain[self.size_var]
-        else:
-            return None
-
     def _update_size(self):
         if self.plotdata is None:
             return
-        sizevar = self._size_var()
         validmask = self.plotdata.validmask
 
         sizedata = size_data(
-            self.data, sizevar, pointsize=self.point_size)[validmask]
+            self.data, self.attr_size, pointsize=self.point_width)[validmask]
         self.plotdata.sizedata = sizedata
         self.plotdata.mainitem.setSize(sizedata)
-
-    def _label_var(self):
-        if self.label_var != "":
-            return self.data.domain[self.label_var]
-        else:
-            return None
 
     def _update_labels(self):
         if self.plotdata is None:
             return
-        labelvar = self._label_var()
 
-        if labelvar is not None:
+        if self.attr_label is not None:
             labeldata = plotutils.column_data(
-                self.data, labelvar, self.plotdata.validmask)
-            labeldata = [labelvar.str_val(val) for val in labeldata]
+                self.data, self.attr_label, self.plotdata.validmask)
+            labeldata = [self.attr_label.str_val(val) for val in labeldata]
         else:
             labeldata = None
 
@@ -845,13 +745,18 @@ class OWFreeViz(widget.OWWidget):
                 self.plot.addItem(item)
                 self.plotdata.labelitems.append(item)
 
+    update_point_size = update_sizes = _update_size
+    update_alpha_value = update_colors = _update_color
+    update_shapes = _update_shape
+    update_labels = _update_labels
+
     def _update_legend(self):
         self.legend.clear()
         if self.plotdata is None:
             return
 
         legend_data = plotutils.legend_data(
-            self._color_var(), self._shape_var())
+            self.attr_color, self.attr_shape)
         self.legend.clear()
         self.legend.setVisible(bool(legend_data))
 
