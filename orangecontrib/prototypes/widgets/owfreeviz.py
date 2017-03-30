@@ -340,6 +340,11 @@ class OWFreeViz(widget.OWWidget):
     jitter = settings.Setting(0)
     class_density = settings.Setting(False)
 
+    class Error(widget.OWWidget.Error):
+        no_class_var = widget.Msg("Need a class variable")
+        not_enough_class_vas = widget.Msg("Needs discrete class variable " \
+                                          "with at lest 2 values")
+
     def __init__(self):
         super().__init__()
 
@@ -496,20 +501,18 @@ class OWFreeViz(widget.OWWidget):
         """
         self.closeContext()
         self.clear()
-        error_msg = ""
+        self.Error.clear()
         if data is not None:
             if data.domain.class_var is None:
-                error_msg = "Need a class variable"
+                self.Error.no_class_var()
                 data = None
             elif data.domain.class_var.is_discrete and \
                     len(data.domain.class_var.values) < 2:
-                error_msg = "Needs discrete class variable with at" \
-                            " lest 2 values"
+                self.Error.not_enough_class_vas()
                 data = None
 
         self.data = data
         self.init_attr_values()
-        self.error(0, error_msg)
         if data is not None:
             self.class_density_cb.setEnabled(data.domain.has_discrete_class)
             self.openContext(data)

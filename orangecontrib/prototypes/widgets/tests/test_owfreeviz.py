@@ -25,3 +25,9 @@ class TestOWFreeViz(WidgetTest):
         self.send_signal("Data", Table(datasets.path("testing_dataset_cls")))
         self.send_signal("Data", Table(datasets.path("testing_dataset_reg")))
 
+    def test_error_msg(self):
+        data = self.data[:, list(range(len(self.data.domain.attributes)))]
+        self.send_signal("Data", data)
+        self.assertTrue(self.widget.Error.no_class_var.is_shown())
+        self.send_signal("Data", None)
+        self.assertFalse(self.widget.Error.no_class_var.is_shown())
