@@ -15,6 +15,7 @@ import pyqtgraph as pg
 
 import Orange.data
 import Orange.projection
+from Orange.canvas import report
 
 from Orange.widgets import widget, gui, settings
 from Orange.widgets.utils import classdensity
@@ -341,6 +342,8 @@ class OWFreeViz(widget.OWWidget):
     alpha_value = settings.Setting(128)
     jitter = settings.Setting(0)
     class_density = settings.Setting(False)
+
+    graph_name = "plot.plotItem"
 
     class Error(widget.OWWidget.Error):
         no_class_var = widget.Msg("Need a class variable")
@@ -1055,6 +1058,18 @@ class OWFreeViz(widget.OWWidget):
         tooltip = format_tooltip(self.data, columns=..., rows=indices)
         QtGui.QToolTip.showText(event.screenPos(), tooltip, widget=self.plot)
         return True
+
+    def send_report(self):
+        self.report_plot()
+        caption = report.render_items_vert((
+            ("Colors", self.attr_color),
+            ("Shape", self.attr_shape),
+            ("Size", self.attr_size),
+            ("Label", self.attr_label),
+            ("Jittering", self.jitter > 0 and
+             self.controls.jitter.currentText()),
+        ))
+        self.report_caption(caption)
 
 
 def format_tooltip(table, columns, rows, maxattrs=5, maxrows=5):
