@@ -80,6 +80,7 @@ class SizeDelegate(QStyledItemDelegate):
         value = index.data(Qt.DisplayRole)
         if isinstance(value, numbers.Integral):
             option.text = sizeformat(int(value))
+            option.displayAlignment = Qt.AlignRight | Qt.AlignVCenter
 
 
 class NumericalDelegate(QStyledItemDelegate):
@@ -154,7 +155,7 @@ class OWDataSets(widget.OWWidget):
         )
         self.mainArea.layout().addWidget(self.splitter)
         self.controlArea.layout().addStretch(10)
-        gui.auto_commit(self.controlArea, self, "auto_commit", "Commit")
+        gui.auto_commit(self.controlArea, self, "auto_commit", "Send Data")
 
         model = QStandardItemModel(self)
         model.setHorizontalHeaderLabels(HEADER)
