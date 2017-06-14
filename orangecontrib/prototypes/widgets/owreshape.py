@@ -12,8 +12,9 @@ from Orange.widgets.utils import itemmodels
 
 
 class OWReshape(widget.OWWidget):
-    name = "Reshape records"
+    name = "To Shopping List"
     description = "Reshape from a 'wide' records table to 'long' format."
+    icon = "icons/ToShoppingList.svg"
 
     inputs = [("Data", Orange.data.Table, "set_data")]
     outputs = [("Data", Orange.data.Table)]
