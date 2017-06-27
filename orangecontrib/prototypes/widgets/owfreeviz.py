@@ -23,7 +23,7 @@ from Orange.widgets.utils.annotated_data import (create_annotated_table,
                                                  ANNOTATED_DATA_SIGNAL_NAME)
 from Orange.widgets.utils.plot import OWPlotGUI
 from Orange.widgets.visualize import owlinearprojection as linproj
-from Orange.widgets.unsupervised.owmds import mdsplotutils as plotutils
+from Orange.widgets.unsupervised.owmds import Mdsplotutils as plotutils
 
 from orangecontrib.prototypes.projection.freeviz import freeviz
 from orangecontrib.prototypes.widgets.utils.axisitem import AxisItem
