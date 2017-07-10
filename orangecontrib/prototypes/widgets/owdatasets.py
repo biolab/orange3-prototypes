@@ -54,6 +54,13 @@ def list_local():
     # type: () -> Dict[Tuple[str, str], dict]
     return LocalFiles(local_cache_path()).allinfo()
 
+def format_info(n_all, n_cached):
+    plural = lambda x: '' if x == 1 else 's'
+    return "{} data set{}\n{} data set{} cached".format(
+            n_all,
+            plural(n_all),
+            n_cached if n_cached else 'No',
+            plural(n_cached))
 
 def format_exception(error):
     # type: (BaseException) -> str
@@ -274,9 +281,7 @@ class OWDataSets(widget.OWWidget):
             self.__on_selection
         )
         # Update the info text
-        self.infolabel.setText(
-            "{} datasets \n{} datasets cached"
-            .format(model.rowCount(), len(allinfolocal)))
+        self.infolabel.setText(format_info(model.rowCount(), len(allinfolocal)))
 
         if current_index != -1:
             selmodel = self.view.selectionModel()
@@ -296,10 +301,8 @@ class OWDataSets(widget.OWWidget):
             item.setData(" " if info.islocal else "", Qt.DisplayRole)
             allinfo.append(info)
 
-        self.infolabel.setText(
-            "{} datasets\n{} datasets cached"
-            .format(model.rowCount(), sum(info.islocal for info in allinfo))
-        )
+        self.infolabel.setText(format_info(
+            model.rowCount(), sum(info.islocal for info in allinfo)))
 
     def selected_dataset(self):
         """
