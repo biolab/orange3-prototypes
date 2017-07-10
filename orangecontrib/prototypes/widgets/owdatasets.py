@@ -234,7 +234,8 @@ class OWDataSets(widget.OWWidget):
                 title=info.get("title", filename),
                 datetime=info.get("datetime", None),
                 description=info.get("description", None),
-                reference=info.get("reference", None),
+                references=info.get("references", None),
+                year=info.get("year", None),
                 instances=info.get("instances", None),
                 variables=info.get("variables", None),
                 target=info.get("target", None),
@@ -477,24 +478,27 @@ def variable_icon(name):
         return gui.attributeIconDict[-1]
 
 
+def make_html_list(items):
+    def format_li(i):
+        return '<li>{}</li>'.format(escape(i))
+
+    if not items:
+        return ''
+    html = ["<ul>"] + [format_li(i) for i in items] + ["</ul>"]
+    return '\n'.join(html)
+
+
 def description_html(datainfo):
     # type: (namespace) -> str
     """
     Summarize a datainfo as a html fragment.
     """
-    parts = [
-        ("Name", datainfo.title),
-        ("Description", datainfo.description),
-        ("Reference", datainfo.reference),
-    ]
-
-    parts = [(t, d) for t, d in parts if d]
-    dttemplate = '<dt><b>{}</b></dt><dd>{}</dd>'
-
-    def format_dt(t, d):
-        return dttemplate.format(escape(t), escape(d))
-
-    html = ["<dl>"] + list(format_dt(*p) for p in parts) + ["</dl>"]
+    year = "  ({})".format(str(datainfo.year)) if datainfo.year else ""
+    html = ["<b>{}</b>{}".format(escape(datainfo.title), year)]
+    html.append("<p>{}</p>".format(escape(datainfo.description)))
+    refs = make_html_list(datainfo.references)
+    if refs:
+        html.append("<em>References</em>\n" + refs)
     return "\n".join(html)
 
 
