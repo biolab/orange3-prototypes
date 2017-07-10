@@ -54,6 +54,13 @@ def list_local():
     # type: () -> Dict[Tuple[str, str], dict]
     return LocalFiles(local_cache_path()).allinfo()
 
+def format_info(n_all, n_cached):
+    plural = lambda x: '' if x == 1 else 's'
+    return "{} data set{}\n{} data set{} cached".format(
+            n_all,
+            plural(n_all),
+            n_cached if n_cached else 'No',
+            plural(n_cached))
 
 def format_exception(error):
     # type: (BaseException) -> str
@@ -70,7 +77,7 @@ class Header(enum.IntEnum):
     Target = 5
     Tags = 6
 
-HEADER = ["", "Name", "Size", "Instances", "Variables", "Class", "Tags"]
+HEADER = ["", "Title", "Size", "Instances", "Variables", "Target", "Tags"]
 
 
 class SizeDelegate(QStyledItemDelegate):
@@ -227,7 +234,8 @@ class OWDataSets(widget.OWWidget):
                 title=info.get("title", filename),
                 datetime=info.get("datetime", None),
                 description=info.get("description", None),
-                reference=info.get("reference", None),
+                references=info.get("references", None),
+                year=info.get("year", None),
                 instances=info.get("instances", None),
                 variables=info.get("variables", None),
                 target=info.get("target", None),
@@ -274,9 +282,7 @@ class OWDataSets(widget.OWWidget):
             self.__on_selection
         )
         # Update the info text
-        self.infolabel.setText(
-            "{} datasets \n{} datasets cached"
-            .format(model.rowCount(), len(allinfolocal)))
+        self.infolabel.setText(format_info(model.rowCount(), len(allinfolocal)))
 
         if current_index != -1:
             selmodel = self.view.selectionModel()
@@ -296,10 +302,8 @@ class OWDataSets(widget.OWWidget):
             item.setData(" " if info.islocal else "", Qt.DisplayRole)
             allinfo.append(info)
 
-        self.infolabel.setText(
-            "{} datasets\n{} datasets cached"
-            .format(model.rowCount(), sum(info.islocal for info in allinfo))
-        )
+        self.infolabel.setText(format_info(
+            model.rowCount(), sum(info.islocal for info in allinfo)))
 
     def selected_dataset(self):
         """
@@ -474,24 +478,27 @@ def variable_icon(name):
         return gui.attributeIconDict[-1]
 
 
+def make_html_list(items):
+    def format_li(i):
+        return '<li>{}</li>'.format(escape(i))
+
+    if not items:
+        return ''
+    html = ["<ul>"] + [format_li(i) for i in items] + ["</ul>"]
+    return '\n'.join(html)
+
+
 def description_html(datainfo):
     # type: (namespace) -> str
     """
     Summarize a datainfo as a html fragment.
     """
-    parts = [
-        ("Name", datainfo.title),
-        ("Description", datainfo.description),
-        ("Reference", datainfo.reference),
-    ]
-
-    parts = [(t, d) for t, d in parts if d]
-    dttemplate = '<dt><b>{}</b></dt><dd>{}</dd>'
-
-    def format_dt(t, d):
-        return dttemplate.format(escape(t), escape(d))
-
-    html = ["<dl>"] + list(format_dt(*p) for p in parts) + ["</dl>"]
+    year = "  ({})".format(str(datainfo.year)) if datainfo.year else ""
+    html = ["<b>{}</b>{}".format(escape(datainfo.title), year)]
+    html.append("<p>{}</p>".format(escape(datainfo.description)))
+    refs = make_html_list(datainfo.references)
+    if refs:
+        html.append("<em>References</em>\n" + refs)
     return "\n".join(html)
 
 
