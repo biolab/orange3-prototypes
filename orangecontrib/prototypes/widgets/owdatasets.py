@@ -70,7 +70,7 @@ class Header(enum.IntEnum):
     Target = 5
     Tags = 6
 
-HEADER = ["", "Name", "Size", "Instances", "Variables", "Class", "Tags"]
+HEADER = ["", "Title", "Size", "Instances", "Variables", "Target", "Tags"]
 
 
 class SizeDelegate(QStyledItemDelegate):
