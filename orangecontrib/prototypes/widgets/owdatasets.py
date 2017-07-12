@@ -1,9 +1,10 @@
-import sys
-import os
-import logging
-import traceback
 import enum
+import logging
 import numbers
+import os
+import re
+import sys
+import traceback
 
 from xml.sax.saxutils import escape
 from concurrent.futures import ThreadPoolExecutor, Future
@@ -234,7 +235,9 @@ class OWDataSets(widget.OWWidget):
                 title=info.get("title", filename),
                 datetime=info.get("datetime", None),
                 description=info.get("description", None),
-                references=info.get("references", None),
+                references=info.get("references", []),
+                seealso=info.get("seealso", []),
+                source=info.get("source", None),
                 year=info.get("year", None),
                 instances=info.get("instances", None),
                 variables=info.get("variables", None),
@@ -478,14 +481,24 @@ def variable_icon(name):
         return gui.attributeIconDict[-1]
 
 
-def make_html_list(items):
-    def format_li(i):
-        return '<li>{}</li>'.format(escape(i))
+def escape_with_urls(s):
+    match = re.search("(?P<pre>.*?)(?P<url>https?://\S+)(?P<post>.*)",
+                      s, flags=re.DOTALL)
+    if match is None:
+        return escape(s)
+    pre = escape(match.group('pre'))
+    url = '<a href="{0}">{0}</a>'.format(escape(match.group('url')))
+    post = escape_with_urls(match.group('post'))
+    return pre + url + post
 
-    if not items:
-        return ''
-    html = ["<ul>"] + [format_li(i) for i in items] + ["</ul>"]
-    return '\n'.join(html)
+
+def make_html_list(items):
+    style = '"margin: 5px; text-indent: -40px; margin-left: 40px;"'
+    def format_item(i):
+        return '<p style={}><small>{}</small></p>'.format(
+            style, escape_with_urls(i))
+
+    return '\n'.join([format_item(i) for i in items])
 
 
 def description_html(datainfo):
@@ -493,12 +506,19 @@ def description_html(datainfo):
     """
     Summarize a datainfo as a html fragment.
     """
-    year = "  ({})".format(str(datainfo.year)) if datainfo.year else ""
-    html = ["<b>{}</b>{}".format(escape(datainfo.title), year)]
-    html.append("<p>{}</p>".format(escape(datainfo.description)))
+    html = []
+    year = " ({})".format(str(datainfo.year)) if datainfo.year else ""
+    html.append("<b>{}</b>{}".format(escape(datainfo.title), year))
+    if datainfo.source:
+        html.append("<br />\n<small>Source: {}</small>".format(
+            escape_with_urls(datainfo.source)))
+    html.append("<p>{}</p>".format(escape_with_urls(datainfo.description)))
+    seealso = make_html_list(datainfo.seealso)
+    if seealso:
+        html.append("<small><b>See Also</b>\n" + seealso + "</small>")
     refs = make_html_list(datainfo.references)
     if refs:
-        html.append("<em>References</em>\n" + refs)
+        html.append("<small><b>References</b>\n" + refs + "</small>")
     return "\n".join(html)
 
 
