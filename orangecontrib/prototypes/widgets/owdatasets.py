@@ -38,9 +38,11 @@ def local_cache_path():
     return os.path.join(data_dir(), "datasets")
 
 
-def ensure_local(domain, filename, progress_advance=None):
+def ensure_local(domain, filename, force=False, progress_advance=None):
     localfiles = LocalFiles(local_cache_path(),
                             serverfiles=ServerFiles(server=INDEX_URL))
+    if force:
+        localfiles.download(domain, filename, callback=progress_advance)
     return localfiles.localpath_download(
         domain, filename, callback=progress_advance)
 
@@ -229,6 +231,11 @@ class OWDataSets(widget.OWWidget):
             else:
                 info = allinfolocal[prefix, filename]
             islocal = (prefix, filename) in allinfolocal
+            isremote = (prefix, filename) in allinforemote
+            outdated = islocal and isremote and (
+                allinforemote[prefix, filename].get('version', '') !=
+                allinfolocal[prefix, filename].get('version', ''))
+            islocal &= not outdated
 
             return namespace(
                 prefix=prefix, filename=filename,
@@ -245,7 +252,8 @@ class OWDataSets(widget.OWWidget):
                 missing=info.get("missing", None),
                 tags=info.get("tags", []),
                 size=info.get("size", None),
-                islocal=islocal
+                islocal=islocal,
+                outdated=outdated
             )
 
         model = QStandardItemModel(self)
@@ -266,7 +274,8 @@ class OWDataSets(widget.OWWidget):
             item5.setData(datainfo.variables, Qt.DisplayRole)
             item6 = QStandardItem()
             item6.setData(datainfo.target, Qt.DisplayRole)
-            item6.setIcon(variable_icon(datainfo.target))
+            if datainfo.target:
+                item6.setIcon(variable_icon(datainfo.target))
             item7 = QStandardItem()
             item7.setData(", ".join(datainfo.tags), Qt.DisplayRole)
             row = [item1, item2, item3, item4, item5, item6, item7]
@@ -377,7 +386,7 @@ class OWDataSets(widget.OWWidget):
                 self.setBlocking(True)
 
                 f = self._executor.submit(
-                    ensure_local, di.prefix, di.filename,
+                    ensure_local, di.prefix, di.filename, force=di.outdated,
                     progress_advance=callback)
                 w = FutureWatcher(f, parent=self)
                 w.done.connect(self.__commit_complete)
