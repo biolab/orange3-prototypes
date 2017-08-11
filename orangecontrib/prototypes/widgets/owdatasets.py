@@ -2,7 +2,6 @@ import enum
 import logging
 import numbers
 import os
-import re
 import sys
 import traceback
 
@@ -57,6 +56,7 @@ def list_local():
     # type: () -> Dict[Tuple[str, str], dict]
     return LocalFiles(local_cache_path()).allinfo()
 
+
 def format_info(n_all, n_cached):
     plural = lambda x: '' if x == 1 else 's'
     return "{} data set{}\n{} data set{} cached".format(
@@ -64,6 +64,7 @@ def format_info(n_all, n_cached):
             plural(n_all),
             n_cached if n_cached else 'No',
             plural(n_cached))
+
 
 def format_exception(error):
     # type: (BaseException) -> str
@@ -127,7 +128,7 @@ class OWDataSets(widget.OWWidget):
 
         box = gui.widgetBox(self.controlArea, "Info")
 
-        self.infolabel = QLabel(text="Initializing\n\n")
+        self.infolabel = QLabel(text="Initializing...\n\n")
         box.layout().addWidget(self.infolabel)
 
         self.splitter = QSplitter(orientation=Qt.Vertical)
@@ -490,22 +491,10 @@ def variable_icon(name):
         return gui.attributeIconDict[-1]
 
 
-def escape_with_urls(s):
-    match = re.search("(?P<pre>.*?)(?P<url>https?://\S+)(?P<post>.*)",
-                      s, flags=re.DOTALL)
-    if match is None:
-        return escape(s)
-    pre = escape(match.group('pre'))
-    url = '<a href="{0}">{0}</a>'.format(escape(match.group('url')))
-    post = escape_with_urls(match.group('post'))
-    return pre + url + post
-
-
 def make_html_list(items):
     style = '"margin: 5px; text-indent: -40px; margin-left: 40px;"'
     def format_item(i):
-        return '<p style={}><small>{}</small></p>'.format(
-            style, escape_with_urls(i))
+        return '<p style={}><small>{}</small></p>'.format(style, i)
 
     return '\n'.join([format_item(i) for i in items])
 
@@ -513,15 +502,13 @@ def make_html_list(items):
 def description_html(datainfo):
     # type: (namespace) -> str
     """
-    Summarize a datainfo as a html fragment.
+    Summarize a data info as a html fragment.
     """
     html = []
     year = " ({})".format(str(datainfo.year)) if datainfo.year else ""
-    html.append("<b>{}</b>{}".format(escape(datainfo.title), year))
-    if datainfo.source:
-        html.append("<br />\n<small>Source: {}</small>".format(
-            escape_with_urls(datainfo.source)))
-    html.append("<p>{}</p>".format(escape_with_urls(datainfo.description)))
+    source = ", from {}".format(datainfo.source) if datainfo.source else ""
+    html.append("<b>{}</b>{}{}".format(escape(datainfo.title), year, source))
+    html.append("<p>{}</p>".format(datainfo.description))
     seealso = make_html_list(datainfo.seealso)
     if seealso:
         html.append("<small><b>See Also</b>\n" + seealso + "</small>")
