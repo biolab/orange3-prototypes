@@ -278,7 +278,7 @@ class OWDataSets(widget.OWWidget):
             if datainfo.target:
                 item6.setIcon(variable_icon(datainfo.target))
             item7 = QStandardItem()
-            item7.setData(", ".join(datainfo.tags), Qt.DisplayRole)
+            item7.setData(", ".join(datainfo.tags) if datainfo.tags else "", Qt.DisplayRole)
             row = [item1, item2, item3, item4, item5, item6, item7]
             model.appendRow(row)
 
