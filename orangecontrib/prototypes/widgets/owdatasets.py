@@ -492,6 +492,8 @@ def variable_icon(name):
 
 
 def make_html_list(items):
+    if items is None:
+        return ''
     style = '"margin: 5px; text-indent: -40px; margin-left: 40px;"'
     def format_item(i):
         return '<p style={}><small>{}</small></p>'.format(style, i)
