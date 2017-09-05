@@ -5,12 +5,22 @@ from PyQt4.QtGui import QApplication
 
 from Orange.data import Table, Domain, ContinuousVariable
 from Orange.preprocess import RemoveNaNColumns, Impute
-from Orange.distance import (Euclidean, Manhattan, Cosine, Jaccard, SpearmanR,
-                             SpearmanRAbsolute, PearsonR, PearsonRAbsolute)
+from Orange import distance
 from Orange.widgets import gui
 from Orange.widgets.settings import Setting
 from Orange.widgets.widget import OWWidget
 
+METRICS = [
+    ("Euclidean", distance.Euclidean),
+    ("Manhattan", distance.Manhattan),
+    ("Mahalanobis", distance.Mahalanobis),
+    ("Cosine", distance.Cosine),
+    ("Jaccard", distance.Jaccard),
+    ("Spearman", distance.SpearmanR),
+    ("Absolute Spearman", distance.SpearmanRAbsolute),
+    ("Pearson", distance.PearsonR),
+    ("Absolute Pearson", distance.PearsonRAbsolute),
+]
 
 class OWNeighbours(OWWidget):
     name = "Neighbours"
@@ -31,9 +41,6 @@ class OWNeighbours(OWWidget):
     _data_info_default = "No data."
     _ref_info_default = "No reference."
 
-    DISTANCES = [Euclidean, Manhattan, Cosine, Jaccard, SpearmanR,
-                 SpearmanRAbsolute, PearsonR, PearsonRAbsolute]
-
     def __init__(self):
         super().__init__()
 
@@ -46,7 +53,7 @@ class OWNeighbours(OWWidget):
         box = gui.vBox(self.controlArea, "Settings")
         self.distance_combo = gui.comboBox(
             box, self, "distance_index", orientation=Qt.Horizontal,
-            label="Distance: ", items=[d.name for d in self.DISTANCES],
+            label="Distance: ", items=[d[0] for d in METRICS],
             callback=self.settings_changed)
 
         check_box = gui.hBox(box)
@@ -86,7 +93,7 @@ class OWNeighbours(OWWidget):
         if self.data is None or self.reference is None:
             self.send("Neighbors", None)
             return
-        distance = self.DISTANCES[self.distance_index]
+        distance = METRICS[self.distance_index][1]
         n_data, n_ref = len(self.data), len(self.reference)
         all_data = Table.concatenate([self.reference, self.data], 0)
         pp_all_data = Impute()(RemoveNaNColumns()(all_data))
