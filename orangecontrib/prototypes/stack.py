@@ -29,6 +29,28 @@ class StackedModel(Model):
 
 
 class StackedLearner(Learner):
+    """
+    Constructs a stacked model by fitting an aggregator
+    over the results of base models.
+
+    K-fold cross-validation is used to get predictions of the base learners
+    and fit the aggregator to obtain a stacked model.
+
+    Args:
+        learners (list):
+            list of `Learner`s used for base models
+
+        aggregate (Learner):
+            Learner used to fit the meta model, aggregating predictions
+            of base models
+
+        k (int):
+            number of folds for cross-validation
+
+    Returns:
+        instance of StackedModel
+    """
+
     __returns__ = StackedModel
 
     def __init__(self, learners, aggregate, k=5, preprocessors=None):
@@ -53,11 +75,24 @@ class StackedLearner(Learner):
 
 
 class StackedClassificationLearner(StackedLearner, LearnerClassification):
+    """
+    Subclass of StackedLearner intended for classification tasks.
+
+    Same as the super class, but has a default
+    classification-specific aggregator (`LogisticRegressionLearner`).
+    """
+
     def __init__(self, learners, aggregate=LogisticRegressionLearner(), k=5):
         super().__init__(learners=learners, aggregate=aggregate, k=k)
 
 
 class StackedRegressionLearner(StackedLearner, LearnerRegression):
+    """
+    Subclass of StackedLearner intended for regression tasks.
+
+    Same as the super class, but has a default
+    regression-specific aggregator (`RidgeRegressionLearner`).
+    """
     def __init__(self, learners, aggregate=RidgeRegressionLearner(), k=5):
         super().__init__(learners=learners, aggregate=aggregate, k=k)
 
