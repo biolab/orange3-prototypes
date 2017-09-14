@@ -22,7 +22,9 @@ class StackedModel(Model):
         probs = [m(data, Model.Probs) for m in self.models]
         X = np.hstack(probs)
         Y = np.repeat(np.nan, X.shape[0])
-        stacked_data = Table(self.aggregate.domain, X, Y)
+        stacked_data = data.transform(self.aggregate.domain)
+        stacked_data.X = X
+        stacked_data.Y = Y
         return self.aggregate(stacked_data, Model.ValueProbs)
 
 
@@ -42,7 +44,9 @@ class StackedLearner(Learner):
         dom = Domain([ContinuousVariable('f{}'.format(i))
                       for i in range(1, X.shape[1] + 1)],
                      data.domain.class_var)
-        stacked_data = Table(dom, X, res.actual)
+        stacked_data = data.transform(dom)
+        stacked_data.X = X
+        stacked_data.Y = res.actual
         models = [l(data) for l in self.learners]
         aggregate_model = self.aggregate(stacked_data)
         return StackedModel(models, aggregate_model)
