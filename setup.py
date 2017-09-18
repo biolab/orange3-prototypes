@@ -40,6 +40,7 @@ if __name__ == '__main__':
             'pyqtgraph',
             'AnyQt>=0.0.8',
             'serverfiles',
+            'BeautifulSoup4',  # for OW1Ka
         ],
         extras_require={
             ':python_version<"3.5"': [
