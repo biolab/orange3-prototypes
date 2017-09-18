@@ -26,7 +26,9 @@ class URLComboBox(QComboBox):
 
     def __init__(self, parent, model_list, **kwargs):
         super().__init__(parent, **kwargs)
-        self.setModel(self.Model(iterable=model_list, parent=self))
+        self.setModel(self.Model(iterable=model_list,
+                                 flags=Qt.ItemIsSelectable | Qt.ItemIsEnabled | Qt.ItemIsEditable,
+                                 parent=self))
 
     def setTitleFor(self, i, title):
         self.model().setData(self.model().index(i, 0), title, self.Model.TitleRole)
