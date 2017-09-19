@@ -34,6 +34,8 @@ class URLComboBox(QComboBox):
         self.model().setData(self.model().index(i, 0), title, self.Model.TitleRole)
 
 
+VALID_URL_HELP = 'https://docs.google.com/spreadsheets/<DOCUMENT_ID>/'
+
 class OWGoogleSheets(widget.OWWidget):
     name = "Google Sheets"
     description = "Read data from a Google Sheets spreadsheet."
@@ -52,16 +54,13 @@ class OWGoogleSheets(widget.OWWidget):
         super().__init__()
         self.table = None
 
-        timer = QTimer(self,
-                       singleShot=True,
-                       timeout=self.load_url)
         vb = gui.vBox(self.controlArea, 'Google Sheets')
         hb = gui.hBox(vb)
         self.combo = combo = URLComboBox(
             hb, self.recent, editable=True, minimumWidth=400,
             insertPolicy=QComboBox.InsertAtTop,
-            editTextChanged=lambda: timer.start(500),
-            currentIndexChanged=lambda: (timer.stop(), self.load_url()))
+            toolTip='Format: ' + VALID_URL_HELP,
+            currentIndexChanged=lambda: self.load_url())
         hb.layout().addWidget(QLabel('URL:', hb))
         hb.layout().addWidget(combo)
         hb.layout().setStretch(1, 2)
