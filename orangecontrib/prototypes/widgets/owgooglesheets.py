@@ -1,7 +1,7 @@
 import logging
 
-from PyQt4.QtCore import QTimer, Qt
-from PyQt4.QtGui import QApplication, QComboBox, QLabel
+from AnyQt.QtCore import QTimer, Qt
+from AnyQt.QtWidgets import QApplication, QComboBox, QLabel, QStyledItemDelegate
 
 from Orange.util import try_
 from Orange.widgets.utils.itemmodels import PyListModel
@@ -13,25 +13,25 @@ log = logging.getLogger(__name__)
 
 class URLComboBox(QComboBox):
 
-    class Model(PyListModel):
+    class TitleShowingPopupDelegate(QStyledItemDelegate):
         TitleRole = Qt.UserRole + 1
 
-        def data(self, index, role=Qt.DisplayRole):
-            super_data = super().data(index, role)
-            if role == Qt.DisplayRole:
-                title = super().data(index, self.TitleRole)
-                if title:
-                    return '{} ({})'.format(title, super_data)
-            return super_data
+        def displayText(self, url, _):
+            i = self.parent().findText(url, Qt.MatchExactly)
+            model = self.parent().model()
+            title = model.data(model.index(i, 0), self.TitleRole)
+            return ('{0} ({1})' if title else '{1}').format(title, url)
 
     def __init__(self, parent, model_list, **kwargs):
         super().__init__(parent, **kwargs)
-        self.setModel(self.Model(iterable=model_list,
-                                 flags=Qt.ItemIsSelectable | Qt.ItemIsEnabled | Qt.ItemIsEditable,
-                                 parent=self))
+        self.setModel(PyListModel(iterable=model_list,
+                                  flags=Qt.ItemIsSelectable | Qt.ItemIsEnabled | Qt.ItemIsEditable,
+                                  parent=self))
+        self.view().setItemDelegate(self.TitleShowingPopupDelegate(self))
 
     def setTitleFor(self, i, title):
-        self.model().setData(self.model().index(i, 0), title, self.Model.TitleRole)
+        self.model().setData(self.model().index(i, 0), title,
+                             self.TitleShowingPopupDelegate.TitleRole)
 
 
 VALID_URL_HELP = 'https://docs.google.com/spreadsheets/<DOCUMENT_ID>/'
