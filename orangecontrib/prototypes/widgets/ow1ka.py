@@ -6,6 +6,7 @@ from itertools import chain, repeat
 from urllib.parse import urlparse
 
 from bs4 import BeautifulSoup
+import numpy as np
 
 from AnyQt.QtCore import QTimer, Qt, QPoint
 from AnyQt.QtGui import QValidator
@@ -13,6 +14,7 @@ from AnyQt.QtWidgets import QApplication, QComboBox, QLabel, QToolTip, QStyledIt
 
 from Orange.data.io import TabReader
 from Orange.util import try_
+from Orange.widgets.utils.domaineditor import DomainEditor
 from Orange.widgets.utils.itemmodels import PyListModel
 from Orange.widgets import widget, gui, settings
 from Orange.data import Table
@@ -70,9 +72,14 @@ class OW1ka(widget.OWWidget):
     want_main_area = False
     resizing_enabled = False
 
+    settingsHandler = settings.PerfectDomainContextHandler(
+        match_values=settings.PerfectDomainContextHandler.MATCH_VALUES_ALL
+    )
+
     recent = settings.Setting([])
     reload_idx = settings.Setting(0)
     autocommit = settings.Setting(True)
+    domain_editor = settings.SettingProvider(DomainEditor)
 
     UserAdviceMessages = [
         widget.Message(
@@ -139,9 +146,21 @@ class OW1ka(widget.OWWidget):
                      items=[i[0] for i in RELOAD_TIMES],
                      callback=_on_reload_changed)
 
+        box = gui.widgetBox(self.controlArea, "Columns (Double-click to edit)")
+        self.domain_editor = DomainEditor(self)
+        editor_model = self.domain_editor.model()
+
+        def editorDataChanged():
+            self.apply_domain_edit()
+            self.commit()
+
+        editor_model.dataChanged.connect(editorDataChanged)
+        box.layout().addWidget(self.domain_editor)
+
         box = gui.widgetBox(self.controlArea, "Info", addSpace=True)
         info = self.data_info = gui.widgetLabel(box, '')
         info.setWordWrap(True)
+
         self.controlArea.layout().addStretch(1)
         gui.auto_commit(self.controlArea, self, 'autocommit', label='Commit')
 
@@ -163,6 +182,9 @@ class OW1ka(widget.OWWidget):
         QToolTip.showText(self.combo.mapToGlobal(QPoint(0, 0)), self.combo.toolTip())
 
     def load_url(self, from_reload=False):
+        self.closeContext()
+        self.domain_editor.set_domain(None)
+
         url = self.combo.currentText()
         if not self.is_valid_url(url):
             self.table = None
@@ -198,16 +220,36 @@ class OW1ka(widget.OWWidget):
                     self.table = None
                 else:
                     self.table = table
+                    self.openContext(table.domain)
                     self.combo.setTitleFor(self.combo.currentIndex(), table.name)
-        self.set_info()
 
         def _equal(data1, data2):
             NAN = float('nan')
             return (try_(lambda: data1.checksum(), NAN) ==
                     try_(lambda: data2.checksum(), NAN))
 
+        self._orig_table = self.table
+        self.apply_domain_edit()
+
         if not (from_reload and _equal(prev_table, self.table)):
             self.commit()
+
+    def apply_domain_edit(self):
+        data = self._orig_table
+        domain, cols = self.domain_editor.get_domain(data.domain, data)
+
+        # Copied verbatim from OWFile
+        if not (domain.variables or domain.metas):
+            table = None
+        else:
+            X, y, m = cols
+            table = Table.from_numpy(domain, X, y, m, data.W)
+            table.name = data.name
+            table.ids = np.array(data.ids)
+            table.attributes = getattr(data, 'attributes', {})
+
+        self.table = table
+        self.set_info()
 
     DATETIME_VAR = 'Paradata (insert)'
 
