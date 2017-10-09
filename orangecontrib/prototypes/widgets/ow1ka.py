@@ -23,6 +23,10 @@ from Orange.widgets.utils.webview import WebviewWidget, wait
 log = logging.getLogger(__name__)
 
 
+class DataEmptyError(Exception):
+    pass
+
+
 class URLComboBox(QComboBox):
 
     class TitleShowingPopupDelegate(QStyledItemDelegate):
@@ -96,6 +100,9 @@ class OW1ka(widget.OWWidget):
         net_error = widget.Msg("Couldn't load data: {}. Ensure network connection, firewall ...")
         parse_error = widget.Msg("Couldn't parse data: {}. Ensure well-formatted data or submit a bug report.")
         invalid_url = widget.Msg('Invalid URL. Public shareable link should match: ' + VALID_URL_HELP)
+
+    class Information(widget.OWWidget.Information):
+        response_data_empty = widget.Msg('Response data is empty. Get some responses first.')
 
     def __init__(self):
         super().__init__()
@@ -212,14 +219,16 @@ class OW1ka(widget.OWWidget):
                 self.table = None
             else:
                 self.Error.clear()
+                self.Information.clear()
+                self.table = None
                 try:
-                    table = self.table_from_html(html)
+                    table = self.table = self.table_from_html(html)
+                except DataEmptyError:
+                    self.Information.response_data_empty()
                 except Exception as e:
                     log.exception('Parsing error: %s', url)
                     self.Error.parse_error(try_(lambda: e.args[0], ''))
-                    self.table = None
                 else:
-                    self.table = table
                     self.openContext(table.domain)
                     self.combo.setTitleFor(self.combo.currentIndex(), table.name)
 
@@ -236,6 +245,10 @@ class OW1ka(widget.OWWidget):
 
     def apply_domain_edit(self):
         data = self._orig_table
+        if data is None:
+            self.set_info()
+            return
+
         domain, cols = self.domain_editor.get_domain(data.domain, data)
 
         # Copied verbatim from OWFile
@@ -255,7 +268,10 @@ class OW1ka(widget.OWWidget):
 
     def table_from_html(self, html):
         soup = BeautifulSoup(html, 'html.parser')
-        html_table = soup.find_all('table')[-1]
+        try:
+            html_table = soup.find_all('table')[-1]
+        except IndexError:
+            raise DataEmptyError
 
         def _header_row_strings(row):
             return chain.from_iterable(
