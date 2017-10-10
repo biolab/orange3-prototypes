@@ -26,6 +26,9 @@ log = logging.getLogger(__name__)
 class DataEmptyError(Exception):
     pass
 
+class DataIsAnalError(Exception):
+    pass
+
 
 class URLComboBox(QComboBox):
 
@@ -100,6 +103,7 @@ class OW1ka(widget.OWWidget):
         net_error = widget.Msg("Couldn't load data: {}. Ensure network connection, firewall ...")
         parse_error = widget.Msg("Couldn't parse data: {}. Ensure well-formatted data or submit a bug report.")
         invalid_url = widget.Msg('Invalid URL. Public shareable link should match: ' + VALID_URL_HELP)
+        data_is_anal = widget.Msg("The provided URL is a public link to 'Analysis'. Need public link to 'Data'.")
 
     class Information(widget.OWWidget.Information):
         response_data_empty = widget.Msg('Response data is empty. Get some responses first.')
@@ -225,6 +229,8 @@ class OW1ka(widget.OWWidget):
                     table = self.table = self.table_from_html(html)
                 except DataEmptyError:
                     self.Information.response_data_empty()
+                except DataIsAnalError:
+                    self.Error.data_is_anal()
                 except Exception as e:
                     log.exception('Parsing error: %s', url)
                     self.Error.parse_error(try_(lambda: e.args[0], ''))
@@ -272,6 +278,9 @@ class OW1ka(widget.OWWidget):
             html_table = soup.find_all('table')[-1]
         except IndexError:
             raise DataEmptyError
+
+        if '<h2>Anal' in html or 'div_analiza_' in html:
+            raise DataIsAnalError
 
         def _header_row_strings(row):
             return chain.from_iterable(
