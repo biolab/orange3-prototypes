@@ -1,16 +1,24 @@
 import sys
 import enum
 from xml.sax.saxutils import escape
+import pkg_resources
+
 from types import SimpleNamespace as namespace
 
-import pkg_resources
+
 
 import numpy
 
-from PyQt4 import QtGui, QtCore
-from PyQt4.QtCore import Qt, QObject, QEvent, QLineF, QRectF, QCoreApplication
-from PyQt4.QtCore import pyqtSignal as Signal, pyqtSlot as Slot
+from AnyQt import QtGui, QtCore
+from AnyQt.QtCore import Qt, QObject, QEvent
+from AnyQt.QtCore import pyqtSignal as Signal, pyqtSlot as Slot
+from AnyQt.QtGui import (
+    QColor, QPen, QBrush, QPainter
+)
+from AnyQt.QtWidgets import QAction, QApplication, QFrame, QFormLayout, QHBoxLayout, QActionGroup, \
+    QToolButton, QGraphicsEllipseItem, QToolTip
 
+import pyqtgraph.graphicsItems.ScatterPlotItem
 import pyqtgraph as pg
 
 import Orange.data
@@ -18,14 +26,14 @@ import Orange.projection
 from Orange.canvas import report
 
 from Orange.widgets import widget, gui, settings
-from Orange.widgets.utils import classdensity
+from Orange.widgets.utils import classdensity, colorpalette, itemmodels
 from Orange.widgets.utils.annotated_data import (create_annotated_table,
                                                  ANNOTATED_DATA_SIGNAL_NAME)
 from Orange.widgets.utils.plot import OWPlotGUI
 from Orange.widgets.visualize import owlinearprojection as linproj
-from Orange.widgets.unsupervised.owmds import Mdsplotutils as plotutils
 
 from orangecontrib.prototypes.projection.freeviz import freeviz
+from orangecontrib.prototypes.widgets.owlinearprojection import plotutils
 from orangecontrib.prototypes.widgets.utils.axisitem import AxisItem
 
 
@@ -148,7 +156,7 @@ class AsyncUpdateLoop(QObject):
 
 
 class PlotToolBox(QtCore.QObject):
-    actionTriggered = Signal(QtGui.QAction)
+    actionTriggered = Signal(QAction)
     toolActivated = Signal(linproj.PlotTool)
 
     class StandardActions(enum.IntEnum):
@@ -191,7 +199,7 @@ class PlotToolBox(QtCore.QObject):
         self.__tools = {}
         self.__viewBox = None
         self.__currentTool = None
-        self.__toolgroup = QtGui.QActionGroup(self, exclusive=True)
+        self.__toolgroup = QActionGroup(self, exclusive=True)
 
         def on_toolaction(action):
             tool = action.property("tool")
@@ -202,7 +210,7 @@ class PlotToolBox(QtCore.QObject):
                 tool.setViewBox(self.__viewBox)
                 self.__viewBox.setCursor(tool.cursor)
 
-        self.__toolgroup.triggered[QtGui.QAction].connect(on_toolaction)
+        self.__toolgroup.triggered[QAction].connect(on_toolaction)
 
         def icon(name):
             path = "icons/Dlg_{}.png".format(name)
@@ -214,7 +222,7 @@ class PlotToolBox(QtCore.QObject):
             if standardActions & flag:
                 _text, _iconname, _keyseq = self.ActionData[flag]
 
-                action = QtGui.QAction(
+                action = QAction(
                     _text, self, icon=icon(_iconname),
                     shortcut=QtGui.QKeySequence(_keyseq)
                 )
@@ -266,7 +274,7 @@ class PlotToolBox(QtCore.QObject):
 
     def button(self, action, parent=None):
         action = self.standardAction(action)
-        b = QtGui.QToolButton(parent)
+        b = QToolButton(parent)
         b.setToolButtonStyle(Qt.ToolButtonIconOnly)
         b.setDefaultAction(action)
         return b
@@ -358,7 +366,7 @@ class OWFreeViz(widget.OWWidget):
         self.plotdata = None
 
         self.plot = pg.PlotWidget(enableMouse=False, enableMenu=False)
-        self.plot.setFrameStyle(QtGui.QFrame.StyledPanel)
+        self.plot.setFrameStyle(QFrame.StyledPanel)
         self.plot.plotItem.hideAxis("bottom")
         self.plot.plotItem.hideAxis("left")
         self.plot.plotItem.hideButtons()
@@ -367,10 +375,10 @@ class OWFreeViz(widget.OWWidget):
         self.replot = self.plot.replot
 
         box = gui.widgetBox(self.controlArea, "Optimization", spacing=10)
-        form = QtGui.QFormLayout(
+        form = QFormLayout(
             labelAlignment=Qt.AlignLeft,
             formAlignment=Qt.AlignLeft,
-            fieldGrowthPolicy=QtGui.QFormLayout.AllNonFixedFieldsGrow,
+            fieldGrowthPolicy=QFormLayout.AllNonFixedFieldsGrow,
             verticalSpacing=10
         )
         form.addRow(
@@ -405,10 +413,10 @@ class OWFreeViz(widget.OWWidget):
         self.models = g.points_models
 
         box = gui.widgetBox(self.controlArea, "Plot")
-        form = QtGui.QFormLayout(
+        form = QFormLayout(
             formAlignment=Qt.AlignLeft,
             labelAlignment=Qt.AlignLeft,
-            fieldGrowthPolicy=QtGui.QFormLayout.AllNonFixedFieldsGrow,
+            fieldGrowthPolicy=QFormLayout.AllNonFixedFieldsGrow,
             spacing=8,
         )
         box.layout().addLayout(form)
@@ -432,7 +440,7 @@ class OWFreeViz(widget.OWWidget):
         rslider.setPageStep(10)
 
         box = gui.widgetBox(self.controlArea, "Zoom/Select")
-        hlayout = QtGui.QHBoxLayout()
+        hlayout = QHBoxLayout()
         box.layout().addLayout(hlayout)
 
         toolbox = PlotToolBox(self)
@@ -642,7 +650,7 @@ class OWFreeViz(widget.OWWidget):
             self.plot.addItem(axitem)
             axisitems.append(axitem)
 
-        hidecircle = QtGui.QGraphicsEllipseItem()
+        hidecircle = QGraphicsEllipseItem()
         hidecircle.setRect(
             QtCore.QRectF(-minradius, -minradius,
                           2 * minradius, 2 * minradius))
@@ -945,7 +953,7 @@ class OWFreeViz(widget.OWWidget):
                    if selectarea.contains(spot.pos())]
         indices = numpy.array(indices, dtype=int)
 
-        self.select(indices, QtGui.QApplication.keyboardModifiers())
+        self.select(indices, QApplication.keyboardModifiers())
 
     def select(self, indices, modifiers=Qt.NoModifier):
         """
@@ -1056,7 +1064,7 @@ class OWFreeViz(widget.OWWidget):
             return False
 
         tooltip = format_tooltip(self.data, columns=..., rows=indices)
-        QtGui.QToolTip.showText(event.screenPos(), tooltip, widget=self.plot)
+        QToolTip.showText(event.screenPos(), tooltip, widget=self.plot)
         return True
 
     def send_report(self):
@@ -1140,13 +1148,236 @@ def size_data(table, var, pointsize=3):
         return size_data
 
 
+class ScatterPlotItem(pg.ScatterPlotItem):
+    Symbols = pyqtgraph.graphicsItems.ScatterPlotItem.Symbols
+
+    def paint(self, painter, option, widget=None):
+        if self.opts["pxMode"]:
+            painter.setRenderHint(QPainter.SmoothPixmapTransform, True)
+
+        if self.opts["antialias"]:
+            painter.setRenderHint(QPainter.Antialiasing, True)
+
+        super().paint(painter, option, widget)
+
+
+class Namespace(namespace):
+    def updated(self, **kwargs):
+        ns = self.__dict__.copy()
+        ns.update(**kwargs)
+        return Namespace(**ns)
+
+
+class plotutils(plotutils):
+    NoFlags, Selected, Highlight = 0, 1, 2
+    NoFill, Filled = 0, 1
+
+    plotstyle = Namespace(
+        selected_pen=make_pen(Qt.yellow, width=3, cosmetic=True),
+        highligh_pen=QPen(Qt.blue, 1),
+        selected_brush=None,
+        default_color=QColor(Qt.darkGray).rgba(),
+        discrete_palette=colorpalette.ColorPaletteGenerator(),
+        continuous_palette=colorpalette.ContinuousPaletteGenerator(
+            QColor(220, 220, 220),
+            QColor(0, 0, 0),
+            False
+        ),
+        symbols=ScatterPlotItem.Symbols,
+        point_size=10,
+        min_point_size=5,
+    )
+
+    @staticmethod
+    def column_data(table, var, mask=None):
+        col, _ = table.get_column_view(var)
+        dtype = float if var.is_primitive() else object
+        col = numpy.asarray(col, dtype=dtype)
+        if mask is not None:
+            mask = numpy.asarray(mask, dtype=bool)
+            return col[mask]
+        else:
+            return col
+
+    @staticmethod
+    def color_data(table, var=None, mask=None, plotstyle=None):
+        N = len(table)
+        if mask is not None:
+            mask = numpy.asarray(mask, dtype=bool)
+            N = numpy.count_nonzero(mask)
+
+        if plotstyle is None:
+            plotstyle = plotutils.plotstyle
+
+        if var is None:
+            col = numpy.zeros(N, dtype=float)
+            color_data = numpy.full(N, plotstyle.default_color, dtype=object)
+        elif var.is_primitive():
+            col = plotutils.column_data(table, var, mask)
+            if var.is_discrete:
+                palette = plotstyle.discrete_palette
+                if len(var.values) >= palette.number_of_colors:
+                    palette = colorpalette.ColorPaletteGenerator(len(var.values))
+
+                color_data = plotutils.discrete_colors(
+                    col, nvalues=len(var.values), palette=palette)
+            elif var.is_continuous:
+                color_data = plotutils.continuous_colors(
+                    col, palette=plotstyle.continuous_palette)
+        else:
+            raise TypeError("Categorical/Numeric variable or None expected.")
+
+        return color_data
+
+    @staticmethod
+    def pen_data(basecolors, flags=None, plotstyle=None):
+        if plotstyle is None:
+            plotstyle = plotutils.plotstyle
+
+        pens = numpy.array(
+            [plotutils.make_pen(QColor(*rgba), width=1)
+             for rgba in basecolors],
+            dtype=object)
+
+        if flags is None:
+            return pens
+
+        selected_mask = flags & plotutils.Selected
+        if numpy.any(selected_mask):
+            pens[selected_mask.astype(bool)] = plotstyle.selected_pen
+
+        highlight_mask = flags & plotutils.Highlight
+        if numpy.any(highlight_mask):
+            pens[highlight_mask.astype(bool)] = plotstyle.hightlight_pen
+
+        return pens
+
+    @staticmethod
+    def brush_data(basecolors, flags=None, plotstyle=None):
+        if plotstyle is None:
+            plotstyle = plotutils.plotstyle
+
+        brush = numpy.array(
+            [plotutils.make_brush(QColor(*c))
+             for c in basecolors],
+            dtype=object)
+
+        if flags is None:
+            return brush
+
+        fill_mask = flags & plotutils.Filled
+
+        if not numpy.all(fill_mask):
+            brush[~fill_mask] = QBrush(Qt.NoBrush)
+        return brush
+
+    @staticmethod
+    def shape_data(table, var, mask=None, plotstyle=None):
+        if plotstyle is None:
+            plotstyle = plotutils.plotstyle
+
+        N = len(table)
+        if mask is not None:
+            mask = numpy.asarray(mask, dtype=bool)
+            N = numpy.nonzero(mask)
+
+        if var is None:
+            return numpy.full(N, "o", dtype=object)
+        elif var.is_discrete:
+            shape_data = plotutils.column_data(table, var, mask)
+            maxsymbols = len(plotstyle.symbols) - 1
+            validmask = numpy.isfinite(shape_data)
+            shape = shape_data % (maxsymbols - 1)
+            shape[~validmask] = maxsymbols  # Special symbol for unknown values
+            symbols = numpy.array(list(plotstyle.symbols))
+            shape_data = symbols[numpy.asarray(shape, dtype=int)]
+
+            if mask is None:
+                return shape_data
+            else:
+                return shape_data[mask]
+        else:
+            raise TypeError()
+
+    @staticmethod
+    def size_data(table, var, mask=None, plotstyle=None):
+        if plotstyle is None:
+            plotstyle = plotutils.plotstyle
+
+        N = len(table)
+        if mask is not None:
+            mask = numpy.asarray(mask, dtype=bool)
+            N = numpy.nonzero(mask)
+
+        if var is None:
+            return numpy.full(N, plotstyle.point_size, dtype=float)
+        else:
+            size_data = plotutils.column_data(table, var, mask)
+            size_data = plotutils.normalized(size_data)
+            size_mask = numpy.isnan(size_data)
+            size_data = size_data * plotstyle.point_size + \
+                        plotstyle.min_point_size
+            size_data[size_mask] = plotstyle.min_point_size - 2
+
+            if mask is None:
+                return size_data
+            else:
+                return size_data[mask]
+
+    @staticmethod
+    def legend_data(color_var=None, shape_var=None, plotstyle=None):
+        if plotstyle is None:
+            plotstyle = plotutils.plotstyle
+
+        if color_var is not None and not color_var.is_discrete:
+            color_var = None
+        assert shape_var is None or shape_var.is_discrete
+        if color_var is None and shape_var is None:
+            return []
+
+        if color_var is not None:
+            palette = plotstyle.discrete_palette
+            if len(color_var.values) >= palette.number_of_colors:
+                palette = colorpalette.ColorPaletteGenerator(len(color_var.values))
+        else:
+            palette = None
+
+        symbols = list(plotstyle.symbols)
+
+        if shape_var is color_var:
+            items = [(palette[i], symbols[i], name)
+                     for i, name in enumerate(color_var.values)]
+        else:
+            colors = shapes = []
+            if color_var is not None:
+                colors = [(palette[i], "o", name)
+                          for i, name in enumerate(color_var.values)]
+            if shape_var is not None:
+                shapes = [(QColor(Qt.gray),
+                           symbols[i % (len(symbols) - 1)], name)
+                          for i, name in enumerate(shape_var.values)]
+            items = colors + shapes
+
+        return items
+
+    @staticmethod
+    def make_pen(color, width=1, cosmetic=True):
+        pen = QPen(color)
+        pen.setWidthF(width)
+        pen.setCosmetic(cosmetic)
+        return pen
+
+    @staticmethod
+    def make_brush(color, ):
+        return QBrush(color, )
+
+
 def main(argv=sys.argv):
-    app = QtGui.QApplication(list(argv))
-    argv = app.argv()
     if len(argv) > 1:
         filename = argv[1]
     else:
         filename = "zoo"
+    app = QApplication(list(argv))
     data = Orange.data.Table(filename)
     subset = data[numpy.random.choice(len(data), 4)]
     w = OWFreeViz()
