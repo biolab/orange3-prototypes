@@ -7,7 +7,7 @@ from types import SimpleNamespace as namespace
 
 
 
-import numpy
+import numpy as np
 
 from AnyQt import QtGui, QtCore
 from AnyQt.QtCore import Qt, QObject, QEvent, QRectF, QPointF
@@ -708,19 +708,19 @@ class linproj:
         if naxes == 1:
             axes_angle = [0]
         elif naxes == 2:
-            axes_angle = [0, numpy.pi / 2]
+            axes_angle = [0, np.pi / 2]
         else:
-            axes_angle = numpy.linspace(0, 2 * numpy.pi, naxes, endpoint=False)
+            axes_angle = np.linspace(0, 2 * np.pi, naxes, endpoint=False)
 
-        axes = numpy.vstack(
-            (numpy.cos(axes_angle),
-             numpy.sin(axes_angle))
+        axes = np.vstack(
+            (np.cos(axes_angle),
+             np.sin(axes_angle))
         )
         return axes
 
     @staticmethod
     def project(axes, X):
-        return numpy.dot(axes, X)
+        return np.dot(axes, X)
 
 
 class ScatterPlotItem(pg.ScatterPlotItem):
@@ -1132,7 +1132,7 @@ class OWFreeViz(widget.OWWidget):
                 self.plotdata.subsetmask is None:
             # received a new subset data set; need to update the subset mask
             # and brush fill
-            self.plotdata.subsetmask = numpy.in1d(
+            self.plotdata.subsetmask = np.in1d(
                 self.data.ids, self.data_subset.ids)
             self._update_color()
             didupdate = True
@@ -1161,8 +1161,8 @@ class OWFreeViz(widget.OWWidget):
         """
         X = self.data.X
         Y = self.data.Y
-        mask = numpy.bitwise_or.reduce(numpy.isnan(X), axis=1)
-        mask |= numpy.isnan(Y)
+        mask = np.bitwise_or.reduce(np.isnan(X), axis=1)
+        mask |= np.isnan(Y)
         valid = ~mask
         X = X[valid, :]
         Y = Y[valid]
@@ -1171,31 +1171,31 @@ class OWFreeViz(widget.OWWidget):
 
         if self.data.domain.class_var.is_discrete:
             Y = Y.astype(int)
-        X = (X - numpy.mean(X, axis=0))
-        span = numpy.ptp(X, axis=0)
+        X = (X - np.mean(X, axis=0))
+        span = np.ptp(X, axis=0)
         X[:, span > 0] /= span[span > 0].reshape(1, -1)
 
         if self.initialization == OWFreeViz.Circular:
             anchors = linproj.defaultaxes(X.shape[1]).T
         else:
-            anchors = numpy.random.random((X.shape[1], 2)) * 2 - 1
+            anchors = np.random.random((X.shape[1], 2)) * 2 - 1
 
-        EX = numpy.dot(X, anchors)
-        radius = numpy.max(numpy.linalg.norm(EX, axis=1))
+        EX = np.dot(X, anchors)
+        radius = np.max(np.linalg.norm(EX, axis=1))
 
-        jittervec = numpy.random.RandomState(4).rand(*EX.shape) * 2 - 1
+        jittervec = np.random.RandomState(4).rand(*EX.shape) * 2 - 1
         jittervec *= 0.01
         _, jitterfactor = self.JitterAmount[self.jitter]
 
         if self.attr_color is not None:
             colors = plotutils.color_data(self.data, self.attr_color)[valid]
         else:
-            colors = numpy.array([[192, 192, 192]])
-            colors = numpy.tile(colors, (X.shape[0], 1))
+            colors = np.array([[192, 192, 192]])
+            colors = np.tile(colors, (X.shape[0], 1))
 
         pendata = plotutils.pen_data(colors * 0.8)
-        colors = numpy.hstack(
-            [colors, numpy.full((colors.shape[0], 1), float(self.alpha_value))])
+        colors = np.hstack(
+            [colors, np.full((colors.shape[0], 1), float(self.alpha_value))])
         brushdata = plotutils.brush_data(colors)
 
         shapedata = plotutils.shape_data(self.data, self.attr_shape)[valid]
@@ -1215,7 +1215,7 @@ class OWFreeViz(widget.OWWidget):
             pen=pendata,
             symbols=shapedata,
             size=sizedata,
-            data=numpy.flatnonzero(valid),
+            data=np.flatnonzero(valid),
             antialias=True,
         )
 
@@ -1228,7 +1228,7 @@ class OWFreeViz(widget.OWWidget):
         for anchor, var in zip(anchors, self.data.domain.attributes):
             axitem = AxisItem(
                 line=QtCore.QLineF(0, 0, *anchor), text=var.name,)
-            axitem.setVisible(numpy.linalg.norm(anchor) > minradius)
+            axitem.setVisible(np.linalg.norm(anchor) > minradius)
             axitem.setPen(pg.mkPen((100, 100, 100)))
             axitem.setArrowVisible(False)
             self.plot.addItem(axitem)
@@ -1263,7 +1263,7 @@ class OWFreeViz(widget.OWWidget):
             densityimage=None,
             X=X,
             Y=Y,
-            selectionmask=numpy.zeros_like(valid, dtype=bool),
+            selectionmask=np.zeros_like(valid, dtype=bool),
             subsetmask=None
         )
         self._update_legend()
@@ -1279,16 +1279,16 @@ class OWFreeViz(widget.OWWidget):
         if self.attr_color is not None:
             colors = plotutils.color_data(self.data, self.attr_color)[validmask]
         else:
-            colors = numpy.array([[192, 192, 192]])
-            colors = numpy.tile(colors, (self.plotdata.X.shape[0], 1))
+            colors = np.array([[192, 192, 192]])
+            colors = np.tile(colors, (self.plotdata.X.shape[0], 1))
 
         selectedmask = selectionmask[validmask]
-        pointstyle = numpy.where(
+        pointstyle = np.where(
             selectedmask, plotutils.Selected, plotutils.NoFlags)
 
         pendata = plotutils.pen_data(colors * 0.8, pointstyle)
-        colors = numpy.hstack(
-            [colors, numpy.full((colors.shape[0], 1), float(self.alpha_value))])
+        colors = np.hstack(
+            [colors, np.full((colors.shape[0], 1), float(self.alpha_value))])
 
         brushdata = plotutils.brush_data(colors, )
         if self.plotdata.subsetmask is not None:
@@ -1341,7 +1341,7 @@ class OWFreeViz(widget.OWWidget):
 
         if labeldata is not None:
             coords = self.plotdata.embedding_coords
-            coords = coords / numpy.max(numpy.linalg.norm(coords, axis=1))
+            coords = coords / np.max(np.linalg.norm(coords, axis=1))
             for (x, y), text in zip(coords, labeldata):
                 item = pg.TextItem(text, anchor=(0.5, 0), color=0.0)
                 item.setPos(x, y)
@@ -1379,7 +1379,7 @@ class OWFreeViz(widget.OWWidget):
 
         if self.data.domain.has_discrete_class and self.class_density:
             coords = self.plotdata.embedding_coords
-            radius = numpy.linalg.norm(coords, axis=1).max()
+            radius = np.linalg.norm(coords, axis=1).max()
             coords = coords / radius
             xmin = ymin = -1.05
             xmax = ymax = 1.05
@@ -1412,7 +1412,7 @@ class OWFreeViz(widget.OWWidget):
                 EX, anchors_new = res[:2]
                 yield res[:2]
 
-                if numpy.all(numpy.isclose(anchors, anchors_new,
+                if np.all(np.isclose(anchors, anchors_new,
                                            rtol=1e-5, atol=1e-4)):
                     return
 
@@ -1463,7 +1463,7 @@ class OWFreeViz(widget.OWWidget):
 
         item = self.plotdata.mainitem
         coords = self.plotdata.embedding_coords
-        radius = numpy.max(numpy.linalg.norm(coords, axis=1))
+        radius = np.max(np.linalg.norm(coords, axis=1))
         coords = coords / radius
         if self.jitter > 0:
             _, factor = self.JitterAmount[self.jitter]
@@ -1474,7 +1474,7 @@ class OWFreeViz(widget.OWWidget):
                      pen=self.plotdata.pendata,
                      size=self.plotdata.sizedata,
                      symbol=self.plotdata.shapedata,
-                     data=numpy.flatnonzero(self.plotdata.validmask)
+                     data=np.flatnonzero(self.plotdata.validmask)
                      )
 
         for anchor, item in zip(self.plotdata.anchors,
@@ -1492,7 +1492,7 @@ class OWFreeViz(widget.OWWidget):
         minradius = self.min_anchor_radius / 100 + 1e-5
         for anchor, item in zip(self.plotdata.anchors,
                                 self.plotdata.axisitems):
-            item.setVisible(numpy.linalg.norm(anchor) > minradius)
+            item.setVisible(np.linalg.norm(anchor) > minradius)
         self.plotdata.hidecircle.setRect(
             QtCore.QRectF(-minradius, -minradius,
                           2 * minradius, 2 * minradius))
@@ -1535,7 +1535,7 @@ class OWFreeViz(widget.OWWidget):
         indices = [spot.data()
                    for spot in item.points()
                    if selectarea.contains(spot.pos())]
-        indices = numpy.array(indices, dtype=int)
+        indices = np.array(indices, dtype=int)
 
         self.select(indices, QApplication.keyboardModifiers())
 
@@ -1558,7 +1558,7 @@ class OWFreeViz(widget.OWWidget):
         if not modifiers & (Qt.ControlModifier | Qt.ShiftModifier |
                             Qt.AltModifier):
             # no modifiers -> clear current selection
-            current = numpy.zeros_like(self.plotdata.validmask, dtype=bool)
+            current = np.zeros_like(self.plotdata.validmask, dtype=bool)
 
         if modifiers & Qt.AltModifier:
             current[indices] = False
@@ -1580,7 +1580,7 @@ class OWFreeViz(widget.OWWidget):
             coords = self.plotdata.embedding_coords
             valid = self.plotdata.validmask
             selection = self.plotdata.selectionmask
-            selectedindices = numpy.flatnonzero(valid & selection)
+            selectedindices = np.flatnonzero(valid & selection)
 
             C1Var = Orange.data.ContinuousVariable(
                 "Component1",
@@ -1612,7 +1612,7 @@ class OWFreeViz(widget.OWWidget):
                 self.data.domain.attributes,
                 metas=[Orange.data.StringVariable(name='component')])
 
-            metas = numpy.array([["FreeViz 1"], ["FreeViz 2"]])
+            metas = np.array([["FreeViz 1"], ["FreeViz 2"]])
             components = Orange.data.Table(
                 compdomain, self.plotdata.anchors.T,
                 metas=metas)
@@ -1718,17 +1718,17 @@ def format_tooltip(table, columns, rows, maxattrs=5, maxrows=5):
 
 def size_data(table, var, pointsize=3):
     if var is None:
-        return numpy.full(len(table), pointsize, dtype=float)
+        return np.full(len(table), pointsize, dtype=float)
     else:
         size_data, _ = table.get_column_view(var)
-        cmin, cmax = numpy.nanmin(size_data), numpy.nanmax(size_data)
+        cmin, cmax = np.nanmin(size_data), np.nanmax(size_data)
         if cmax - cmin > 0:
             size_data = (size_data - cmin) / (cmax - cmin)
         else:
-            size_data = numpy.zeros(len(table))
+            size_data = np.zeros(len(table))
 
         size_data = size_data * pointsize + 3
-        size_data[numpy.isnan(size_data)] = 1
+        size_data[np.isnan(size_data)] = 1
         return size_data
 
 
@@ -1776,9 +1776,9 @@ class plotutils(plotutils):
     def column_data(table, var, mask=None):
         col, _ = table.get_column_view(var)
         dtype = float if var.is_primitive() else object
-        col = numpy.asarray(col, dtype=dtype)
+        col = np.asarray(col, dtype=dtype)
         if mask is not None:
-            mask = numpy.asarray(mask, dtype=bool)
+            mask = np.asarray(mask, dtype=bool)
             return col[mask]
         else:
             return col
@@ -1787,15 +1787,15 @@ class plotutils(plotutils):
     def color_data(table, var=None, mask=None, plotstyle=None):
         N = len(table)
         if mask is not None:
-            mask = numpy.asarray(mask, dtype=bool)
-            N = numpy.count_nonzero(mask)
+            mask = np.asarray(mask, dtype=bool)
+            N = np.count_nonzero(mask)
 
         if plotstyle is None:
             plotstyle = plotutils.plotstyle
 
         if var is None:
-            col = numpy.zeros(N, dtype=float)
-            color_data = numpy.full(N, plotstyle.default_color, dtype=object)
+            col = np.zeros(N, dtype=float)
+            color_data = np.full(N, plotstyle.default_color, dtype=object)
         elif var.is_primitive():
             col = plotutils.column_data(table, var, mask)
             if var.is_discrete:
@@ -1818,7 +1818,7 @@ class plotutils(plotutils):
         if plotstyle is None:
             plotstyle = plotutils.plotstyle
 
-        pens = numpy.array(
+        pens = np.array(
             [plotutils.make_pen(QColor(*rgba), width=1)
              for rgba in basecolors],
             dtype=object)
@@ -1827,11 +1827,11 @@ class plotutils(plotutils):
             return pens
 
         selected_mask = flags & plotutils.Selected
-        if numpy.any(selected_mask):
+        if np.any(selected_mask):
             pens[selected_mask.astype(bool)] = plotstyle.selected_pen
 
         highlight_mask = flags & plotutils.Highlight
-        if numpy.any(highlight_mask):
+        if np.any(highlight_mask):
             pens[highlight_mask.astype(bool)] = plotstyle.hightlight_pen
 
         return pens
@@ -1841,7 +1841,7 @@ class plotutils(plotutils):
         if plotstyle is None:
             plotstyle = plotutils.plotstyle
 
-        brush = numpy.array(
+        brush = np.array(
             [plotutils.make_brush(QColor(*c))
              for c in basecolors],
             dtype=object)
@@ -1851,7 +1851,7 @@ class plotutils(plotutils):
 
         fill_mask = flags & plotutils.Filled
 
-        if not numpy.all(fill_mask):
+        if not np.all(fill_mask):
             brush[~fill_mask] = QBrush(Qt.NoBrush)
         return brush
 
@@ -1862,19 +1862,19 @@ class plotutils(plotutils):
 
         N = len(table)
         if mask is not None:
-            mask = numpy.asarray(mask, dtype=bool)
-            N = numpy.nonzero(mask)
+            mask = np.asarray(mask, dtype=bool)
+            N = np.nonzero(mask)
 
         if var is None:
-            return numpy.full(N, "o", dtype=object)
+            return np.full(N, "o", dtype=object)
         elif var.is_discrete:
             shape_data = plotutils.column_data(table, var, mask)
             maxsymbols = len(plotstyle.symbols) - 1
-            validmask = numpy.isfinite(shape_data)
+            validmask = np.isfinite(shape_data)
             shape = shape_data % (maxsymbols - 1)
             shape[~validmask] = maxsymbols  # Special symbol for unknown values
-            symbols = numpy.array(list(plotstyle.symbols))
-            shape_data = symbols[numpy.asarray(shape, dtype=int)]
+            symbols = np.array(list(plotstyle.symbols))
+            shape_data = symbols[np.asarray(shape, dtype=int)]
 
             if mask is None:
                 return shape_data
@@ -1890,15 +1890,15 @@ class plotutils(plotutils):
 
         N = len(table)
         if mask is not None:
-            mask = numpy.asarray(mask, dtype=bool)
-            N = numpy.nonzero(mask)
+            mask = np.asarray(mask, dtype=bool)
+            N = np.nonzero(mask)
 
         if var is None:
-            return numpy.full(N, plotstyle.point_size, dtype=float)
+            return np.full(N, plotstyle.point_size, dtype=float)
         else:
             size_data = plotutils.column_data(table, var, mask)
             size_data = plotutils.normalized(size_data)
-            size_mask = numpy.isnan(size_data)
+            size_mask = np.isnan(size_data)
             size_data = size_data * plotstyle.point_size + \
                         plotstyle.min_point_size
             size_data[size_mask] = plotstyle.min_point_size - 2
@@ -1963,7 +1963,7 @@ def main(argv=sys.argv):
         filename = "zoo"
     app = QApplication(list(argv))
     data = Orange.data.Table(filename)
-    subset = data[numpy.random.choice(len(data), 4)]
+    subset = data[np.random.choice(len(data), 4)]
     w = OWFreeViz()
     w.show()
     w.raise_()
