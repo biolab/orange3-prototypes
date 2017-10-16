@@ -18,7 +18,21 @@ from Orange.widgets.utils.domaineditor import DomainEditor
 from Orange.widgets.utils.itemmodels import PyListModel
 from Orange.widgets import widget, gui, settings
 from Orange.data import Table
-from Orange.widgets.utils.webview import WebviewWidget, wait
+from Orange.widgets.utils.webview import WebviewWidget
+try:
+    from Orange.widgets.utils.webview import wait
+except ImportError:  # WebKit and before wait() was toplevel
+    import time
+    from AnyQt.QtWidgets import qApp
+    from AnyQt.QtCore import QEventLoop
+
+    def wait(until: callable, timeout=5000):
+        started = time.clock()
+        while not until():
+            qApp.processEvents(QEventLoop.ExcludeUserInputEvents)
+            if (time.clock() - started) * 1000 > timeout:
+                raise TimeoutError()
+
 
 log = logging.getLogger(__name__)
 
