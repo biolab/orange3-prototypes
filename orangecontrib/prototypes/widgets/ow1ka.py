@@ -215,6 +215,10 @@ class OW1ka(widget.OWWidget):
             self.table = None
             self.commit()
             return
+
+        if url not in self.recent:
+            self.recent.insert(0, url)
+
         prev_table = self.table
         with self.progressBar(3) as progress:
             try:

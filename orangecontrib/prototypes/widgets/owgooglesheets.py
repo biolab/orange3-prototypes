@@ -60,7 +60,7 @@ class OWGoogleSheets(widget.OWWidget):
             hb, self.recent, editable=True, minimumWidth=400,
             insertPolicy=QComboBox.InsertAtTop,
             toolTip='Format: ' + VALID_URL_HELP,
-            currentIndexChanged=lambda: self.load_url())
+            currentIndexChanged=lambda: QTimer.singleShot(1, self.load_url))
         hb.layout().addWidget(QLabel('URL:', hb))
         hb.layout().addWidget(combo)
         hb.layout().setStretch(1, 2)
@@ -113,6 +113,10 @@ class OWGoogleSheets(widget.OWWidget):
         url = self.combo.currentText()
         if not url:
             return
+
+        if url not in self.recent:
+            self.recent.insert(0, url)
+
         prev_table = self.table
         try:
             with self.progressBar(3) as progress:
