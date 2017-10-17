@@ -3,27 +3,16 @@
 <!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
 <svg version="1.1" id="Layer_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
 	 width="48px" height="48px" viewBox="0 0 48 48" enable-background="new 0 0 48 48" xml:space="preserve">
-<g id="zXDtGm_1_">
-</g>
 <g>
-	<ellipse fill="#666666" cx="73.471" cy="9.807" rx="5.847" ry="5.901"/>
-	<ellipse fill="#666666" cx="67.008" cy="25.073" rx="4.75" ry="4.794"/>
-	<path fill="#666666" d="M61.378,16.553c0,2.647-2.127,4.793-4.749,4.793c-2.619,0-4.746-2.146-4.746-4.793
-		c0-2.647,2.127-4.792,4.746-4.792C59.251,11.761,61.378,13.906,61.378,16.553z"/>
-	<ellipse fill="#666666" cx="87.62" cy="18.269" rx="4.747" ry="4.792"/>
-	<polyline fill="none" stroke="#666666" stroke-miterlimit="10" points="67.009,25.073 73.471,9.807 88.889,19.548 	"/>
-	<line fill="none" stroke="#666666" stroke-miterlimit="10" x1="73.471" y1="9.807" x2="56.629" y2="16.553"/>
+	<g id="zXDtGm_2_">
+	</g>
+	<rect x="6.734" y="4.522" fill="#666666" width="7.145" height="19.052"/>
+	<rect x="15.863" y="12.715" fill="#666666" width="7.145" height="10.859"/>
+	<rect x="24.992" y="18.925" fill="#666666" width="7.145" height="4.649"/>
+	<rect x="34.121" y="12.715" fill="#666666" width="7.145" height="10.859"/>
+	<rect x="6.734" y="38.828" fill="#666666" width="7.145" height="4.648"/>
+	<rect x="15.863" y="34.547" fill="#666666" width="7.145" height="8.932"/>
+	<rect x="24.992" y="30.352" fill="#666666" width="7.145" height="13.127"/>
+	<rect x="34.121" y="27.424" fill="#666666" width="7.145" height="16.055"/>
 </g>
-<g>
-	<path fill="#333333" d="M78.712,17.44h0.687l11.071,24H67.624L78.712,17.44z M71.038,39.374l13.612,0.021l-6.652-15.35
-		L71.038,39.374z"/>
-</g>
-<rect x="6.734" y="4.523" fill="#666666" width="7.145" height="19.052"/>
-<rect x="15.863" y="12.716" fill="#666666" width="7.145" height="10.859"/>
-<rect x="24.992" y="18.926" fill="#666666" width="7.145" height="4.649"/>
-<rect x="34.121" y="12.716" fill="#666666" width="7.145" height="10.859"/>
-<rect x="6.734" y="38.828" fill="#666666" width="7.145" height="4.649"/>
-<rect x="15.863" y="34.547" fill="#666666" width="7.145" height="8.931"/>
-<rect x="24.992" y="30.351" fill="#666666" width="7.145" height="13.127"/>
-<rect x="34.121" y="27.424" fill="#666666" width="7.145" height="16.054"/>
 </svg>
