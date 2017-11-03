@@ -12,7 +12,7 @@ from orangecontrib.prototypes.stack import StackedLearner
 class OWStackedLearner(OWBaseLearner):
     name = "Stacking"
     description = "Stack multiple models."
-    icon = "icons/Stack.svg"
+    icon = "icons/Stacking.svg"
     priority = 100
 
     LEARNER = StackedLearner
