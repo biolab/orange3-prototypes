@@ -14,18 +14,24 @@ __all__ = ['StackedLearner', 'StackedClassificationLearner',
 
 
 class StackedModel(Model):
-    def __init__(self, models, aggregate):
+    def __init__(self, models, aggregate, use_prob=True):
         self.models = models
         self.aggregate = aggregate
+        self.use_prob = use_prob
 
     def predict_storage(self, data):
-        probs = [m(data, Model.Probs) for m in self.models]
-        X = np.hstack(probs)
+        if self.use_prob:
+            probs = [m(data, Model.Probs) for m in self.models]
+            X = np.hstack(probs)
+        else:
+            pred = [m(data) for m in self.models]
+            X = np.column_stack(pred)
         Y = np.repeat(np.nan, X.shape[0])
         stacked_data = data.transform(self.aggregate.domain)
         stacked_data.X = X
         stacked_data.Y = Y
-        return self.aggregate(stacked_data, Model.ValueProbs)
+        return self.aggregate(
+            stacked_data, Model.ValueProbs if self.use_prob else Model.Value)
 
 
 class StackedLearner(Learner):
@@ -62,16 +68,21 @@ class StackedLearner(Learner):
 
     def fit_storage(self, data):
         res = CrossValidation(data, self.learners, k=self.k)
-        X = np.hstack(res.probabilities)
-        dom = Domain([ContinuousVariable('f{}'.format(i))
-                      for i in range(1, X.shape[1] + 1)],
+        if data.domain.class_var.is_discrete:
+            X = np.hstack(res.probabilities)
+            use_prob = True
+        else:
+            X = res.predicted.T
+            use_prob = False
+        dom = Domain([ContinuousVariable('f{}'.format(i + 1))
+                      for i in range(X.shape[1])],
                      data.domain.class_var)
         stacked_data = data.transform(dom)
         stacked_data.X = X
         stacked_data.Y = res.actual
         models = [l(data) for l in self.learners]
         aggregate_model = self.aggregate(stacked_data)
-        return StackedModel(models, aggregate_model)
+        return StackedModel(models, aggregate_model, use_prob=use_prob)
 
 
 class StackedClassificationLearner(StackedLearner, LearnerClassification):
@@ -106,3 +117,8 @@ if __name__ == '__main__':
     sl = StackedClassificationLearner([tree, knn])
     m = sl(iris[::2])
     print(m(iris[1::2], Model.Value))
+
+    housing = Table('housing')
+    sl = StackedRegressionLearner([tree, knn])
+    m = sl(housing[::2])
+    print(list(zip(housing[1:10:2].Y, m(housing[1:10:2], Model.Value))))
