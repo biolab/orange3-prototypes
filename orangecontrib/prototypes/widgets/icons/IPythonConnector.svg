@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   xmlns:dc="http://purl.org/dc/elements/1.1/"
+   xmlns:cc="http://creativecommons.org/ns#"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   width="140.35503mm"
+   height="140.28819mm"
+   viewBox="0 0 497.32096 497.08415"
+   id="svg2"
+   version="1.1"
+   inkscape:version="0.92.1 r15371"
+   sodipodi:docname="IPythonConnector.svg">
+  <defs
+     id="defs4">
+    <filter
+       style="color-interpolation-filters:sRGB"
+       inkscape:label="Greyscale"
+       id="filter4708">
+      <feColorMatrix
+         values="0.31 -0.36 1.75 0 0 0.31 -0.36 1.75 0 0 0.31 -0.36 1.75 0 0 0 0 0 1 0 "
+         id="feColorMatrix4706" />
+    </filter>
+    <clipPath
+       clipPathUnits="userSpaceOnUse"
+       id="clipPath4534">
+      <path
+         d="M 0,0 H 239 V 109 H 0 Z"
+         id="path4532"
+         inkscape:connector-curvature="0" />
+    </clipPath>
+  </defs>
+  <sodipodi:namedview
+     id="base"
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1.0"
+     inkscape:pageopacity="0.0"
+     inkscape:pageshadow="2"
+     inkscape:zoom="0.98994949"
+     inkscape:cx="243.40615"
+     inkscape:cy="175.0159"
+     inkscape:document-units="px"
+     inkscape:current-layer="text11833"
+     showgrid="false"
+     fit-margin-top="0"
+     fit-margin-left="0"
+     fit-margin-right="0"
+     fit-margin-bottom="0"
+     inkscape:window-width="1918"
+     inkscape:window-height="1042"
+     inkscape:window-x="0"
+     inkscape:window-y="18"
+     inkscape:window-maximized="0" />
+  <metadata
+     id="metadata7">
+    <rdf:RDF>
+      <cc:Work
+         rdf:about="">
+        <dc:format>image/svg+xml</dc:format>
+        <dc:type
+           rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
+        <dc:title></dc:title>
+      </cc:Work>
+    </rdf:RDF>
+  </metadata>
+  <g
+     inkscape:label="Layer 1"
+     inkscape:groupmode="layer"
+     id="layer1"
+     transform="translate(-145.74728,-211.67799)">
+    <g
+       aria-label="IP[y]"
+       style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:223.21331787px;line-height:125%;font-family:Monospace;-inkscape-font-specification:Monospace;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;fill:black;fill-opacity:1;stroke:none;stroke-width:5.95235538px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+       id="text11833">
+      <path
+         d="m 172.77794,373.48707 h 90.35344 v 18.52845 H 229.01723 V 517.682 h 34.11415 v 18.52845 H 172.77794 V 517.682 h 34.11414 V 392.01552 h -34.11414 z"
+         style="stroke-width:5.95235538px"
+         id="path11900" />
+      <path
+         d="m 328.6349,391.57955 v 61.14389 h 25.50386 q 15.25873,0 23.76001,-8.06533 8.61028,-8.06532 8.61028,-22.56111 0,-14.49579 -8.50128,-22.45212 -8.50129,-8.06533 -23.86901,-8.06533 z m -22.01616,-18.09248 h 47.52002 q 27.24772,0 41.30755,12.42496 14.05982,12.31597 14.05982,36.18497 0,24.08698 -14.05982,36.40295 -13.95084,12.31597 -41.30755,12.31597 H 328.6349 v 65.39453 h -22.01616 z"
+         style="letter-spacing:-19.11562538px"
+         id="path11902" />
+      <path
+         d="m 437.04573,402.62853 h 33.64258 v 11.34643 h -19.04297 v 122.19239 h 19.04297 v 11.34643 h -33.64258 z"
+         style="letter-spacing:-25.06875038px;fill:gray"
+         id="path11904" />
+      <path
+         d="m 541.07243,497.52599 q -3.6499,9.28344 -9.28344,24.43847 -7.85523,20.94727 -10.55298,25.54932 -3.6499,6.18897 -9.12476,9.28345 -5.47485,3.09448 -12.77466,3.09448 h -11.74316 v -12.21924 h 8.64868 q 6.427,0 10.07691,-3.72925 3.6499,-3.72924 9.28344,-19.281 l -34.35669,-87.43897 h 15.47242 l 26.34277,69.50684 25.94604,-69.50684 h 15.47242 z"
+         style="font-size:162.5px;letter-spacing:-25.06875038px"
+         id="path11906" />
+      <path
+         d="m 606.77519,402.62853 v 144.88525 h -33.64258 v -11.34643 h 19.04297 V 413.97496 h -19.04297 v -11.34643 z"
+         style="letter-spacing:-25.06875038px;fill:gray"
+         id="path11908" />
+    </g>
+  </g>
+</svg>
