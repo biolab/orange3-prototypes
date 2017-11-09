@@ -31,6 +31,8 @@ if __name__ == '__main__':
         packages=find_packages(),
         package_data={
             "orangecontrib.prototypes.widgets": ["icons/*.svg"],
+            "orangecontrib.prototypes.widgets.utils": ["_plotly/*"],
+            "orangecontrib.prototypes.widgets": ["_owparallelcoordiantes/*"],
         },
         install_requires=[
             'Orange3',
@@ -47,6 +49,7 @@ if __name__ == '__main__':
 
             'BeautifulSoup4',  # for OW1Ka
             'lap==0.3.0',      # for ImageGrid
+            'plotly>=2.0.8',   # for OWParallelCoordinates
         ],
         extras_require={
             ':python_version<"3.5"': [
