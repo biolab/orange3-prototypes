@@ -44,20 +44,17 @@ class OWImageGrid(widget.OWWidget):
     description = "Visualize images in a similarity grid"
     icon = "icons/Category-Prototypes.svg"
     priority = 160
-    category = ""
     keywords = ["image", "grid", "similarity"]
     graph_name = "scene"
 
     class Inputs:
         data = Input("Embeddings", Orange.data.Table)
+        # TODO: implement data subset handling
         # data_subset = Input("Embeddings Subset", Orange.data.Table)
 
     class Outputs:
         data = Output("Images", Orange.data.Table)
 
-    _NO_DATA_INFO_TEXT = "No data on input."
-
-    settings_version = 2
     settingsHandler = settings.DomainContextHandler()
 
     cell_fit = settings.Setting("Resize")
@@ -276,27 +273,12 @@ class OWImageGrid(widget.OWWidget):
                 self._updateStatus()
 
     def urlFromValue(self, value):
-        variable = value.variable
-        origin = variable.attributes.get("origin", "")
-        if origin and QDir(origin).exists():
-            origin = QUrl.fromLocalFile(origin)
-        elif origin:
-            origin = QUrl(origin)
-            if not origin.scheme():
-                origin.setScheme("file")
+        base = value.variable.attributes.get("origin", "")
+        if QDir(base).exists():
+            base = QUrl.fromLocalFile(base)
         else:
-            origin = QUrl("")
-        base = origin.path()
-        if base.strip() and not base.endswith("/"):
-            origin.setPath(base + "/")
-
-        if os.path.exists(str(value)):
-            url = QUrl.fromLocalFile(str(value))
-        else:
-            name = QUrl(str(value))
-            url = origin.resolved(name)
-        if not url.scheme():
-            url.setScheme("file")
+            base = QUrl(base)
+        url = base.resolved(QUrl(value))
         return url
 
     def _cancelAllFutures(self):
@@ -406,7 +388,18 @@ class OWImageGrid(widget.OWWidget):
         self.clear()
 
 
-# Classes from Image Viewer, adapted with some new options.
+"""
+Classes from Image Viewer, slightly adapted.
+Unfortunately, these classes had to be modified with ImageGrid-specific
+changes, which would require substantial modification of Image Viewer
+if they were to be added as an option there.
+
+Changes:
+- crop option added
+- layout is fixed instead of autoreflowing
+- resizing policy for individual Pixmap widgets is now fixed
+instead of auto-stretch
+"""
 
 
 class GraphicsPixmapWidget(QGraphicsWidget):
@@ -963,7 +956,7 @@ class ThumbnailView(QGraphicsView):
 
         sh = QShortcut(Qt.Key_Space, self,
                        context=Qt.WidgetWithChildrenShortcut)
-        sh.activated.connect(self.__previewToogle)
+        sh.activated.connect(self.__previewToggle)
 
         self.__grid.geometryChanged.connect(self.__updateSceneRect)
 
@@ -1032,7 +1025,7 @@ class ThumbnailView(QGraphicsView):
             return
         return super().keyPressEvent(event)
 
-    def __previewToogle(self):
+    def __previewToggle(self):
         if self.__previewWidget is None and self.__grid.currentItem() is not None:
             focusitem = self.__grid.currentItem()
             preview = self.__getPreviewWidget()
@@ -1100,10 +1093,10 @@ class ThumbnailView(QGraphicsView):
 
 # TODO only loads when workdir is image dir
 def main(argv=None):
-    import sys
     """
-    Will be uncommented when the widget is moved to ImageAnalytics.
+    # TODO fix imports for ImageAnalytics code
     
+    import sys
     from orangecontrib.imageanalytics.import_images import ImportImages
     from orangecontrib.imageanalytics.image_embedder import ImageEmbedder
 

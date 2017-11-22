@@ -25,9 +25,17 @@ class ImageGrid:
         """
         Process the data based on the provided grid size.
         If the desired grid size is not provided, it is calculated from the data.
-        
-        :param size_x: The number of columns
-        :param size_y: The number of rows
+
+        Parameters
+        ----------
+        size_x: int
+            The number of columns.
+        size_y: int
+            he number of rows.
+
+        Returns
+        -------
+
         """
 
         # check if grid will fit all of the images
@@ -52,13 +60,23 @@ class ImageGrid:
     def _reduce_dimensions(data, method="MDS", use_cosine=True):
         """
         Reduce the dimensionality of the data to 2D.
+
+        Parameters
+        ----------
+        data: Orange.data.Table
+            The image embeddings (vectors of length 2048).
+        method: string
+            The method to use (default MDS).
+        use_cosine: bool
+            Precompute cosine distances and pass them to MDS.
         
-        :param data: The image embeddings (vectors of length 2048)
-        :param method: the method to use (default MDS)
-        :param use_cosine: precompute cosine distances and pass them to MDS
-        :return: the data in 2 dimensions
+        Returns
+        -------
+        array-like
+            The data, reduced to 2 dimensions.
+
         """
-        if method is "MDS":
+        if method == "MDS":
             if use_cosine:
                 mds = MDS(n_init=1, dissimilarity="precomputed")
                 dist_matrix = Cosine(data)
@@ -67,11 +85,11 @@ class ImageGrid:
                 mds = MDS(n_init=1, init_type="PCA")
                 return mds(data).embedding_
 
-        elif method is "PCA":
+        elif method == "PCA":
             pca = PCA(n_components=2)
             return pca(data)(data)
 
-        elif method is "TSNE":
+        elif method == "TSNE":
             tsne = TSNE(init="pca")
             return tsne(data).embedding_
 
@@ -80,9 +98,18 @@ class ImageGrid:
         """
         Calculate the size of the grid.
         
-        :param data: the normalized data
-        :param use_default_square: define the grid as the minimum possible square
-        :return: the x and y size of the grid
+        Parameters
+        ----------
+        data: array-like
+            The normalized data.
+        use_default_square: bool
+            Define the grid as the minimal possible square.
+
+        Returns
+        -------
+        int, int
+            The width and height of the grid.
+
         """
 
         # if the grid would be square, this is the minimum size
@@ -100,9 +127,17 @@ class ImageGrid:
     @staticmethod
     def _normalize_data(data):
         """
-        Normalize the data (a series of 2D coordinates) to the interval [0, 1].
-        :param data: The data to be normalized
-        :return: The normalized data constrained to [0, 1]
+         Normalize the data (a series of 2D coordinates) to the interval [0, 1].
+
+        Parameters
+        ----------
+        data: Orange.data.Table
+            The data to be normalized.
+
+        Returns
+        -------
+        Orange.data.Table
+            The normalized data constrained to [0, 1].
         """
 
         normalizer = Normalize(norm_type=Normalize.NormalizeBySpan)
@@ -113,10 +148,17 @@ class ImageGrid:
         Get the assignments of the 2D points to the regular grid by solving the linear assignment problem
         using the Jonker-Volgenant algorithm.
         
-        :param data: the normalized data
-        :return: the cost and assigments to grid cells
-        """
+        Parameters
+        ----------
+        data: np.ndarray
+            The normalized data.
 
+        Returns
+        -------
+        int, array-like, array-like
+            The cost and assigments to grid cells.
+
+        """
         # create grid of size n with linearly spaced coordinates, reshape to list of coordinates (size_x*size_y x2)
         grid = np.dstack(np.meshgrid(np.linspace(0, 1, self.size_x, endpoint=False),
                                      np.linspace(0, 1, self.size_y, endpoint=False))).reshape(-1, 2)
@@ -139,8 +181,15 @@ class ImageGrid:
         Return the image grid as a Table of images, ordered by rows. 
         If a grid cell does not contain an image, put None in its place.
         
-        :param images: the images to order
-        :return: a Table of images in the grid, ordered by rows.
+        Parameters
+        ----------
+        images: Orange.data.Table
+            The images to order.
+
+        Returns
+        -------
+        Orange.data.Table
+            A Table of images in the grid, ordered by rows.
         """
 
         image_list = Table.from_domain(self.data.domain)
