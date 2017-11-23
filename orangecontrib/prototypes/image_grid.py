@@ -57,7 +57,7 @@ class ImageGrid:
         self.image_list = self._grid_indices_to_image_list(self.data)
 
     @staticmethod
-    def _reduce_dimensions(data, method="MDS", use_cosine=True):
+    def _reduce_dimensions(data, method="MDS", use_cosine=False):
         """
         Reduce the dimensionality of the data to 2D.
 

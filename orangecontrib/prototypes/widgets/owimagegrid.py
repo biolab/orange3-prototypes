@@ -278,7 +278,12 @@ class OWImageGrid(widget.OWWidget):
             base = QUrl.fromLocalFile(base)
         else:
             base = QUrl(base)
-        url = base.resolved(QUrl(value))
+
+        path = base.path()
+        if path.strip() and not path.endswith("/"):
+            base.setPath(path + "/")
+
+        url = base.resolved(QUrl(str(value)))
         return url
 
     def _cancelAllFutures(self):
@@ -1091,11 +1096,8 @@ class ThumbnailView(QGraphicsView):
         self.ensureVisible(QRectF(point, QSizeF(1, 1)), 5, 5),
 
 
-# TODO only loads when workdir is image dir
+# TODO only loads when workdir is image dir (ImportImages keeps only the filename in the path)
 def main(argv=None):
-    """
-    # TODO fix imports for ImageAnalytics code
-    
     import sys
     from orangecontrib.imageanalytics.import_images import ImportImages
     from orangecontrib.imageanalytics.image_embedder import ImageEmbedder
@@ -1109,10 +1111,11 @@ def main(argv=None):
     if len(argv) > 1:
         image_dir = argv[1]
     else:
-        image_dir = "zoo-with-images"
+        raise ValueError("Provide the image directory as the first argument.")
 
     import_images = ImportImages()
     images, err = import_images(image_dir)
+
     image_embedder = ImageEmbedder()
     embeddings, _, _ = image_embedder(images)
 
@@ -1126,8 +1129,6 @@ def main(argv=None):
     ow.onDeleteWidget()
 
     return rval
-    """
-    return 0
 
 
 if __name__ == "__main__":
