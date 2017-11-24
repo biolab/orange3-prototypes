@@ -512,8 +512,6 @@ class GraphicsThumbnailWidget(QGraphicsWidget):
 
         self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
 
-        self.setFlag(QGraphicsItem.ItemIsSelectable, True)
-
     def setGeometry(self, rect):
         self.prepareGeometryChange()
         super().setGeometry(rect)
@@ -521,6 +519,7 @@ class GraphicsThumbnailWidget(QGraphicsWidget):
     def setPixmap(self, pixmap):
         self.pixmapWidget.setPixmap(pixmap)
         self._updatePixmapSize()
+        self.setFlag(QGraphicsItem.ItemIsSelectable, pixmap.height() != 0)
 
     def setCrop(self, crop):
         self.pixmapWidget.setCrop(crop)
