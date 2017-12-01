@@ -43,6 +43,7 @@ if __name__ == '__main__':
             # For OWIPythonConnector
             'ipython',
             'pandas',
+            'joblib',  # For SignificantGoups
 
             'BeautifulSoup4',  # for OW1Ka
         ],

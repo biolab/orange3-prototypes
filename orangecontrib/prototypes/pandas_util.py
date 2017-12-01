@@ -13,11 +13,12 @@ from Orange.data import (
 )
 
 
-def table_from_frame(df):
+def table_from_frame(df, *, force_nominal=False):
 
     def _is_discrete(s):
         return (is_categorical_dtype(s) or
-                is_object_dtype(s) and s.nunique() < s.size ** .5)
+                is_object_dtype(s) and (force_nominal or
+                                        s.nunique() < s.size**.666))
 
     def _is_datetime(s):
         if is_datetime64_any_dtype(s):
