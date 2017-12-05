@@ -3,16 +3,17 @@ import sys
 from types import SimpleNamespace as namespace
 
 import numpy as np
-from PyQt4 import QtGui, QtCore
-from PyQt4.QtGui import QStyle, QGraphicsItem, QPen, QColor
-from PyQt4.QtCore import Qt, QPointF
+
+from AnyQt.QtCore import Qt, QSize
+from AnyQt.QtGui import QPainter, QPen, QColor
+from AnyQt.QtWidgets import QListWidget
 
 import pyqtgraph as pg
 
-import Orange.data
-
-from Orange.widgets import widget, gui, settings
+from Orange.data import Table
+from Orange.widgets import gui, settings
 from Orange.widgets.utils import colorpalette
+from Orange.widgets.widget import OWWidget, Input
 
 
 def disconnected_curve_data(data, x=None):
@@ -36,14 +37,18 @@ def disconnected_curve_data(data, x=None):
 # TODO:
 #  * Box plot item
 
-class OWLinePlot(widget.OWWidget):
+class OWLinePlot(OWWidget):
     name = "Line Plot"
     description = "Visualization of data profiles (e.g., time series)."
     icon = "icons/LinePlot.svg"
     priority = 1030
 
-    inputs = [("Data", Orange.data.Table, "set_data")]
-    outputs = []
+    class Inputs:
+        data = Input("Data", Table, default=True)
+
+    class Outputs:
+        pass
+
     settingsHandler = settings.DomainContextHandler()
 
     group_var = settings.Setting("")                #: Group by group_var's values
@@ -78,7 +83,7 @@ class OWLinePlot(widget.OWWidget):
             callback=self.update_group_var)
         self.group_listbox = gui.listBox(
             group_box, self, "selected_classes", "classes",
-            selectionMode=QtGui.QListWidget.MultiSelection,
+            selectionMode=QListWidget.MultiSelection,
             callback=self.__on_class_selection_changed)
         self.unselectAllClassedQLB = gui.button(
             group_box, self, "Unselect all",
@@ -87,11 +92,11 @@ class OWLinePlot(widget.OWWidget):
         gui.rubber(self.controlArea)
 
         self.graph = pg.PlotWidget(background="w", enableMenu=False)
-        self.graph.setRenderHint(QtGui.QPainter.Antialiasing, True)
+        self.graph.setRenderHint(QPainter.Antialiasing, True)
         self.mainArea.layout().addWidget(self.graph)
 
     def sizeHint(self):
-        return QtCore.QSize(800, 600)
+        return QSize(800, 600)
 
     def clear(self):
         """
@@ -103,6 +108,7 @@ class OWLinePlot(widget.OWWidget):
         self.__groups = None
         self.graph.clear()
 
+    @Inputs.data
     def set_data(self, data):
         """
         Set the input profile dataset.
@@ -248,13 +254,14 @@ class OWLinePlot(widget.OWWidget):
 
 
 def test_main(argv=sys.argv):
-    a = QtGui.QApplication(argv)
+    from AnyQt.QtWidgets import QApplication
+    a = QApplication(argv)
     if len(argv) > 1:
         filename = argv[1]
     else:
         filename = "brown-selected"
     w = OWLinePlot()
-    d = Orange.data.Table(filename)
+    d = Table(filename)
 
     w.set_data(d)
     w.show()
