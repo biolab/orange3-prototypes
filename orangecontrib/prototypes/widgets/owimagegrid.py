@@ -42,7 +42,7 @@ _ImageItem = namedtuple(
 class OWImageGrid(widget.OWWidget):
     name = "Image Grid"
     description = "Visualize images in a similarity grid"
-    icon = "icons/Category-Prototypes.svg"
+    icon = "icons/ImageGrid.svg"
     priority = 160
     keywords = ["image", "grid", "similarity"]
     graph_name = "scene"
