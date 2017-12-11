@@ -1,5 +1,5 @@
 import numpy as np
-import sklearn.lda as skl_lda
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 
 from Orange.data import Table, Domain, StringVariable, ContinuousVariable
 from Orange.preprocess import Impute, Continuize
@@ -43,7 +43,7 @@ class LDA(OWWidget):
         transformed = components = None
         if self.data is not None:
             self.data = Continuize(Impute(self.data))
-            lda = skl_lda.LDA(solver='eigen', n_components=2)
+            lda = LinearDiscriminantAnalysis(solver='eigen', n_components=2)
             X = lda.fit_transform(self.data.X, self.data.Y)
             dom = Domain([ContinuousVariable('Component_1'),
                           ContinuousVariable('Component_2')],
