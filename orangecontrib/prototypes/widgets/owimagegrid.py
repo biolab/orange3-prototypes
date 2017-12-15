@@ -21,7 +21,12 @@ from AnyQt.QtWidgets import (
     QGraphicsGridLayout, QSizePolicy, QApplication, QStyle, QShortcut,
     QFormLayout)
 from Orange.widgets import widget, gui, settings
-from Orange.widgets.data.owimageviewer import ImageLoader, Preview, GraphicsScene
+try:  # since 0.1.11
+    from orangecontrib.imageanalytics.widgets.owimageviewer import (
+        ImageLoader, Preview, GraphicsScene
+)
+except ImportError:  # until 3.8
+    from Orange.widgets.data.owimageviewer import ImageLoader, Preview, GraphicsScene
 from Orange.widgets.utils.itemmodels import VariableListModel
 from Orange.widgets.utils.overlay import proxydoc
 from Orange.widgets.widget import Input, Output
