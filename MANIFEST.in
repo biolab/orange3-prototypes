@@ -1,3 +1,4 @@
 # From https://docs.python.org/2/distutils/sourcedist.html#commands
 include README.md
 recursive-include orangecontrib *.svg icons/*
+recursive-include orangecontrib *.html *.js *.css
