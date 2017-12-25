@@ -48,7 +48,6 @@ if __name__ == '__main__':
             'joblib',  # For SignificantGoups
 
             'BeautifulSoup4',  # for OW1Ka
-            'lap==0.3.0',      # for ImageGrid
             'plotly>=2.0.8',   # for OWParallelCoordinates
         ],
         extras_require={
