@@ -305,15 +305,16 @@ class NoFocusRectDelegate(QStyledItemDelegate):
 
 class DistributionDelegate(NoFocusRectDelegate):
     def __init__(self, parent=None):
+        self.color_attribute = None
         super().__init__(parent)
-        self.target_class_index = None
         self.__cache = {}
 
     def clear(self):
         self.__cache.clear()
 
-    def set_target_class(self, new_index):
-        self.target_class_index = new_index
+    def set_color_attribute(self, variable):
+        assert variable is None or isinstance(variable, Variable)
+        self.color_attribute = variable
         self.__cache.clear()
 
     def paint(self, painter, option, index):
@@ -330,7 +331,7 @@ class DistributionDelegate(NoFocusRectDelegate):
             histogram = Histogram(
                 data=data,
                 variable=attribute,
-                class_index=self.target_class_index,
+                color_attribute=self.color_attribute,
                 border=(0, 0, 2, 0),
                 border_color='#ccc',
             )
@@ -355,7 +356,7 @@ class DistributionDelegate(NoFocusRectDelegate):
 class OWFeatureStatistics(widget.OWWidget):
     HISTOGRAM_ASPECT_RATIO = (7, 3)
     MINIMUM_HISTOGRAM_HEIGHT = 50
-    MAXIMUM_HISTOGRAM_HEIGHT = 100
+    MAXIMUM_HISTOGRAM_HEIGHT = 80
 
     name = 'Feature Statistics'
     description = 'Show basic statistics for data features.'
@@ -398,12 +399,13 @@ class OWFeatureStatistics(widget.OWWidget):
         shortcut.setWhatsThis('Filter variables by name')
 
         self.target_var_model = DomainModel(
-            order=DomainModel.CLASSES, placeholder='None',
+            valid_types=(ContinuousVariable, DiscreteVariable),
+            placeholder='None',
         )
         target_var_box = gui.vBox(self.controlArea, 'Histogram')
         self.cb_target_var_index = gui.comboBox(
             target_var_box, master=self, value='target_var',
-            model=self.target_var_model, label='Target class',
+            model=self.target_var_model, label='Color:', orientation=Qt.Horizontal,
         )
         self.cb_target_var_index.currentIndexChanged.connect(self.__target_class_changed)
 
@@ -524,9 +526,10 @@ class OWFeatureStatistics(widget.OWWidget):
 
     @pyqtSlot(int)
     def __target_class_changed(self, new_index):
-        self.distribution_delegate.set_target_class(
-            None if new_index < 1 else new_index - 1
-        )
+        attribute = None if new_index < 1 else self.cb_target_var_index.model()[new_index]
+        if not isinstance(attribute, Variable):
+            attribute = None
+        self.distribution_delegate.set_color_attribute(attribute)
 
         if self.model:
             for row_idx in range(self.model.rowCount()):

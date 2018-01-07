@@ -122,7 +122,7 @@ class Histogram(QGraphicsWidget):
 
     def __init__(self, data, variable, parent=None, height=200,
                  width=300, side_padding=5, top_padding=20, bar_spacing=4,
-                 border=0, border_color=None, class_index=None, n_bins=10):
+                 border=0, border_color=None, color_attribute=None, n_bins=10):
         super().__init__(parent)
         self.height, self.width = height, width
         self.padding = side_padding
@@ -148,12 +148,10 @@ class Histogram(QGraphicsWidget):
                 self.n_bins = min(max(2, num_unique), n_bins)
 
         # Handle target variable index
-        self.class_index = class_index
-        if self.class_index is not None:
-            assert 0 <= class_index < len(data.domain.class_vars), \
-                'Target variable `%d` out of range!' % class_index
-            self.target_var = data.domain.class_vars[class_index]
-            self.y = data.Y[:, class_index] if data.Y.ndim > 1 else data.Y
+        self.color_attribute = color_attribute
+        if self.color_attribute is not None:
+            self.target_var = data.domain[color_attribute]
+            self.y = data.get_column_view(color_attribute)[0]
         else:
             self.target_var, self.y = None, None
 
@@ -356,7 +354,7 @@ if __name__ == '__main__':
     dataset = Table(sys.argv[1] if len(sys.argv) > 1 else 'iris')
     histogram = Histogram(
         dataset, variable=0, height=300, width=500, n_bins=20, bar_spacing=2,
-        border=(0, 0, 5, 0), border_color='#000', class_index=0,
+        border=(0, 0, 5, 0), border_color='#000', color_attribute='iris',
     )
     scene.addItem(histogram)
 
