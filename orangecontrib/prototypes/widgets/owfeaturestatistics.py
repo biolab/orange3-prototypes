@@ -388,15 +388,15 @@ class OWFeatureStatistics(widget.OWWidget):
         self.info_meta = gui.widgetLabel(info_box, wordWrap=True)
         self.set_info()
 
-        filter_box = gui.vBox(self.controlArea, 'Filter')
-
-        self.filter_text = gui.lineEdit(
-            filter_box, self, value='filter_string',
-            placeholderText='Filter variables by name',
-            callback=self._filter_table_variables, callbackOnType=True,
-        )
-        shortcut = QShortcut(QKeySequence('Ctrl+f'), self, self.filter_text.setFocus)
-        shortcut.setWhatsThis('Filter variables by name')
+        # TODO: Implement filtering on the model
+        # filter_box = gui.vBox(self.controlArea, 'Filter')
+        # self.filter_text = gui.lineEdit(
+        #     filter_box, self, value='filter_string',
+        #     placeholderText='Filter variables by name',
+        #     callback=self._filter_table_variables, callbackOnType=True,
+        # )
+        # shortcut = QShortcut(QKeySequence('Ctrl+f'), self, self.filter_text.setFocus)
+        # shortcut.setWhatsThis('Filter variables by name')
 
         self.target_var_model = DomainModel(
             valid_types=(ContinuousVariable, DiscreteVariable),
