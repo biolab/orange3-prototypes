@@ -370,7 +370,7 @@ class OWFeatureStatistics(widget.OWWidget):
     settingsHandler = DomainContextHandler()
 
     auto_commit = Setting(True)
-    target_var = ContextSetting(None)  # type: Variable
+    color_var = ContextSetting(None)  # type: Optional[Variable]
     filter_string = ContextSetting('')
 
     def __init__(self):
@@ -398,16 +398,16 @@ class OWFeatureStatistics(widget.OWWidget):
         # shortcut = QShortcut(QKeySequence('Ctrl+f'), self, self.filter_text.setFocus)
         # shortcut.setWhatsThis('Filter variables by name')
 
-        self.target_var_model = DomainModel(
+        self.color_var_model = DomainModel(
             valid_types=(ContinuousVariable, DiscreteVariable),
             placeholder='None',
         )
-        target_var_box = gui.vBox(self.controlArea, 'Histogram')
-        self.cb_target_var_index = gui.comboBox(
-            target_var_box, master=self, value='target_var',
-            model=self.target_var_model, label='Color:', orientation=Qt.Horizontal,
+        box = gui.vBox(self.controlArea, 'Histogram')
+        self.cb_color_var = gui.comboBox(
+            box, master=self, value='color_var',
+            model=self.color_var_model, label='Color:', orientation=Qt.Horizontal,
         )
-        self.cb_target_var_index.currentIndexChanged.connect(self.__target_class_changed)
+        self.cb_color_var.currentIndexChanged.connect(self.__color_var_changed)
 
         gui.rubber(self.controlArea)
         gui.auto_commit(
@@ -501,14 +501,14 @@ class OWFeatureStatistics(widget.OWWidget):
 
         if data is not None:
             self.model = FeatureStatisticsTableModel(data, parent=self)
-            self.target_var_model.set_domain(data.domain)
+            self.color_var_model.set_domain(data.domain)
             # Set the selected index to 1 if any target classes, otherwise 0
-            if len(self.target_var_model) >= 2:
-                self.target_var = self.target_var_model[1]
+            if data.domain.class_vars:
+                self.color_var = data.domain.class_vars[0]
             self.openContext(self.data)
         else:
             self.model = None
-            self.target_var_model.set_domain(None)
+            self.color_var_model.set_domain(None)
 
         self.view.setModel(self.model)
         self._filter_table_variables()
@@ -525,10 +525,8 @@ class OWFeatureStatistics(widget.OWWidget):
             hheader.setSectionResizeMode(columns.DISTRIBUTION.index, QHeaderView.Stretch)
 
     @pyqtSlot(int)
-    def __target_class_changed(self, new_index):
-        attribute = None if new_index < 1 else self.cb_target_var_index.model()[new_index]
-        if not isinstance(attribute, Variable):
-            attribute = None
+    def __color_var_changed(self, new_index):
+        attribute = None if new_index < 1 else self.cb_color_var.model()[new_index]
         self.distribution_delegate.set_color_attribute(attribute)
 
         if self.model:

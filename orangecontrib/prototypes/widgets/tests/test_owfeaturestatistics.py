@@ -275,7 +275,7 @@ class TestOWFeatureStatistics(WidgetTest):
             time_full,
         ])
         self.send_signal('Data', prepare_table(data))
-        simulate.combobox_run_through_all(self.widget.cb_target_var_index)
+        simulate.combobox_run_through_all(self.widget.cb_color_var)
 
     @table_dense_sparse
     def test_runs_with_missing_target_values(self, prepare_table):
@@ -293,7 +293,7 @@ class TestOWFeatureStatistics(WidgetTest):
         self.send_signal('Data', prepare_table(data))
         # TODO: This does not actually test the crash because the histogram
         # code only runs when visible
-        simulate.combobox_run_through_all(self.widget.cb_target_var_index)
+        simulate.combobox_run_through_all(self.widget.cb_color_var)
 
     @table_dense_sparse
     def test_runs_with_all_missing_target_values(self, prepare_table):
@@ -311,4 +311,4 @@ class TestOWFeatureStatistics(WidgetTest):
         self.send_signal('Data', prepare_table(data))
         # TODO: This does not actually test the crash because the histogram
         # code only runs when visible
-        simulate.combobox_run_through_all(self.widget.cb_target_var_index)
+        simulate.combobox_run_through_all(self.widget.cb_color_var)
