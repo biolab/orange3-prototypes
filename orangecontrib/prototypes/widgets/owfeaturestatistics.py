@@ -360,6 +360,7 @@ class OWFeatureStatistics(widget.OWWidget):
 
     name = 'Feature Statistics'
     description = 'Show basic statistics for data features.'
+    icon = 'icons/FeatureStatistics.svg'
 
     class Inputs:
         data = Input('Data', Table, default=True)
