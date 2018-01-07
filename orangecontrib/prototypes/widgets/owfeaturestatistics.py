@@ -355,6 +355,7 @@ class DistributionDelegate(NoFocusRectDelegate):
 class OWFeatureStatistics(widget.OWWidget):
     HISTOGRAM_ASPECT_RATIO = (7, 3)
     MINIMUM_HISTOGRAM_HEIGHT = 50
+    MAXIMUM_HISTOGRAM_HEIGHT = 100
 
     name = 'Feature Statistics'
     description = 'Show basic statistics for data features.'
@@ -453,6 +454,7 @@ class OWFeatureStatistics(widget.OWWidget):
             unit_width = new_size / ratio_width
             new_height = unit_width * ratio_height
             effective_height = max(new_height, self.MINIMUM_HISTOGRAM_HEIGHT)
+            effective_height = min(effective_height, self.MAXIMUM_HISTOGRAM_HEIGHT)
             vheader.setDefaultSectionSize(effective_height)
 
         def keep_row_centered(logical_index, old_size, new_size):
