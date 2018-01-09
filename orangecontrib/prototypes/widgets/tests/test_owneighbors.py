@@ -3,13 +3,13 @@
 import numpy as np
 
 from Orange.data import Table
-from orangecontrib.prototypes.widgets.owneighbours import OWNeighbours
+from orangecontrib.prototypes.widgets.owneighbors import OWNeighbors
 from Orange.widgets.tests.base import WidgetTest, ParameterMapping
 
 
-class TestOWNeighbours(WidgetTest):
+class TestOWNeighbors(WidgetTest):
     def setUp(self):
-        self.widget = self.create_widget(OWNeighbours,
+        self.widget = self.create_widget(OWNeighbors,
                                          stored_settings={"auto_apply": False})
         self.iris = Table("iris")
 
