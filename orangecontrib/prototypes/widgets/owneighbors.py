@@ -22,10 +22,12 @@ METRICS = [
     ("Absolute Pearson", distance.PearsonRAbsolute),
 ]
 
-class OWNeighbours(OWWidget):
-    name = "Neighbours"
-    description = "Compute nearest neighbours in data according to reference."
-    icon = "icons/Neighbours.svg"
+class OWNeighbors(OWWidget):
+    name = "Neighbors"
+    description = "Compute nearest neighbors in data according to reference."
+    icon = "icons/Neighbors.svg"
+
+    replaces = ["orangecontrib.prototypes.widgets.owneighbours.OWNeighbours"]
 
     inputs = [("Data", Table, "set_data"), ("Reference", Table, "set_ref")]
     outputs = [("Neighbors", Table)]
@@ -107,9 +109,9 @@ class OWNeighbours(OWWidget):
             if (self.data[index] not in self.reference or
                     not self.exclude_reference) and index not in indices:
                 indices.append(index)
-        neighbours = data[indices]
-        neighbours.attributes = self.data.attributes
-        self.send("Neighbors", neighbours)
+        neighbors = data[indices]
+        neighbors.attributes = self.data.attributes
+        self.send("Neighbors", neighbors)
 
     @staticmethod
     def _add_similarity(data, dist):
@@ -122,7 +124,7 @@ class OWNeighbours(OWWidget):
 
 if __name__ == "__main__":
     a = QApplication([])
-    ow = OWNeighbours()
+    ow = OWNeighbors()
     ow.show()
     ow.set_data(Table("iris"))
     ow.set_ref(Table("iris")[:10])
