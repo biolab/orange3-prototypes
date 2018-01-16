@@ -2,9 +2,10 @@ from enum import IntEnum
 from operator import attrgetter
 
 import numpy as np
+from Orange.widgets.utils.signals import Input, Output
 from scipy.stats import spearmanr
 
-from AnyQt.QtCore import Qt, QItemSelectionModel, QItemSelection
+from AnyQt.QtCore import Qt, QItemSelectionModel, QItemSelection, QSize
 from AnyQt.QtGui import QStandardItem
 from AnyQt.QtWidgets import QHeaderView
 
@@ -61,9 +62,13 @@ class OWCorrelations(OWWidget):
     icon = "icons/Correlations.svg"
     priority = 2000
 
-    inputs = [("Data", Table, "set_data")]
-    outputs = [("Data", Table), ("Features", AttributeList),
-               ("Correlations", Table)]
+    class Inputs:
+        data = Input("Data", Table)
+
+    class Outputs:
+        data = Output("Data", Table)
+        features = Output("Features", AttributeList)
+        correlations = Output("Correlations", Table)
 
     want_control_area = False
 
@@ -95,7 +100,9 @@ class OWCorrelations(OWWidget):
 
         button_box = gui.hBox(self.mainArea)
         button_box.layout().addWidget(self.vizrank.button)
-        button_box.layout().addWidget(self.report_button)
+
+    def sizeHint(self):
+        return QSize(350, 400)
 
     def _correlation_combo_changed(self):
         self.apply()
@@ -115,6 +122,7 @@ class OWCorrelations(OWWidget):
                     selection, QItemSelectionModel.ClearAndSelect)
                 break
 
+    @Inputs.data
     def set_data(self, data):
         self.closeContext()
         self.clear_messages()
@@ -148,9 +156,9 @@ class OWCorrelations(OWWidget):
 
     def commit(self):
         if self.data is None or self.cont_data is None:
-            self.send("Data", self.data)
-            self.send("Features", None)
-            self.send("Correlations", None)
+            self.Outputs.data.send(self.data)
+            self.Outputs.features.send(None)
+            self.Outputs.correlations.send(None)
             return
 
         metas = [StringVariable("Feature 1"), StringVariable("Feature 2")]
@@ -164,11 +172,11 @@ class OWCorrelations(OWWidget):
         corr_table = Table(domain, x, metas=m)
         corr_table.name = "Correlations"
 
-        self.send("Data", self.data)
+        self.Outputs.data.send(self.data)
         # data has been imputed; send original attributes
-        self.send("Features", AttributeList([attr.compute_value.variable for
-                                             attr in self.selection]))
-        self.send("Correlations", corr_table)
+        self.Outputs.features.send(AttributeList([attr.compute_value.variable
+                                                  for attr in self.selection]))
+        self.Outputs.correlations.send(corr_table)
 
     def send_report(self):
         self.report_table(CorrelationType.items()[self.correlation_type],
