@@ -15,6 +15,10 @@ ENTRY_POINTS = {
         #    orangecontrib/datafusion/widgets/__init__.py
         'Prototypes = orangecontrib.prototypes.widgets',
     ),
+    # Register widget help
+    "orange.canvas.help": (
+    'html-index = orangecontrib.prototypes.widgets:WIDGET_HELP_PATH',
+    ),
 }
 
 if __name__ == '__main__':
