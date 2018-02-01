@@ -19,9 +19,8 @@ class ORACLESQL(OWWidget):
     want_message_bar = True
     #inputs = []
     outputs = [("Data", Table)]
-    description = "Create a Table from an ODBC datasource"
+    description = "Select data from oracle databases"
     settingsHandler = settings.DomainContextHandler()
-    priority = 1
     autocommit = settings.Setting(False, schema_only=True)
     savedQuery = settings.Setting(None, schema_only=True)
     savedUsername = settings.Setting(None, schema_only=True)
