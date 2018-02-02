@@ -226,6 +226,11 @@ class OWSignificantGroups(widget.OWWidget):
             self.Error.no_class_selected()
             return
 
+        # If listview selection was a single item the list of items is not a list,
+        # but futher below we expect it to be
+        if not isinstance(self.chosen_X, (list, tuple)):
+            self.chosen_X = [self.chosen_X]
+
         self.btn_compute.setEnabled(False)
         yvar = self.data.domain[self.chosen_y]
 
