@@ -299,12 +299,17 @@ class OWLookalike(OWWidget):
                         len(self.neighbors) <= self.neighbor_index:
             return
 
-        reference_path = self.reference[0][self.reference_img_attr].value
+        reference_path = os.path.join(
+            self.reference[0][self.reference_img_attr].variable.attributes.get(
+                "origin", ""),
+            self.reference[0][self.reference_img_attr].value)
         reference_image = self._get_image(reference_path)
         reference_image = reference_image.scaledToHeight(350)
 
-        neighbors_path = self.neighbors[self.neighbor_index][
-            self.neighbors_img_attr].value
+        sel_neigbour = self.neighbors[self.neighbor_index]
+        neighbors_path = os.path.join(
+            sel_neigbour[self.neighbors_img_attr].variable.attributes.get("origin", ""),
+            sel_neigbour[self.neighbors_img_attr].value)
         neighbors_image = self._get_image(neighbors_path)
         neighbors_image = neighbors_image.scaledToHeight(350)
 
