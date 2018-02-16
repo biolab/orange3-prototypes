@@ -4,7 +4,7 @@ from AnyQt.QtWidgets import QSizePolicy, QPlainTextEdit, QLineEdit
 
 from Orange.widgets import gui, settings
 from Orange.widgets.widget import OWWidget, Msg, Output
-from Orange.data import Table, Domain, ContinuousVariable, DiscreteVariable, TimeVariable, StringVariable
+from Orange.data import Table, Domain, ContinuousVariable, DiscreteVariable, TimeVariable
 from PyQt5.QtCore import QTimer
 
 try:
@@ -107,13 +107,29 @@ class OWOracleSQL(OWWidget):
             columns = [i[0] for i in cur.description]      
         
         data_tr = list(zip(*data))
-        n = len(columns)
-        featurelist = [ContinuousVariable(str(columns[col])) if all(type(x)==int or type(x)==float
-                                or type(x)==type(None) for x in data_tr[col]) else 
-            TimeVariable(str(columns[col])) if all(type(x)==type(datetime.datetime(9999,12,31,0,0)) or type(x)==type(None) for x in data_tr[col])  else  DiscreteVariable(str(columns[col]),self.setOfUniques(data_tr[col]))
-            if self.countUniques(data_tr[col]) < 101 else DiscreteVariable(str(columns[col]),self.setOfUniques(data_tr[col])) for col in range (0,n)]
 
-        data_tr = [self.dateToStr(data_tr[col]) if all(type(x)==type(datetime.datetime(9999,12,31,0,0)) or type(x)==type(None) for x in data_tr[col])  else  data_tr[col] for col in range (0,n)]
+        def create_variable(column_name, column_data):
+            continuous_types = (int, float, type(None))
+            datetime_types = (datetime.datetime, type(None))
+            column_name = str(column_name)
+
+            if all(isinstance(x, continuous_types) for x in column_data):
+                return ContinuousVariable(column_name)
+
+            if all(isinstance(x, datetime_types) for x in column_data):
+                return TimeVariable(column_name)
+
+            if self.countUniques(column_data) < 101:
+                return DiscreteVariable(str(column_name), self.setOfUniques(column_data))
+
+            return DiscreteVariable(str(column_name), self.setOfUniques(column_data))
+
+        featurelist = [create_variable(column_name, column_data)
+                       for column_name, column_data in zip(columns, data_tr)]
+
+        data_tr = [
+            self.dateToStr(data) if isinstance(var, TimeVariable) else data
+            for (var, data) in zip(featurelist, data_tr)]
         data = list(zip(*data_tr))
 
         orangedomain = Domain(featurelist)
