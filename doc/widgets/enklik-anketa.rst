@@ -1,25 +1,15 @@
 EnKlik Anketa
 =============
 
-.. figure:: icons/en-klik.png
-
 Import data from EnKlikAnketa (1ka.si) public URL.
 
-Signals
--------
+Inputs
+    None
 
-**Inputs**:
+Outputs
+    Data
+        survey results
 
--  None
-
-**Outputs**:
-
--  **Data**
-
-   A data table constructed from the survey results.
-
-Description
------------
 
 The **EnKlik Anketa** widget retrieves survey results obtained from the `EnKlikAnketa <http://english.1ka.si/>`_ service. You need to create a public link to to retrieve the results. Go to the survey you wish to retrieve, then select Data (Podatki) tab and create a public link (javna povezava) at the top right corner. 
 

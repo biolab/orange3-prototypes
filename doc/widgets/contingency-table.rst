@@ -1,27 +1,16 @@
 Contingency Table
 =================
 
-.. figure:: icons/contingency.png
-
 Construct a contingency table from given data.
 
-Signals
--------
+Inputs
+    Data
+        input dataset
 
-**Inputs**:
+Outputs
+    Contingency Table
+        data table with frequency counts
 
--  **Data**
-
-   An input data set.
-
-**Outputs**:
-
--  **Contingency Table**
-
-   A data table with frequency counts.
-
-Description
------------
 
 **Contingency Table** computes occurrences (frequencies) of two discrete variables (rows and columns).
 
