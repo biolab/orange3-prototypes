@@ -340,10 +340,7 @@ class DistributionDelegate(NoFocusRectDelegate):
 
         painter.setRenderHint(QPainter.HighQualityAntialiasing)
 
-        if option.state & QStyle.State_Selected:
-            background_color = option.palette.highlight()
-        else:
-            background_color = index.data(Qt.BackgroundRole)
+        background_color = index.data(Qt.BackgroundRole)
         self.__cache[row].setBackgroundBrush(background_color)
 
         self.__cache[row].render(
@@ -370,7 +367,6 @@ class OWFeatureStatistics(widget.OWWidget):
 
     settingsHandler = DomainContextHandler()
 
-    auto_commit = Setting(True)
     color_var = ContextSetting(None)  # type: Optional[Variable]
     filter_string = ContextSetting('')
 
@@ -411,18 +407,13 @@ class OWFeatureStatistics(widget.OWWidget):
         self.cb_color_var.currentIndexChanged.connect(self.__color_var_changed)
 
         gui.rubber(self.controlArea)
-        gui.auto_commit(
-            self.buttonsArea, self, 'auto_commit', 'Send Selected Rows',
-            'Send Automatically'
-        )
 
         # Main area
         self.view = QTableView(
             showGrid=False,
             cornerButtonEnabled=False,
             sortingEnabled=True,
-            selectionBehavior=QTableView.SelectRows,
-            selectionMode=QTableView.MultiSelection,
+            selectionMode=QTableView.NoSelection,
             horizontalScrollMode=QTableView.ScrollPerPixel,
             verticalScrollMode=QTableView.ScrollPerPixel,
         )
@@ -588,9 +579,6 @@ class OWFeatureStatistics(widget.OWWidget):
             self.info_attr.setText('')
             self.info_class.setText('')
             self.info_meta.setText('')
-
-    def commit(self):
-        pass
 
     def send_report(self):
         pass
