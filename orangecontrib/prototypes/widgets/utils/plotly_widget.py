@@ -113,7 +113,7 @@ class Plotly(WebviewWidget):
                                                           '_plotly', 'html.html')))
         if style:
             if path.isfile(style):
-                with open(style) as f:
+                with open(style, encoding='utf-8') as f:
                     style = f.read()
             # Add each of the rules of the stylesheet into the document
             # If you feel this is overly complicated, be my guest to improve it
@@ -125,7 +125,7 @@ class Plotly(WebviewWidget):
                 javascript = [javascript]
             for js in javascript:
                 if path.isfile(js):
-                    with open(js) as f:
+                    with open(js, encoding='utf-8') as f:
                         js = f.read()
                 self.evalJS(js)
 
