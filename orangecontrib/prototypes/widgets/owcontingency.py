@@ -1,3 +1,5 @@
+import unicodedata
+from AnyQt.QtGui import QStandardItemModel
 from Orange.data import (ContinuousVariable, DiscreteVariable, StringVariable,
                          Domain, Table)
 from Orange.statistics import contingency
@@ -6,6 +8,8 @@ from Orange.widgets.settings import (Setting, ContextSetting,
                                      DomainContextHandler)
 from Orange.widgets.utils.itemmodels import DomainModel
 from Orange.widgets.utils.sql import check_sql_input
+
+from orangecontrib.prototypes.widgets.contingency_table import ContingencyTable
 
 
 class OWContingencyTable(widget.OWWidget):
@@ -22,7 +26,7 @@ class OWContingencyTable(widget.OWWidget):
     columns = ContextSetting(None)
     auto_apply = Setting(True)
 
-    want_main_area = False
+    want_main_area = True
 
     def __init__(self):
         super().__init__()
@@ -41,6 +45,10 @@ class OWContingencyTable(widget.OWWidget):
         self.apply_button = gui.auto_commit(
             self.controlArea, self, "auto_apply", "&Apply", box=False)
 
+        self.tablemodel = QStandardItemModel(self)
+        view = self.tableview = ContingencyTable(self, self.tablemodel, None)
+        self.mainArea.layout().addWidget(view)
+
     @check_sql_input
     def set_data(self, data):
         if self.feature_model:
@@ -55,6 +63,9 @@ class OWContingencyTable(widget.OWWidget):
                 self.rows = self.feature_model[0]
                 self.columns = self.feature_model[0]
                 self.openContext(data)
+                self.tableview.initialize(
+                    self.rows.values + [unicodedata.lookup("N-ARY SUMMATION")],
+                    self.columns.values + [unicodedata.lookup("N-ARY SUMMATION")])
 
     def handleNewSignals(self):
         self._invalidate()
@@ -63,6 +74,9 @@ class OWContingencyTable(widget.OWWidget):
         table = None
         if self.data and self.rows and self.columns:
             table = contingency_table(self.data, self.columns, self.rows)
+            self.tableview.initialize(
+                self.rows.values + [unicodedata.lookup("N-ARY SUMMATION")],
+                self.columns.values + [unicodedata.lookup("N-ARY SUMMATION")])
         self.send("Contingency Table", table)
 
     def _invalidate(self):
