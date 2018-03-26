@@ -126,14 +126,56 @@ class OWLinePlot(OWWidget):
                                     if var.is_continuous]
 
             groupvars = [var for var in data.domain.variables + data.domain.metas
-                        if var.is_discrete]
+                         if var.is_discrete]
+
             if len(groupvars) > 0:
                 self.cb_attr.addItems([str(var) for var in groupvars])
                 self.group_var = str(groupvars[0])
                 self.group_variables = groupvars
                 self.update_group_var()
+            else:
+                self._setup_plot()
 
             self.openContext(data)
+
+    def _plot_curve(self, X, color, data):
+        plot_x, plot_y, connect = disconnected_curve_data(data.X, x=X)
+
+        color.setAlpha(200)
+        lightcolor = QColor(color.lighter(factor=150))
+        lightcolor.setAlpha(150)
+        pen = QPen(color, 2)
+        pen.setCosmetic(True)
+
+        lightpen = QPen(lightcolor, 1)
+        lightpen.setCosmetic(True)
+
+        curve = pg.PlotCurveItem(
+            x=plot_x, y=plot_y, connect=connect,
+            pen=lightpen, symbolSize=2, antialias=True,
+        )
+        self.graph.addItem(curve)
+
+        mean = np.nanmean(data.X, axis=0)
+
+        meancurve = pg.PlotDataItem(
+            x=X, y=mean, pen=pen, size=5, symbol="o", pxMode=True,
+            symbolSize=5, antialias=True
+        )
+
+        self.graph.addItem(meancurve)
+
+        q1, q2, q3 = np.nanpercentile(data.X, [25, 50, 75], axis=0)
+        # TODO: implement and use a box plot item
+        errorbar = pg.ErrorBarItem(
+            x=X, y=mean,
+            bottom=np.clip(mean - q1, 0, mean - q1),
+            top=np.clip(q3 - mean, 0, q3 - mean),
+            beam=0.5
+        )
+        self.graph.addItem(errorbar)
+
+        return curve, mean, meancurve, errorbar
 
     def _setup_plot(self):
         """Setup the plot with new curve data."""
@@ -141,11 +183,6 @@ class OWLinePlot(OWWidget):
         self.graph.clear()
 
         data, domain = self.data, self.data.domain
-        var = domain[self.group_var]
-        class_col_data, _ = data.get_column_view(var)
-        group_indices = [np.flatnonzero(class_col_data == i)
-                         for i in range(len(self.classes))]
-
         self.graph.getAxis('bottom').setTicks([
             [(i+1, str(a)) for i, a in enumerate(self.graph_variables)]
         ])
@@ -153,55 +190,40 @@ class OWLinePlot(OWWidget):
         X = np.arange(1, len(self.graph_variables)+1)
         groups = []
 
-        for i, indices in enumerate(group_indices):
-            if len(indices) == 0:
-                groups.append(None)
-            else:
-                if self.classes:
-                    color = self.class_colors[i]
+        if not self.selected_classes:
+            group_data = data[:, self.graph_variables]
+            curve, mean, meancurve, errorbar = self._plot_curve(X, QColor(Qt.darkGray), group_data)
+            groups.append(
+                namespace(
+                    data=group_data,
+                    profiles=curve,
+                    mean=meancurve,
+                    boxplot=errorbar)
+            )
+        else:
+            var = domain[self.group_var]
+            class_col_data, _ = data.get_column_view(var)
+            group_indices = [np.flatnonzero(class_col_data == i)
+                             for i in range(len(self.classes))]
+
+            for i, indices in enumerate(group_indices):
+                if len(indices) == 0:
+                    groups.append(None)
                 else:
-                    color = QColor(Qt.darkGray)
-                group_data = data[indices, self.graph_variables]
-                plot_x, plot_y, connect = disconnected_curve_data(group_data.X, x=X)
+                    if self.classes:
+                        color = self.class_colors[i]
+                    else:
+                        color = QColor(Qt.darkGray)
 
-                color.setAlpha(200)
-                lightcolor = QColor(color.lighter(factor=150))
-                lightcolor.setAlpha(150)
-                pen = QPen(color, 2)
-                pen.setCosmetic(True)
+                    group_data = data[indices, self.graph_variables]
+                    curve, mean, meancurve, errorbar = self._plot_curve(X, color, group_data)
 
-                lightpen = QPen(lightcolor, 1)
-                lightpen.setCosmetic(True)
-
-                curve = pg.PlotCurveItem(
-                    x=plot_x, y=plot_y, connect=connect,
-                    pen=lightpen, symbolSize=2, antialias=True,
-                )
-                self.graph.addItem(curve)
-
-                mean = np.nanmean(group_data.X, axis=0)
-
-                meancurve = pg.PlotDataItem(
-                    x=X, y=mean, pen=pen, size=5, symbol="o", pxMode=True,
-                    symbolSize=5, antialias=True
-                )
-                self.graph.addItem(meancurve)
-
-                q1, q2, q3 = np.nanpercentile(group_data.X, [25, 50, 75], axis=0)
-                # TODO: implement and use a box plot item
-                errorbar = pg.ErrorBarItem(
-                    x=X, y=mean,
-                    bottom=np.clip(mean - q1, 0, mean - q1),
-                    top=np.clip(q3 - mean, 0, q3 - mean),
-                    beam=0.5
-                )
-                self.graph.addItem(errorbar)
-                groups.append(
-                    namespace(
-                        data=group_data, indices=indices,
-                        profiles=curve, mean=meancurve,
-                        boxplot=errorbar)
-                )
+                    groups.append(
+                        namespace(
+                            data=group_data, indices=indices,
+                            profiles=curve, mean=meancurve,
+                            boxplot=errorbar)
+                    )
 
         self.__groups = groups
         self.__update_visibility()
@@ -209,8 +231,7 @@ class OWLinePlot(OWWidget):
     def __update_visibility(self):
         if self.__groups is None:
             return
-
-        if self.classes:
+        if self.classes and self.selected_classes:
             selected = lambda i: i in self.selected_classes
         else:
             selected = lambda i: True
@@ -268,6 +289,7 @@ def test_main(argv=sys.argv):
     r = a.exec_()
     w.saveSettings()
     return r
+
 
 if __name__ == "__main__":
     sys.exit(test_main())
