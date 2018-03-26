@@ -66,6 +66,8 @@ class OWContingencyTable(widget.OWWidget):
                 self.tableview.initialize(
                     self.rows.values + [unicodedata.lookup("N-ARY SUMMATION")],
                     self.columns.values + [unicodedata.lookup("N-ARY SUMMATION")])
+                table = contingency_table(self.data, self.columns, self.rows)
+                self.tableview.update_table(table.X, formatstr="{:.0f}")
 
     def handleNewSignals(self):
         self._invalidate()
@@ -74,12 +76,13 @@ class OWContingencyTable(widget.OWWidget):
         table = None
         if self.data and self.rows and self.columns:
             table = contingency_table(self.data, self.columns, self.rows)
-            self.tableview.initialize(
-                self.rows.values + [unicodedata.lookup("N-ARY SUMMATION")],
-                self.columns.values + [unicodedata.lookup("N-ARY SUMMATION")])
+            self.tableview.update_table(table.X, formatstr="{:.0f}")
         self.send("Contingency Table", table)
 
     def _invalidate(self):
+        self.tableview.initialize(
+            self.rows.values + [unicodedata.lookup("N-ARY SUMMATION")],
+            self.columns.values + [unicodedata.lookup("N-ARY SUMMATION")])
         self.commit()
 
     def send_report(self):

@@ -1,20 +1,18 @@
 """Confusion matrix widget"""
 
 import unicodedata
-from math import isnan, isinf
 
 import Orange
 import Orange.evaluation
 import numpy as np
 import sklearn.metrics as skl_metrics
 from AnyQt.QtCore import Qt, QSize, QItemSelectionModel, QItemSelection
-from AnyQt.QtGui import QBrush, QColor, QStandardItemModel, QStandardItem
+from AnyQt.QtGui import QStandardItemModel
 from Orange.widgets import widget, settings, gui
 from Orange.widgets.utils.annotated_data import (create_annotated_table,
                                                  ANNOTATED_DATA_SIGNAL_NAME)
 from Orange.widgets.widget import Msg, Input, Output
-
-from orangecontrib.prototypes.widgets.contingency_table import ContingencyTable, BorderRole, BorderColorRole
+from orangecontrib.prototypes.widgets.contingency_table import ContingencyTable
 
 
 def confusion_matrix(res, index):
@@ -125,12 +123,6 @@ class OWConfusionMatrix(widget.OWWidget):
     def sizeHint(self):
         """Initial size"""
         return QSize(750, 340)
-
-    def _item(self, i, j):
-        return self.tablemodel.item(i, j) or QStandardItem()
-
-    def _set_item(self, i, j, item):
-        self.tablemodel.setItem(i, j, item)
 
     @Inputs.evaluation_results
     def set_results(self, results):
@@ -335,9 +327,6 @@ class OWConfusionMatrix(widget.OWWidget):
         self.commit()
 
     def _update(self):
-        def _isinvalid(x):
-            return isnan(x) or isinf(x)
-
         # Update the displayed confusion matrix
         if self.results is not None and self.selected_learner:
             cmatrix = confusion_matrix(self.results, self.selected_learner[0])
@@ -364,42 +353,7 @@ class OWConfusionMatrix(widget.OWWidget):
             colors /= div
             colors[diag] = normalized[diag] / normalized[diag].max()
 
-            for i in range(n):
-                for j in range(n):
-                    val = normalized[i, j]
-                    col_val = colors[i, j]
-                    item = self._item(i + 2, j + 2)
-                    item.setData(
-                        "NA" if _isinvalid(val) else formatstr.format(val),
-                        Qt.DisplayRole)
-                    bkcolor = QColor.fromHsl(
-                        [0, 240][i == j], 160,
-                        255 if _isinvalid(col_val) else int(255 - 30 * col_val))
-                    item.setData(QBrush(bkcolor), Qt.BackgroundRole)
-                    item.setData("trbl", BorderRole)
-                    item.setToolTip("actual: {}\npredicted: {}".format(
-                        self.headers[i], self.headers[j]))
-                    item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-                    item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
-                    self._set_item(i + 2, j + 2, item)
-
-            bold_font = self.tablemodel.invisibleRootItem().font()
-            bold_font.setBold(True)
-
-            def _sum_item(value, border=""):
-                item = QStandardItem()
-                item.setData(value, Qt.DisplayRole)
-                item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-                item.setFlags(Qt.ItemIsEnabled)
-                item.setFont(bold_font)
-                item.setData(border, BorderRole)
-                item.setData(QColor(192, 192, 192), BorderColorRole)
-                return item
-
-            for i in range(n):
-                self._set_item(n + 2, i + 2, _sum_item(int(colsum[i]), "t"))
-                self._set_item(i + 2, n + 2, _sum_item(int(rowsum[i]), "l"))
-            self._set_item(n + 2, n + 2, _sum_item(int(rowsum.sum())))
+            self.tableview.update_table(normalized, colsum, rowsum, colors, formatstr)
 
     def send_report(self):
         """Send report"""
