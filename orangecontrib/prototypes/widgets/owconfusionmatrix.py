@@ -1,7 +1,5 @@
 """Confusion matrix widget"""
 
-import unicodedata
-
 import Orange
 import Orange.evaluation
 import numpy as np
@@ -172,8 +170,9 @@ class OWConfusionMatrix(widget.OWWidget):
             self.report_button.setDisabled(False)
 
             nmodels = results.predicted.shape[0]
-            self.headers = class_values + \
-                           [unicodedata.lookup("N-ARY SUMMATION")]
+            # Does self.headers have a use?
+            # self.headers = class_values + \
+            #                [unicodedata.lookup("N-ARY SUMMATION")]
 
             # NOTE: The 'learner_names' is set in 'Test Learners' widget.
             if hasattr(results, "learner_names"):
@@ -182,7 +181,7 @@ class OWConfusionMatrix(widget.OWWidget):
                 self.learners = ["Learner #{}".format(i + 1)
                                  for i in range(nmodels)]
 
-            self.tableview.initialize(self.headers)
+            self.tableview.initialize(class_values)
             self.openContext(data.domain.class_var)
             if not prev_sel_learner or prev_sel_learner[0] >= len(self.learners):
                 if self.learners:

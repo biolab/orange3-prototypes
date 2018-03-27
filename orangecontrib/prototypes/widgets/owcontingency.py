@@ -1,4 +1,3 @@
-import unicodedata
 from AnyQt.QtGui import QStandardItemModel
 from Orange.data import (ContinuousVariable, DiscreteVariable, StringVariable,
                          Domain, Table)
@@ -64,9 +63,7 @@ class OWContingencyTable(widget.OWWidget):
                 self.rows = self.feature_model[0]
                 self.columns = self.feature_model[0]
                 self.openContext(data)
-                self.tableview.initialize(
-                    self.rows.values + [unicodedata.lookup("N-ARY SUMMATION")],
-                    self.columns.values + [unicodedata.lookup("N-ARY SUMMATION")])
+                self.tableview.initialize(self.rows.values, self.columns.values)
                 self.table = contingency_table(self.data, self.columns, self.rows)
                 self.tableview.update_table(self.table.X, formatstr="{:.0f}")
         else:
@@ -81,9 +78,7 @@ class OWContingencyTable(widget.OWWidget):
     def _invalidate(self):
         self.table = None
         if self.data and self.rows and self.columns:
-            self.tableview.initialize(
-                self.rows.values + [unicodedata.lookup("N-ARY SUMMATION")],
-                self.columns.values + [unicodedata.lookup("N-ARY SUMMATION")])
+            self.tableview.initialize(self.rows.values, self.columns.values)
             self.table = contingency_table(self.data, self.columns, self.rows)
             self.tableview.update_table(self.table.X, formatstr="{:.0f}")
         self.commit()

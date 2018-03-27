@@ -1,5 +1,6 @@
 from math import isnan, isinf
 
+import unicodedata
 from AnyQt.QtCore import Qt
 from AnyQt.QtGui import QStandardItem, QColor, QFont, QBrush
 from AnyQt.QtWidgets import QTableView, QSizePolicy, QHeaderView, QStyledItemDelegate
@@ -48,10 +49,8 @@ class ContingencyTable(QTableView):
     def __init__(self, parent, tablemodel, click_event=None):
         super().__init__(editTriggers=QTableView.NoEditTriggers)
 
-        self.headersv = None
-        self.headersh = None
-        self.nclassesv = None
-        self.nclassesh = None
+        self.classesv = None
+        self.classesh = None
         self.parent = parent
         self.tablemodel = tablemodel
 
@@ -73,13 +72,12 @@ class ContingencyTable(QTableView):
     def _set_item(self, i, j, item):
         self.tablemodel.setItem(i, j, item)
 
-    def initialize(self, headersv, headersh=None):
+    def initialize(self, classesv, classesh=None, corner_string=None):
         # Maybe merge with __init__.
-        # Maybe add unicodedata.lookup("N-ARY SUMMATION") automatically.
-        self.headersv = headersv
-        self.headersh = headersh or self.headersv
-        self.nclassesv = len(self.headersv) - 1
-        self.nclassesh = len(self.headersh) - 1
+        self.classesv = classesv
+        self.classesh = classesh or self.classesv
+        if corner_string is None:
+            corner_string = unicodedata.lookup("N-ARY SUMMATION")
 
         # TODO: Change "Predicted" and "Actual" to attribute names when headersh isn't None.
         item = self._item(0, 2)
@@ -94,8 +92,8 @@ class ContingencyTable(QTableView):
         item.setFlags(Qt.NoItemFlags)
         self.setItemDelegateForColumn(0, gui.VerticalItemDelegate())
         self._set_item(2, 0, item)
-        self.setSpan(0, 2, 1, self.nclassesh)
-        self.setSpan(2, 0, self.nclassesv, 1)
+        self.setSpan(0, 2, 1, len(self.classesh)+1)
+        self.setSpan(2, 0, len(self.classesv)+1, 1)
 
         font = self.tablemodel.invisibleRootItem().font()
         bold_font = QFont(font)
@@ -107,8 +105,8 @@ class ContingencyTable(QTableView):
                 item.setFlags(Qt.NoItemFlags)
                 self._set_item(i, j, item)
 
-        for headers, nclasses, ix in ((self.headersv, self.nclassesv, lambda p: (p + 2, 1)),
-                                      (self.headersh, self.nclassesh, lambda p: (1, p + 2))):
+        for headers, ix in ((self.classesv + [corner_string], lambda p: (p + 2, 1)),
+                            (self.classesh + [corner_string], lambda p: (1, p + 2))):
             for p, label in enumerate(headers):
                 i, j = ix(p)
                 item = self._item(i, j)
@@ -116,7 +114,7 @@ class ContingencyTable(QTableView):
                 item.setFont(bold_font)
                 item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                 item.setFlags(Qt.ItemIsEnabled)
-                if p < nclasses:
+                if p < len(headers) - 1:
                     item.setData("br"[j == 1], BorderRole)
                     item.setData(QColor(192, 192, 192), BorderColorRole)
                 else:
@@ -124,12 +122,12 @@ class ContingencyTable(QTableView):
                 self._set_item(i, j, item)
 
         hor_header = self.horizontalHeader()
-        if len(' '.join(self.headersh)) < 120:
+        if len(' '.join(self.classesh + [corner_string])) < 120:
             hor_header.setSectionResizeMode(QHeaderView.ResizeToContents)
         else:
             hor_header.setDefaultSectionSize(60)
-        self.tablemodel.setRowCount(self.nclassesv + 3)
-        self.tablemodel.setColumnCount(self.nclassesh + 3)
+        self.tablemodel.setRowCount(len(self.classesv) + 3)
+        self.tablemodel.setColumnCount(len(self.classesh) + 3)
 
     def update_table(self, matrix, colsum=None, rowsum=None, colors=None, formatstr="{}"):
         def _isinvalid(x):
@@ -140,8 +138,8 @@ class ContingencyTable(QTableView):
         if rowsum is None:
             rowsum = matrix.sum(axis=1)
 
-        for i in range(self.nclassesv):
-            for j in range(self.nclassesh):
+        for i in range(len(self.classesv)):
+            for j in range(len(self.classesh)):
                 val = matrix[i, j]
                 col_val = float('nan') if colors is None else colors[i, j]
                 item = QStandardItem()
@@ -155,7 +153,7 @@ class ContingencyTable(QTableView):
                 item.setData("trbl", BorderRole)
                 # TODO: Make tooltips appropriate.
                 item.setToolTip("actual: {}\npredicted: {}".format(
-                    self.headersv[i], self.headersh[j]))
+                    self.classesv[i], self.classesh[j]))
                 item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                 item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
                 self._set_item(i + 2, j + 2, item)
@@ -173,8 +171,8 @@ class ContingencyTable(QTableView):
             item.setData(QColor(192, 192, 192), BorderColorRole)
             return item
 
-        for i in range(self.nclassesh):
-            self._set_item(self.nclassesv + 2, i + 2, _sum_item(int(colsum[i]), "t"))
-        for i in range(self.nclassesv):
-            self._set_item(i + 2, self.nclassesh + 2, _sum_item(int(rowsum[i]), "l"))
-        self._set_item(self.nclassesv + 2, self.nclassesh + 2, _sum_item(int(rowsum.sum())))
+        for i in range(len(self.classesh)):
+            self._set_item(len(self.classesv) + 2, i + 2, _sum_item(int(colsum[i]), "t"))
+        for i in range(len(self.classesv)):
+            self._set_item(i + 2, len(self.classesh) + 2, _sum_item(int(rowsum[i]), "l"))
+        self._set_item(len(self.classesv) + 2, len(self.classesh) + 2, _sum_item(int(rowsum.sum())))
