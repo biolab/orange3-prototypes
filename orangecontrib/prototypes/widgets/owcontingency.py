@@ -33,6 +33,7 @@ class OWContingencyTable(widget.OWWidget):
 
         self.data = None
         self.feature_model = DomainModel(valid_types=DiscreteVariable)
+        self.table = None
 
         box = gui.vBox(self.controlArea, "Rows")
         gui.comboBox(box, self, 'rows', sendSelectedValue=True,
@@ -66,23 +67,25 @@ class OWContingencyTable(widget.OWWidget):
                 self.tableview.initialize(
                     self.rows.values + [unicodedata.lookup("N-ARY SUMMATION")],
                     self.columns.values + [unicodedata.lookup("N-ARY SUMMATION")])
-                table = contingency_table(self.data, self.columns, self.rows)
-                self.tableview.update_table(table.X, formatstr="{:.0f}")
+                self.table = contingency_table(self.data, self.columns, self.rows)
+                self.tableview.update_table(self.table.X, formatstr="{:.0f}")
+        else:
+            self.tablemodel.clear()
 
     def handleNewSignals(self):
         self._invalidate()
 
     def commit(self):
-        table = None
-        if self.data and self.rows and self.columns:
-            table = contingency_table(self.data, self.columns, self.rows)
-            self.tableview.update_table(table.X, formatstr="{:.0f}")
-        self.send("Contingency Table", table)
+        self.send("Contingency Table", self.table)
 
     def _invalidate(self):
-        self.tableview.initialize(
-            self.rows.values + [unicodedata.lookup("N-ARY SUMMATION")],
-            self.columns.values + [unicodedata.lookup("N-ARY SUMMATION")])
+        self.table = None
+        if self.data and self.rows and self.columns:
+            self.tableview.initialize(
+                self.rows.values + [unicodedata.lookup("N-ARY SUMMATION")],
+                self.columns.values + [unicodedata.lookup("N-ARY SUMMATION")])
+            self.table = contingency_table(self.data, self.columns, self.rows)
+            self.tableview.update_table(self.table.X, formatstr="{:.0f}")
         self.commit()
 
     def send_report(self):
