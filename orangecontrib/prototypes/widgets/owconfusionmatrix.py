@@ -78,7 +78,6 @@ class OWConfusionMatrix(widget.OWWidget):
         self.data = None
         self.results = None
         self.learners = []
-        self.headers = []
 
         self.learners_box = gui.listBox(
             self.controlArea, self, "selected_learner", "learners", box=True,
@@ -170,9 +169,6 @@ class OWConfusionMatrix(widget.OWWidget):
             self.report_button.setDisabled(False)
 
             nmodels = results.predicted.shape[0]
-            # Does self.headers have a use?
-            # self.headers = class_values + \
-            #                [unicodedata.lookup("N-ARY SUMMATION")]
 
             # NOTE: The 'learner_names' is set in 'Test Learners' widget.
             if hasattr(results, "learner_names"):
@@ -197,7 +193,6 @@ class OWConfusionMatrix(widget.OWWidget):
         self.results = None
         self.data = None
         self.tablemodel.clear()
-        self.headers = []
         # Clear learners last. This action will invoke `_learner_changed`
         self.learners = []
 
