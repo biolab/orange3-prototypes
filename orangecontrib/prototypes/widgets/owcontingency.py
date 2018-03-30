@@ -46,7 +46,7 @@ class OWContingencyTable(widget.OWWidget):
             self.controlArea, self, "auto_apply", "&Apply", box=False)
 
         self.tablemodel = QStandardItemModel(self)
-        view = self.tableview = ContingencyTable(self, self.tablemodel, None)
+        view = self.tableview = ContingencyTable(self, self.tablemodel)
         self.mainArea.layout().addWidget(view)
 
     @check_sql_input

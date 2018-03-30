@@ -106,7 +106,7 @@ class OWConfusionMatrix(widget.OWWidget):
                      orientation=Qt.Horizontal, callback=self._update)
 
         self.tablemodel = QStandardItemModel(self)
-        view = self.tableview = ContingencyTable(self, self.tablemodel, self.cell_clicked)
+        view = self.tableview = ContingencyTable(self, self.tablemodel)
         box.layout().addWidget(view)
 
         selbox = gui.hBox(box)
@@ -222,25 +222,6 @@ class OWConfusionMatrix(widget.OWWidget):
     def select_none(self):
         """Reset selection"""
         self.tableview.selectionModel().clear()
-
-    def cell_clicked(self, model_index):
-        """Handle cell click event"""
-        i, j = model_index.row(), model_index.column()
-        if not i or not j:
-            return
-        n = self.tablemodel.rowCount()
-        index = self.tablemodel.index
-        selection = None
-        if i == j == 1 or i == j == n - 1:
-            selection = QItemSelection(index(2, 2), index(n - 1, n - 1))
-        elif i in (1, n - 1):
-            selection = QItemSelection(index(2, j), index(n - 1, j))
-        elif j in (1, n - 1):
-            selection = QItemSelection(index(i, 2), index(i, n - 1))
-
-        if selection is not None:
-            self.tableview.selectionModel().select(
-                selection, QItemSelectionModel.ClearAndSelect)
 
     def _prepare_data(self):
         indices = self.tableview.selectedIndexes()

@@ -1,7 +1,7 @@
 from math import isnan, isinf
 
 import unicodedata
-from AnyQt.QtCore import Qt
+from AnyQt.QtCore import Qt, QItemSelection, QItemSelectionModel
 from AnyQt.QtGui import QStandardItem, QColor, QFont, QBrush
 from AnyQt.QtWidgets import QTableView, QSizePolicy, QHeaderView, QStyledItemDelegate
 from Orange.widgets import gui
@@ -46,7 +46,7 @@ class BorderedItemDelegate(QStyledItemDelegate):
 
 
 class ContingencyTable(QTableView):
-    def __init__(self, parent, tablemodel, click_event=None):
+    def __init__(self, parent, tablemodel):
         super().__init__(editTriggers=QTableView.NoEditTriggers)
 
         self.classesv = None
@@ -63,8 +63,26 @@ class ContingencyTable(QTableView):
         self.setItemDelegate(BorderedItemDelegate(Qt.white))
         self.setSizePolicy(QSizePolicy.MinimumExpanding,
                            QSizePolicy.MinimumExpanding)
-        if click_event:
-            self.clicked.connect(click_event)
+        self.clicked.connect(self.cell_clicked)
+
+    def cell_clicked(self, model_index):
+        """Handle cell click event"""
+        i, j = model_index.row(), model_index.column()
+        if not i or not j:
+            return
+        n = self.tablemodel.rowCount()
+        index = self.tablemodel.index
+        selection = None
+        if i == j == 1 or i == j == n - 1:
+            selection = QItemSelection(index(2, 2), index(n - 1, n - 1))
+        elif i in (1, n - 1):
+            selection = QItemSelection(index(2, j), index(n - 1, j))
+        elif j in (1, n - 1):
+            selection = QItemSelection(index(i, 2), index(i, n - 1))
+
+        if selection is not None:
+            self.selectionModel().select(
+                selection, QItemSelectionModel.ClearAndSelect)
 
     def _item(self, i, j):
         return self.tablemodel.item(i, j) or QStandardItem()
