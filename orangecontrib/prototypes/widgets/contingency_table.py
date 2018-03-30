@@ -63,9 +63,9 @@ class ContingencyTable(QTableView):
         self.setItemDelegate(BorderedItemDelegate(Qt.white))
         self.setSizePolicy(QSizePolicy.MinimumExpanding,
                            QSizePolicy.MinimumExpanding)
-        self.clicked.connect(self.cell_clicked)
+        self.clicked.connect(self._cell_clicked)
 
-    def cell_clicked(self, model_index):
+    def _cell_clicked(self, model_index):
         """Handle cell click event"""
         i, j = model_index.row(), model_index.column()
         if not i or not j:

@@ -1,6 +1,7 @@
 from AnyQt.QtGui import QStandardItemModel
 from Orange.data import (ContinuousVariable, DiscreteVariable, StringVariable,
                          Domain, Table)
+from Orange.data.filter import FilterDiscrete, Values
 from Orange.statistics import contingency
 from Orange.widgets import widget, gui
 from Orange.widgets.settings import (Setting, ContextSetting,
@@ -18,7 +19,8 @@ class OWContingencyTable(widget.OWWidget):
     priority = 2010
 
     inputs = [("Data", Table, "set_data", widget.Default)]
-    outputs = [("Contingency Table", Table, )]
+    outputs = [("Contingency Table", Table, ),
+               ("Selected Data", Table, )]
 
     settingsHandler = DomainContextHandler(metas_in_res=True)
     rows = ContextSetting(None)
@@ -74,6 +76,16 @@ class OWContingencyTable(widget.OWWidget):
         self._attribute_changed()
 
     def commit(self):
+        if len(self.selection):
+            cells = []
+            for ir, r in enumerate(self.rows.values):
+                for ic, c in enumerate(self.columns.values):
+                    if (ir, ic) in self.selection:
+                        cells.append(Values([FilterDiscrete(self.rows, [r]), FilterDiscrete(self.columns, [c])]))
+            selected_data = Values(cells, conjunction=False)(self.data)
+        else:
+            selected_data = None
+        self.send("Selected Data", selected_data)
         self.send("Contingency Table", self.table)
 
     def _invalidate(self):
