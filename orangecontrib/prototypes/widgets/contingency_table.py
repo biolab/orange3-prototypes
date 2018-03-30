@@ -71,14 +71,15 @@ class ContingencyTable(QTableView):
         if not i or not j:
             return
         n = self.tablemodel.rowCount()
+        m = self.tablemodel.columnCount()
         index = self.tablemodel.index
         selection = None
-        if i == j == 1 or i == j == n - 1:
-            selection = QItemSelection(index(2, 2), index(n - 1, n - 1))
+        if i == j == 1 or i == n - 1 and j == m - 1:
+            selection = QItemSelection(index(2, 2), index(n - 1, m - 1))
         elif i in (1, n - 1):
             selection = QItemSelection(index(2, j), index(n - 1, j))
-        elif j in (1, n - 1):
-            selection = QItemSelection(index(i, 2), index(i, n - 1))
+        elif j in (1, m - 1):
+            selection = QItemSelection(index(i, 2), index(i, m - 1))
 
         if selection is not None:
             self.selectionModel().select(
@@ -147,6 +148,18 @@ class ContingencyTable(QTableView):
         self.tablemodel.setRowCount(len(self.classesv) + 3)
         self.tablemodel.setColumnCount(len(self.classesh) + 3)
 
+    def get_selection(self):
+        return {(ind.row() - 2, ind.column() - 2) for ind in self.selectedIndexes()}
+
+    def set_selection(self, indexes):
+        selection = QItemSelection()
+        index = self.model().index
+        for row, col in indexes:
+            sel = index(row + 2, col + 2)
+            selection.select(sel, sel)
+        self.selectionModel().select(
+            selection, QItemSelectionModel.ClearAndSelect)
+
     def update_table(self, matrix, colsum=None, rowsum=None, colors=None, formatstr="{}"):
         def _isinvalid(x):
             return isnan(x) or isinf(x)
@@ -155,6 +168,8 @@ class ContingencyTable(QTableView):
             colsum = matrix.sum(axis=0)
         if rowsum is None:
             rowsum = matrix.sum(axis=1)
+
+        selected_indexes = {(ind.row() - 2, ind.column() - 2) for ind in self.selectedIndexes()}
 
         for i in range(len(self.classesv)):
             for j in range(len(self.classesh)):
@@ -194,3 +209,5 @@ class ContingencyTable(QTableView):
         for i in range(len(self.classesv)):
             self._set_item(i + 2, len(self.classesh) + 2, _sum_item(int(rowsum[i]), "l"))
         self._set_item(len(self.classesv) + 2, len(self.classesh) + 2, _sum_item(int(rowsum.sum())))
+
+        self.set_selection(selected_indexes)

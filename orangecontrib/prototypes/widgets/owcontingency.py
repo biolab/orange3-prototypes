@@ -23,6 +23,7 @@ class OWContingencyTable(widget.OWWidget):
     settingsHandler = DomainContextHandler(metas_in_res=True)
     rows = ContextSetting(None)
     columns = ContextSetting(None)
+    selection = ContextSetting(set())
     auto_apply = Setting(True)
 
     want_main_area = True
@@ -36,11 +37,11 @@ class OWContingencyTable(widget.OWWidget):
 
         box = gui.vBox(self.controlArea, "Rows")
         gui.comboBox(box, self, 'rows', sendSelectedValue=True,
-                     model=self.feature_model, callback=self._invalidate)
+                     model=self.feature_model, callback=self._attribute_changed)
 
         box = gui.vBox(self.controlArea, "Columns")
         gui.comboBox(box, self, 'columns', sendSelectedValue=True,
-                     model=self.feature_model, callback=self._invalidate)
+                     model=self.feature_model, callback=self._attribute_changed)
 
         self.apply_button = gui.auto_commit(
             self.controlArea, self, "auto_apply", "&Apply", box=False)
@@ -70,18 +71,23 @@ class OWContingencyTable(widget.OWWidget):
             self.tablemodel.clear()
 
     def handleNewSignals(self):
-        self._invalidate()
+        self._attribute_changed()
 
     def commit(self):
         self.send("Contingency Table", self.table)
 
     def _invalidate(self):
+        self.selection = self.tableview.get_selection()
+        self.commit()
+
+    def _attribute_changed(self):
+        self.tableview.set_selection(self.selection)
         self.table = None
         if self.data and self.rows and self.columns:
             self.tableview.initialize(self.rows.values, self.columns.values)
             self.table = contingency_table(self.data, self.columns, self.rows)
             self.tableview.update_table(self.table.X, formatstr="{:.0f}")
-        self.commit()
+        self._invalidate()
 
     def send_report(self):
         rows = None

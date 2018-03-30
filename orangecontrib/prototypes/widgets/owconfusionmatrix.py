@@ -185,7 +185,7 @@ class OWConfusionMatrix(widget.OWWidget):
             else:
                 self.selected_learner[:] = prev_sel_learner
             self._update()
-            self._set_selection()
+            self.tableview.set_selection(self.selection)
             self.unconditional_commit()
 
     def clear(self):
@@ -287,18 +287,8 @@ class OWConfusionMatrix(widget.OWWidget):
         self.selection = {(ind.row() - 2, ind.column() - 2) for ind in indices}
         self.commit()
 
-    def _set_selection(self):
-        selection = QItemSelection()
-        index = self.tableview.model().index
-        for row, col in self.selection:
-            sel = index(row + 2, col + 2)
-            selection.select(sel, sel)
-        self.tableview.selectionModel().select(
-            selection, QItemSelectionModel.ClearAndSelect)
-
     def _learner_changed(self):
         self._update()
-        self._set_selection()
         self.commit()
 
     def _update(self):
