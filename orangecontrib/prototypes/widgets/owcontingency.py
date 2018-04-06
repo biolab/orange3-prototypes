@@ -1,4 +1,5 @@
 from AnyQt.QtGui import QStandardItemModel
+from AnyQt.QtWidgets import QLabel
 from Orange.data import (ContinuousVariable, DiscreteVariable, StringVariable,
                          Domain, Table)
 from Orange.data.filter import FilterDiscrete, Values
@@ -9,6 +10,8 @@ from Orange.widgets.settings import (Setting, ContextSetting,
 from Orange.widgets.utils.annotated_data import create_annotated_table, ANNOTATED_DATA_SIGNAL_NAME
 from Orange.widgets.utils.itemmodels import DomainModel
 from Orange.widgets.utils.sql import check_sql_input
+from Orange.widgets.visualize.owsieve import ChiSqStats
+from sklearn.metrics import adjusted_mutual_info_score, adjusted_rand_score
 
 from orangecontrib.prototypes.widgets.contingency_table import ContingencyTable
 
@@ -46,6 +49,11 @@ class OWContingencyTable(widget.OWWidget):
         box = gui.vBox(self.controlArea, "Columns")
         gui.comboBox(box, self, 'columns', sendSelectedValue=True,
                      model=self.feature_model, callback=self._attribute_changed)
+
+        self.controlArea.layout().addStretch()
+
+        self.scores = QLabel(self)
+        self.controlArea.layout().addWidget(self.scores)
 
         self.apply_button = gui.auto_commit(
             self.controlArea, self, "auto_apply", "&Apply", box=False)
@@ -104,6 +112,17 @@ class OWContingencyTable(widget.OWWidget):
             self.tableview.initialize(self.rows.values, self.columns.values)
             self.table = contingency_table(self.data, self.columns, self.rows)
             self.tableview.update_table(self.table.X, formatstr="{:.0f}")
+
+            chi = ChiSqStats(self.data, self.rows, self.columns)
+            vardata1 = self.data.get_column_view(self.rows.name)[0]
+            vardata2 = self.data.get_column_view(self.columns.name)[0]
+            self.scores.setText("ARI: {:.3f}\nAMI: {:.3f}\nχ²={:.2f}, p={:.3f}".format(
+                adjusted_rand_score(vardata1, vardata2),
+                adjusted_mutual_info_score(vardata1, vardata2),
+                chi.chisq,
+                chi.p))
+        else:
+            self.scores.setText("")
         self._invalidate()
 
     def send_report(self):
