@@ -6,6 +6,7 @@ from Orange.statistics import contingency
 from Orange.widgets import widget, gui
 from Orange.widgets.settings import (Setting, ContextSetting,
                                      DomainContextHandler)
+from Orange.widgets.utils.annotated_data import create_annotated_table, ANNOTATED_DATA_SIGNAL_NAME
 from Orange.widgets.utils.itemmodels import DomainModel
 from Orange.widgets.utils.sql import check_sql_input
 
@@ -20,7 +21,8 @@ class OWContingencyTable(widget.OWWidget):
 
     inputs = [("Data", Table, "set_data", widget.Default)]
     outputs = [("Contingency Table", Table, ),
-               ("Selected Data", Table, )]
+               ("Selected Data", Table),
+               (ANNOTATED_DATA_SIGNAL_NAME, Table)]
 
     settingsHandler = DomainContextHandler(metas_in_res=True)
     rows = ContextSetting(None)
@@ -83,10 +85,13 @@ class OWContingencyTable(widget.OWWidget):
                     if (ir, ic) in self.selection:
                         cells.append(Values([FilterDiscrete(self.rows, [r]), FilterDiscrete(self.columns, [c])]))
             selected_data = Values(cells, conjunction=False)(self.data)
+            annotated_data = create_annotated_table(self.data, selected_data.ids)
         else:
             selected_data = None
-        self.send("Selected Data", selected_data)
+            annotated_data = create_annotated_table(self.data, [])
         self.send("Contingency Table", self.table)
+        self.send("Selected Data", selected_data)
+        self.send(ANNOTATED_DATA_SIGNAL_NAME, annotated_data)
 
     def _invalidate(self):
         self.selection = self.tableview.get_selection()
