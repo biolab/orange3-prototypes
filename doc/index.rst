@@ -13,6 +13,7 @@ Widgets
    widgets/neighbors
    widgets/parallel-coordinates
    widgets/stacking
+   widgets/feature-statistics
 
 
 Indices and tables

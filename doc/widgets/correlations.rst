@@ -1,35 +1,20 @@
 Correlations
 ============
 
-.. figure:: icons/correlations.png
-
 Compute all pairwise attribute correlations.
 
-Signals
--------
+Inputs
+    Data
+        input dataset
 
-**Inputs**:
+Outputs
+    Data
+        input dataset
+    Features
+        selected pair of features
+    Correlations
+        data table with correlation scores
 
--  **Data**
-
-   An input data set.
-
-**Outputs**:
-
--  **Data**
-
-   An input data set.
-
--  **Features**
-
-   Selected pair of features.
-
--  **Correlations**
-
-   A data table with correlation scores.
-
-Description
------------
 
 **Correlations** computes Pearson or Spearman correlation scores for all pairs of features in a data set. These methods can only detect monotonic relationship.
 

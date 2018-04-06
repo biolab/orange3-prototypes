@@ -1,39 +1,22 @@
 Parallel Coordinates
 ====================
 
-.. figure:: icons/parallel-coordinates.png
-
 Parallel coordinates display of multi-dimensional data.
 
-Signals
--------
+Inputs
+    Data
+        input dataset
+    Features
+        list of attributes
 
-**Inputs**:
+Outputs
+    Selected Data
+        instances selected from the plot
+    Annotated Data
+        data with an additional column showing whether a point is selected
+    Features
+        list of attributes
 
--  **Data**
-
-   An input data set.
-
--  **Featrues**
-
-   A list of attributes.
-
-**Outputs**:
-
--  **Selected Data**
-
-   A subset of instances that the user manually selected from the plot.
-
--  **Annotated Data**
-
-   Data table augumented with information on whether the instance was selected in the plot or not.
-
--  **Features**
-
-   A list of attributes.
-
-Description
------------
 
 The **Parallel Coordinates** widget shows `high-dimensional data in a plot <https://en.wikipedia.org/wiki/Parallel_coordinates>`_. The widget will display the first 9 attributes and color them by class, if class is present. The widget also enables plot optimization and subset selection.
 

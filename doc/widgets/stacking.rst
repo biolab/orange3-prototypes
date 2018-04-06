@@ -1,43 +1,24 @@
 Stacking
 ========
 
-.. figure:: icons/stacking.png
-
 Stack multiple models.
 
-Signals
--------
+Inputs
+    Data
+        input dataset
+    Preprocessor
+        preprocessing method(s)
+    Learners
+        learning algorithm
+    Aggregate
+        model aggregation method
 
-**Inputs**:
+Outputs
+    Learner
+        aggregated (stacked) learning algorithm
+    Model
+        trained model
 
--  **Data**
-
-   An input data set.
-
--  **Preprocessor**
-
-   Preprocessing method(s).
-
--  **Learners**
-
-   A learning algorithm.
-
--  **Aggregate**
-
-   Model aggregation method.
-
-**Outputs**:
-
--  **Learner**
-
-   An aggregated (stacked) learning algorithm.
-
--  **Model**
-
-   A trained model.
-
-Description
------------
 
 **Stacking** is an ensemble method that computes a meta model from several base models. The **Stacking** widget needs the **Aggregate** input, which provides a method for aggregating the input models.
 
