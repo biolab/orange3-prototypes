@@ -1,6 +1,5 @@
-from AnyQt.QtGui import QStandardItemModel
-from AnyQt.QtWidgets import QLabel
 import numpy as np
+from AnyQt.QtGui import QStandardItemModel
 from Orange.data import (ContinuousVariable, DiscreteVariable, StringVariable,
                          Domain, Table)
 from Orange.data.filter import FilterDiscrete, Values
@@ -51,10 +50,10 @@ class OWContingencyTable(widget.OWWidget):
         gui.comboBox(box, self, 'columns', sendSelectedValue=True,
                      model=self.feature_model, callback=self._attribute_changed)
 
-        self.controlArea.layout().addStretch()
+        gui.rubber(self.controlArea)
 
-        self.scores = QLabel(self)
-        self.controlArea.layout().addWidget(self.scores)
+        box = gui.vBox(self.controlArea, "Scores")
+        self.scores = gui.widgetLabel(box, "\n\n")
 
         self.apply_button = gui.auto_commit(
             self.controlArea, self, "auto_apply", "&Apply", box=False)
@@ -124,7 +123,7 @@ class OWContingencyTable(widget.OWWidget):
                 chi.chisq,
                 chi.p))
         else:
-            self.scores.setText("")
+            self.scores.setText("\n\n")
         self._invalidate()
 
     def send_report(self):
