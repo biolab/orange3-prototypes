@@ -85,6 +85,10 @@ class OWContingencyTable(widget.OWWidget):
     def handleNewSignals(self):
         self._attribute_changed()
 
+    def _find_matching_ids(self, orig, filtered):
+        filtered_ids = set(filtered.ids)
+        return [ix for ix, id in enumerate(orig.ids) if id in filtered_ids]
+
     def commit(self):
         if len(self.selection):
             cells = []
@@ -93,7 +97,7 @@ class OWContingencyTable(widget.OWWidget):
                     if (ir, ic) in self.selection:
                         cells.append(Values([FilterDiscrete(self.rows, [r]), FilterDiscrete(self.columns, [c])]))
             selected_data = Values(cells, conjunction=False)(self.data)
-            annotated_data = create_annotated_table(self.data, selected_data.ids)
+            annotated_data = create_annotated_table(self.data, self._find_matching_ids(self.data, selected_data))
         else:
             selected_data = None
             annotated_data = create_annotated_table(self.data, [])
