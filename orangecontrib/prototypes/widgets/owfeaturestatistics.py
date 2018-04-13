@@ -144,7 +144,7 @@ class FeatureStatisticsTableModel(AbstractSortTableModel):
         _dispersion = partial(
             _apply_to_types,
             discrete_f=lambda x: _entropy(x),
-            continuous_f=lambda x: ut.nanvar(x, axis=0),
+            continuous_f=lambda x: ut.nanvar(x, axis=0) / ut.nanmean(x, axis=0),
         )
         self._dispersion = np.hstack(map(_dispersion, matrices))
 
