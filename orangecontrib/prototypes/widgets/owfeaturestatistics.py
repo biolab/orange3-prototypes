@@ -14,8 +14,8 @@ import numpy as np
 import scipy.stats as ss
 from AnyQt.QtCore import Qt, QSize, QRectF, QVariant, \
     QModelIndex, pyqtSlot, QRegExp
-from AnyQt.QtGui import QPainter, QColor, QKeySequence
-from AnyQt.QtWidgets import QStyleOptionViewItem, QShortcut
+from AnyQt.QtGui import QPainter, QColor
+from AnyQt.QtWidgets import QStyleOptionViewItem
 from AnyQt.QtWidgets import QStyledItemDelegate, QGraphicsScene, \
     QTableView, QHeaderView, QStyle
 
@@ -24,7 +24,7 @@ from Orange.canvas.report import plural
 from Orange.data import Table, StringVariable, DiscreteVariable, \
     ContinuousVariable, TimeVariable, Domain, Variable
 from Orange.widgets import widget, gui
-from Orange.widgets.settings import Setting, ContextSetting, \
+from Orange.widgets.settings import ContextSetting, \
     DomainContextHandler
 from Orange.widgets.utils.itemmodels import DomainModel, AbstractSortTableModel
 from Orange.widgets.utils.signals import Input
@@ -64,7 +64,7 @@ class FeatureStatisticsTableModel(AbstractSortTableModel):
         def from_index(cls, index):
             return cls(index)
 
-    def __init__(self, data=None, parent=None):
+    def __init__(self, data, parent=None):
         """
 
         Parameters
@@ -73,13 +73,15 @@ class FeatureStatisticsTableModel(AbstractSortTableModel):
         parent
         """
         super().__init__(parent)
-        self._data = data
-        self._domain = domain = data.domain  # type: Domain
+        self.data = data  # type: Table
+        self.domain = domain = data.domain  # type: Domain
+        self.target_var = None
 
         self._attributes = domain.attributes + domain.class_vars + domain.metas
         self.n_attributes = len(self._attributes)
         self.n_instances = len(data)
 
+        self.__distributions_cache = {}
         self.__compute_statistics()
 
     @staticmethod
@@ -96,12 +98,12 @@ class FeatureStatisticsTableModel(AbstractSortTableModel):
 
     def __compute_statistics(self):
         # We will compute statistics over all data at once
-        matrices = [self._data.X, self._data._Y, self._data.metas]
+        matrices = [self.data.X, self.data._Y, self.data.metas]
 
         # Since data matrices can of mixed sparsity, we need to compute
         # attributes separately for each of them.
         matrices = zip([
-            self._domain.attributes, self._domain.class_vars, self._domain.metas
+            self.domain.attributes, self.domain.class_vars, self.domain.metas
         ], matrices)
         # Filter out any matrices with size 0, filter the zipped matrices to 
         # eliminate variables in a single swoop
@@ -144,7 +146,7 @@ class FeatureStatisticsTableModel(AbstractSortTableModel):
         _dispersion = partial(
             _apply_to_types,
             discrete_f=lambda x: _entropy(x),
-            continuous_f=lambda x: ut.nanvar(x, axis=0) / ut.nanmean(x, axis=0),
+            continuous_f=lambda x: np.sqrt(ut.nanvar(x, axis=0)) / ut.nanmean(x, axis=0),
         )
         self._dispersion = np.hstack(map(_dispersion, matrices))
 
@@ -185,13 +187,7 @@ class FeatureStatisticsTableModel(AbstractSortTableModel):
         elif column == self.Columns.CENTER:
             return self._center
         elif column == self.Columns.DISPERSION:
-            # Since absolute values of dispersion aren't very helpful when the
-            # variables occupy different ranges, use the coefficient of
-            # variation instead for a more reasonable sorting
-            dispersion = np.array(self._dispersion)
-            _, cont_var_indices, *_ = self._attr_indices(self._attributes)
-            dispersion[cont_var_indices] /= self._center[cont_var_indices]
-            return dispersion
+            return self._dispersion
         elif column == self.Columns.MIN:
             return self._min
         elif column == self.Columns.MAX:
@@ -225,9 +221,20 @@ class FeatureStatisticsTableModel(AbstractSortTableModel):
             if role == Qt.DisplayRole:
                 output = attribute.name
         elif column == self.Columns.DISTRIBUTION:
-            if role == self.DistributionRole:
+            if role == Qt.DisplayRole:
                 if isinstance(attribute, (DiscreteVariable, ContinuousVariable)):
-                    return attribute, self._data
+                    if row not in self.__distributions_cache:
+                        scene = QGraphicsScene(parent=self)
+                        histogram = Histogram(
+                            data=self.data,
+                            variable=attribute,
+                            color_attribute=self.target_var,
+                            border=(0, 0, 2, 0),
+                            border_color='#ccc',
+                        )
+                        scene.addItem(histogram)
+                        self.__distributions_cache[row] = scene
+                    return self.__distributions_cache[row]
         elif column == self.Columns.CENTER:
             if role == Qt.DisplayRole:
                 if isinstance(attribute, DiscreteVariable):
@@ -261,11 +268,11 @@ class FeatureStatisticsTableModel(AbstractSortTableModel):
                 )
 
         if role == Qt.BackgroundRole:
-            if attribute in self._domain.attributes:
+            if attribute in self.domain.attributes:
                 return self.COLOR_FOR_ROLE[self.ATTRIBUTE]
-            elif attribute in self._domain.metas:
+            elif attribute in self.domain.metas:
                 return self.COLOR_FOR_ROLE[self.META]
-            elif attribute in self._domain.class_vars:
+            elif attribute in self.domain.class_vars:
                 return self.COLOR_FOR_ROLE[self.CLASS_VAR]
 
         elif role == Qt.TextAlignmentRole:
@@ -293,6 +300,13 @@ class FeatureStatisticsTableModel(AbstractSortTableModel):
     def columnCount(self, parent=QModelIndex()):
         return 0 if parent.isValid() else len(self.Columns)
 
+    def set_target_var(self, variable):
+        self.target_var = variable
+        self.__distributions_cache.clear()
+        start_idx = self.index(0, self.Columns.DISTRIBUTION)
+        end_idx = self.index(self.rowCount(), self.Columns.DISTRIBUTION)
+        self.dataChanged.emit(start_idx, end_idx)
+
 
 class NoFocusRectDelegate(QStyledItemDelegate):
     """Removes the light blue background and border on a focused item."""
@@ -304,50 +318,19 @@ class NoFocusRectDelegate(QStyledItemDelegate):
 
 
 class DistributionDelegate(NoFocusRectDelegate):
-    def __init__(self, parent=None):
-        self.color_attribute = None
-        super().__init__(parent)
-        self.__cache = {}
-
-    def clear(self):
-        self.__cache.clear()
-
-    def set_color_attribute(self, variable):
-        assert variable is None or isinstance(variable, Variable)
-        self.color_attribute = variable
-        self.__cache.clear()
-
     def paint(self, painter, option, index):
         # type: (QPainter, QStyleOptionViewItem, QModelIndex) -> None
-        data = index.data(FeatureStatisticsTableModel.DistributionRole)
-        if data is None:
+        scene = index.data(Qt.DisplayRole)  # type: Optional[QGraphicsScene]
+        if scene is None:
             return super().paint(painter, option, index)
 
-        row = index.model().mapToSourceRows(index.row())
-
-        if row not in self.__cache:
-            scene = QGraphicsScene(self)
-            attribute, data = data
-            histogram = Histogram(
-                data=data,
-                variable=attribute,
-                color_attribute=self.color_attribute,
-                border=(0, 0, 2, 0),
-                border_color='#ccc',
-            )
-            scene.addItem(histogram)
-            self.__cache[row] = scene
-
-        painter.setRenderHint(QPainter.HighQualityAntialiasing)
+        painter.setRenderHint(QPainter.Antialiasing)
 
         background_color = index.data(Qt.BackgroundRole)
-        self.__cache[row].setBackgroundBrush(background_color)
+        if background_color is not None:
+            scene.setBackgroundBrush(background_color)
 
-        self.__cache[row].render(
-            painter,
-            target=QRectF(option.rect),
-            mode=Qt.IgnoreAspectRatio,
-        )
+        scene.render(painter, target=QRectF(option.rect), mode=Qt.IgnoreAspectRatio)
 
 
 class OWFeatureStatistics(widget.OWWidget):
@@ -401,10 +384,10 @@ class OWFeatureStatistics(widget.OWWidget):
         )
         box = gui.vBox(self.controlArea, 'Histogram')
         self.cb_color_var = gui.comboBox(
-            box, master=self, value='color_var',
-            model=self.color_var_model, label='Color:', orientation=Qt.Horizontal,
+            box, master=self, value='color_var', model=self.color_var_model,
+            label='Color:', orientation=Qt.Horizontal,
         )
-        self.cb_color_var.currentIndexChanged.connect(self.__color_var_changed)
+        self.cb_color_var.activated.connect(self.__color_var_changed)
 
         gui.rubber(self.controlArea)
 
@@ -467,8 +450,11 @@ class OWFeatureStatistics(widget.OWWidget):
         hheader.sectionResized.connect(bind_histogram_aspect_ratio)
         hheader.sectionResized.connect(keep_row_centered)
 
-        self.distribution_delegate = DistributionDelegate()
-        self.view.setItemDelegate(self.distribution_delegate)
+        self.distribution_delegate = DistributionDelegate(parent=self)
+        self.view.setItemDelegateForColumn(
+            FeatureStatisticsTableModel.Columns.DISTRIBUTION,
+            self.distribution_delegate,
+        )
 
         self.mainArea.layout().addWidget(self.view)
 
@@ -494,18 +480,18 @@ class OWFeatureStatistics(widget.OWWidget):
         if data is not None:
             self.model = FeatureStatisticsTableModel(data, parent=self)
             self.color_var_model.set_domain(data.domain)
-            # Set the selected index to 1 if any target classes, otherwise 0
-            if data.domain.class_vars:
-                self.color_var = data.domain.class_vars[0]
-            self.openContext(self.data)
+            if self.data.domain.class_vars:
+                self.color_var = self.data.domain.class_vars[0]
         else:
             self.model = None
             self.color_var_model.set_domain(None)
+            self.color_var = None
 
+        self.openContext(self.data)
         self.view.setModel(self.model)
-        self._filter_table_variables()
+        # self._filter_table_variables()
+        self.__color_var_changed()
 
-        self.distribution_delegate.clear()
         self.set_info()
 
         # The resize modes for individual columns must be set here, because
@@ -517,16 +503,9 @@ class OWFeatureStatistics(widget.OWWidget):
             hheader.setSectionResizeMode(columns.DISTRIBUTION.index, QHeaderView.Stretch)
 
     @pyqtSlot(int)
-    def __color_var_changed(self, new_index):
-        attribute = None if new_index < 1 else self.cb_color_var.model()[new_index]
-        self.distribution_delegate.set_color_attribute(attribute)
-
-        if self.model:
-            for row_idx in range(self.model.rowCount()):
-                index = self.model.index(
-                    row_idx,
-                    self.model.Columns.DISTRIBUTION.index)
-                self.view.update(index)
+    def __color_var_changed(self, *_):
+        if self.model is not None:
+            self.model.set_target_var(self.color_var)
 
     @staticmethod
     def _format_variables_string(variables):
