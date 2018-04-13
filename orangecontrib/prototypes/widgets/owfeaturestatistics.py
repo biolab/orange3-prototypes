@@ -308,16 +308,7 @@ class FeatureStatisticsTableModel(AbstractSortTableModel):
         self.dataChanged.emit(start_idx, end_idx)
 
 
-class NoFocusRectDelegate(QStyledItemDelegate):
-    """Removes the light blue background and border on a focused item."""
-
-    def paint(self, painter, option, index):
-        # type: (QPainter, QStyleOptionViewItem, QModelIndex) -> None
-        option.state &= ~QStyle.State_HasFocus
-        super().paint(painter, option, index)
-
-
-class DistributionDelegate(NoFocusRectDelegate):
+class DistributionDelegate(QStyledItemDelegate):
     def paint(self, painter, option, index):
         # type: (QPainter, QStyleOptionViewItem, QModelIndex) -> None
         scene = index.data(Qt.DisplayRole)  # type: Optional[QGraphicsScene]
@@ -326,7 +317,10 @@ class DistributionDelegate(NoFocusRectDelegate):
 
         painter.setRenderHint(QPainter.Antialiasing)
 
-        background_color = index.data(Qt.BackgroundRole)
+        if option.state & QStyle.State_Selected:
+            background_color = option.palette.highlight()
+        else:
+            background_color = index.data(Qt.BackgroundRole)
         if background_color is not None:
             scene.setBackgroundBrush(background_color)
 
@@ -350,6 +344,7 @@ class OWFeatureStatistics(widget.OWWidget):
 
     settingsHandler = DomainContextHandler()
 
+    auto_commit = ContextSetting(True)
     color_var = ContextSetting(None)  # type: Optional[Variable]
     filter_string = ContextSetting('')
 
@@ -390,18 +385,24 @@ class OWFeatureStatistics(widget.OWWidget):
         self.cb_color_var.activated.connect(self.__color_var_changed)
 
         gui.rubber(self.controlArea)
+        gui.auto_commit(
+            self.buttonsArea, self, 'auto_commit', 'Send Selected Rows',
+            'Send Automatically',
+        )
 
         # Main area
-        self.view = QTableView(
+        self.table_view = QTableView(
             showGrid=False,
             cornerButtonEnabled=False,
             sortingEnabled=True,
-            selectionMode=QTableView.NoSelection,
+            selectionBehavior=QTableView.SelectRows,
+            selectionMode=QTableView.MultiSelection,
             horizontalScrollMode=QTableView.ScrollPerPixel,
             verticalScrollMode=QTableView.ScrollPerPixel,
         )
+        self.table_view.setFocusPolicy(Qt.NoFocus)
 
-        hheader = self.view.horizontalHeader()
+        hheader = self.table_view.horizontalHeader()
         hheader.setStretchLastSection(False)
         # Contents precision specifies how many rows should be taken into
         # account when computing the sizes, 0 being the visible rows. This is
@@ -417,7 +418,7 @@ class OWFeatureStatistics(widget.OWWidget):
         # indices must be valid in the model, which requires data.
         hheader.setSectionResizeMode(QHeaderView.Interactive)
 
-        vheader = self.view.verticalHeader()
+        vheader = self.table_view.verticalHeader()
         vheader.setVisible(False)
         vheader.setSectionResizeMode(QHeaderView.Fixed)
 
@@ -442,21 +443,21 @@ class OWFeatureStatistics(widget.OWWidget):
             # Prevent function being exectued more than once per resize
             if logical_index is not self.model.Columns.DISTRIBUTION.index:
                 return
-            top_row = self.view.indexAt(self.view.rect().topLeft()).row()
-            bottom_row = self.view.indexAt(self.view.rect().bottomLeft()).row()
+            top_row = self.table_view.indexAt(self.table_view.rect().topLeft()).row()
+            bottom_row = self.table_view.indexAt(self.table_view.rect().bottomLeft()).row()
             middle_row = top_row + (bottom_row - top_row) // 2
-            self.view.scrollTo(self.model.index(middle_row, 0), QTableView.PositionAtCenter)
+            self.table_view.scrollTo(self.model.index(middle_row, 0), QTableView.PositionAtCenter)
 
         hheader.sectionResized.connect(bind_histogram_aspect_ratio)
         hheader.sectionResized.connect(keep_row_centered)
 
         self.distribution_delegate = DistributionDelegate(parent=self)
-        self.view.setItemDelegateForColumn(
+        self.table_view.setItemDelegateForColumn(
             FeatureStatisticsTableModel.Columns.DISTRIBUTION,
             self.distribution_delegate,
         )
 
-        self.mainArea.layout().addWidget(self.view)
+        self.mainArea.layout().addWidget(self.table_view)
 
     def sizeHint(self):
         return QSize(900, 500)
@@ -488,7 +489,7 @@ class OWFeatureStatistics(widget.OWWidget):
             self.color_var = None
 
         self.openContext(self.data)
-        self.view.setModel(self.model)
+        self.table_view.setModel(self.model)
         # self._filter_table_variables()
         self.__color_var_changed()
 
@@ -498,7 +499,7 @@ class OWFeatureStatistics(widget.OWWidget):
         # the logical index must be valid in `setSectionResizeMode`. It is not
         # valid when there is no data in the model.
         if self.model:
-            columns, hheader = self.model.Columns, self.view.horizontalHeader()
+            columns, hheader = self.model.Columns, self.table_view.horizontalHeader()
             hheader.setSectionResizeMode(columns.ICON.index, QHeaderView.ResizeToContents)
             hheader.setSectionResizeMode(columns.DISTRIBUTION.index, QHeaderView.Stretch)
 
@@ -558,6 +559,9 @@ class OWFeatureStatistics(widget.OWWidget):
             self.info_attr.setText('')
             self.info_class.setText('')
             self.info_meta.setText('')
+
+    def commit(self):
+        pass
 
     def send_report(self):
         pass
