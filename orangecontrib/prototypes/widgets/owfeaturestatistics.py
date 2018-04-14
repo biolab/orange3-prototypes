@@ -253,15 +253,26 @@ class FeatureStatisticsTableModel(AbstractSortTableModel):
         for variables, x in matrices:
             result = np.full(len(variables), default_val)
 
+            # While the following caching and checks are messy, the indexing
+            # turns out to be a bottleneck for large datasets, so a single
+            # indexing operation improves performance
             disc_idx, cont_idx, time_idx, str_idx = self._attr_indices(variables)
-            if discrete_f and x[:, disc_idx].size:
-                result[disc_idx] = discrete_f(_to_float(x[:, disc_idx]))
-            if continuous_f and x[:, cont_idx].size:
-                result[cont_idx] = continuous_f(_to_float(x[:, cont_idx]))
-            if time_f and x[:, time_idx].size:
-                result[time_idx] = time_f(_to_float(x[:, time_idx]))
-            if string_f and x[:, str_idx].size:
-                result[str_idx] = string_f(_to_object(x[:, str_idx]))
+            if discrete_f:
+                x_ = x[:, disc_idx]
+                if x_.size:
+                    result[disc_idx] = discrete_f(_to_float(x_))
+            if continuous_f:
+                x_ = x[:, cont_idx]
+                if x_.size:
+                    result[cont_idx] = continuous_f(_to_float(x_))
+            if time_f:
+                x_ = x[:, time_idx]
+                if x_.size:
+                    result[time_idx] = time_f(_to_float(x_))
+            if string_f:
+                x_ = x[:, str_idx]
+                if x_.size:
+                    result[str_idx] = string_f(_to_object(x_))
 
             results.append(result)
 
