@@ -12,7 +12,7 @@ from typing import Any, Optional, Tuple, List  # pylint: disable=unused-import
 import numpy as np
 import scipy.stats as ss
 from AnyQt.QtCore import Qt, QSize, QRectF, QVariant, QModelIndex, pyqtSlot, \
-    QRegExp
+    QRegExp, QItemSelection, QItemSelectionRange, QItemSelectionModel
 from AnyQt.QtGui import QPainter, QColor
 from AnyQt.QtWidgets import QStyleOptionViewItem
 from AnyQt.QtWidgets import QStyledItemDelegate, QGraphicsScene, QTableView, \
@@ -575,23 +575,38 @@ class OWFeatureStatistics(widget.OWWidget):
     @Inputs.data
     def set_data(self, data):
         self.closeContext()
+        self.selected_rows = []
+        self.model.resetSorting()
+
         self.data = data
 
         if data is not None:
-            self.model.set_data(data)
             self.color_var_model.set_domain(data.domain)
             if self.data.domain.class_vars:
                 self.color_var = self.data.domain.class_vars[0]
         else:
-            self.model.clear()
             self.color_var_model.set_domain(None)
             self.color_var = None
 
         self.openContext(self.data)
+        self.model.set_data(data)
+        self.__restore_selection()
         # self._filter_table_variables()
         self.__color_var_changed()
 
         self.set_info()
+
+    def __restore_selection(self):
+        """Restore the selection on the table view from saved settings."""
+        selection_model = self.table_view.selectionModel()
+        selection = QItemSelection()
+        if len(self.selected_rows):
+            for row in self.model.mapFromSourceRows(self.selected_rows):
+                selection.append(QItemSelectionRange(
+                    self.model.index(row, 0),
+                    self.model.index(row, self.model.columnCount() - 1)
+                ))
+        selection_model.select(selection, QItemSelectionModel.ClearAndSelect)
 
     @pyqtSlot(int)
     def __color_var_changed(self, *_):

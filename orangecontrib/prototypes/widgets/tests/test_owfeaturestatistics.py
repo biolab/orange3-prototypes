@@ -406,3 +406,29 @@ class TestFeatureStatisticsOutputs(WidgetTest):
         self.widget.unconditional_commit()
         self.assertIsNone(self.get_output(self.widget.Outputs.reduced_data))
         self.assertIsNone(self.get_output(self.widget.Outputs.statistics))
+
+
+class TestFeatureStatisticsUI(WidgetTest):
+    def setUp(self):
+        self.widget = self.create_widget(
+            OWFeatureStatistics, stored_settings={'auto_commit': False}
+        )
+        self.data1 = Table('iris')
+        self.data2 = Table('zoo')
+
+    def test_restores_previous_selection(self):
+        """Widget should remember selection with domain context handler."""
+        # Send data and select rows
+        self.send_signal(self.widget.Inputs.data, self.data1)
+        self.widget.table_view.selectRow(0)
+        self.widget.table_view.selectRow(2)
+        self.assertEqual(len(self.widget.selected_rows), 2)
+
+        # Sending new data clears selection
+        self.send_signal(self.widget.Inputs.data, self.data2)
+        self.assertEqual(len(self.widget.selected_rows), 0)
+
+        # Sending back the old data restores the selection
+        self.send_signal(self.widget.Inputs.data, self.data1)
+        self.assertEqual(len(self.widget.selected_rows), 2)
+
