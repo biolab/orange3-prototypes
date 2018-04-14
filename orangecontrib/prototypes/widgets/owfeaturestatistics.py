@@ -507,7 +507,7 @@ class OWFeatureStatistics(widget.OWWidget):
     color_var = ContextSetting(None)  # type: Optional[Variable]
     # filter_string = ContextSetting('')
 
-    sorting = Setting((0, Qt.DescendingOrder))
+    sorting = ContextSetting((0, Qt.DescendingOrder))
     selected_rows = ContextSetting([])
 
     def __init__(self):
@@ -555,6 +555,7 @@ class OWFeatureStatistics(widget.OWWidget):
         self.model = FeatureStatisticsTableModel(parent=self)
         self.table_view = FeatureStatisticsTableView(self.model, parent=self)
         self.table_view.selectionModel().selectionChanged.connect(self.on_select)
+        self.table_view.horizontalHeader().sectionClicked.connect(self.on_header_click)
 
         self.mainArea.layout().addWidget(self.table_view)
 
@@ -591,6 +592,7 @@ class OWFeatureStatistics(widget.OWWidget):
         self.openContext(self.data)
         self.model.set_data(data)
         self.__restore_selection()
+        self.__restore_sorting()
         # self._filter_table_variables()
         self.__color_var_changed()
 
@@ -607,6 +609,20 @@ class OWFeatureStatistics(widget.OWWidget):
                     self.model.index(row, self.model.columnCount() - 1)
                 ))
         selection_model.select(selection, QItemSelectionModel.ClearAndSelect)
+
+    def __restore_sorting(self):
+        """Restore the sort column and order from saved settings."""
+        sort_column, sort_order = self.sorting
+        if sort_column < self.model.columnCount():
+            self.model.sort(sort_column, sort_order)
+            self.table_view.horizontalHeader().setSortIndicator(sort_column, sort_order)
+
+    @pyqtSlot(int)
+    def on_header_click(self, *_):
+        # Store the header states
+        sort_order = self.model.sortOrder()
+        sort_column = self.model.sortColumn()
+        self.sorting = sort_column, sort_order
 
     @pyqtSlot(int)
     def __color_var_changed(self, *_):
