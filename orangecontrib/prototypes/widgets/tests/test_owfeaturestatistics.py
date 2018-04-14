@@ -328,10 +328,14 @@ class TestFeatureStatisticsOutputs(WidgetTest):
             target=[rgb_full, rgb_missing], metas=[ints_full, ints_missing]
         )
         self.send_signal('Data', self.data)
+        self.cont_full_idx = self.widget.model.mapToSourceRows(0)
+        self.cont_miss_idx = self.widget.model.mapToSourceRows(1)
+        self.disc_full_idx = self.widget.model.mapToSourceRows(2)
+        self.ints_full_idx = self.widget.model.mapToSourceRows(4)
 
     def test_sends_single_attribute_table_to_output(self):
         # Check if selecting a single attribute row
-        self.widget.table_view.selectRow(0)
+        self.widget.table_view.selectRow(self.cont_full_idx)
         self.widget.unconditional_commit()
 
         desired_domain = Domain(attributes=[continuous_full.variable])
@@ -340,8 +344,8 @@ class TestFeatureStatisticsOutputs(WidgetTest):
 
     def test_sends_multiple_attribute_table_to_output(self):
         # Check if selecting a single attribute row
-        self.widget.table_view.selectRow(0)
-        self.widget.table_view.selectRow(1)
+        self.widget.table_view.selectRow(self.cont_full_idx)
+        self.widget.table_view.selectRow(self.cont_miss_idx)
         self.widget.unconditional_commit()
 
         desired_domain = Domain(attributes=[
@@ -351,7 +355,7 @@ class TestFeatureStatisticsOutputs(WidgetTest):
         self.assertEqual(output.domain, desired_domain)
 
     def test_sends_single_class_var_table_to_output(self):
-        self.widget.table_view.selectRow(2)
+        self.widget.table_view.selectRow(self.disc_full_idx)
         self.widget.unconditional_commit()
 
         desired_domain = Domain(attributes=[], class_vars=[rgb_full.variable])
@@ -359,7 +363,7 @@ class TestFeatureStatisticsOutputs(WidgetTest):
         self.assertEqual(output.domain, desired_domain)
 
     def test_sends_single_meta_table_to_output(self):
-        self.widget.table_view.selectRow(4)
+        self.widget.table_view.selectRow(self.ints_full_idx)
         self.widget.unconditional_commit()
 
         desired_domain = Domain(attributes=[], metas=[ints_full.variable])
@@ -367,9 +371,9 @@ class TestFeatureStatisticsOutputs(WidgetTest):
         self.assertEqual(output.domain, desired_domain)
 
     def test_sends_multiple_var_types_table_to_output(self):
-        self.widget.table_view.selectRow(0)
-        self.widget.table_view.selectRow(2)
-        self.widget.table_view.selectRow(4)
+        self.widget.table_view.selectRow(self.cont_full_idx)
+        self.widget.table_view.selectRow(self.disc_full_idx)
+        self.widget.table_view.selectRow(self.ints_full_idx)
         self.widget.unconditional_commit()
 
         desired_domain = Domain(
@@ -382,8 +386,8 @@ class TestFeatureStatisticsOutputs(WidgetTest):
 
     def test_sends_all_samples_to_output(self):
         """All rows should be sent to output for selected column."""
-        self.widget.table_view.selectRow(0)
-        self.widget.table_view.selectRow(2)
+        self.widget.table_view.selectRow(self.cont_full_idx)
+        self.widget.table_view.selectRow(self.disc_full_idx)
         self.widget.unconditional_commit()
 
         selected_vars = Domain(
