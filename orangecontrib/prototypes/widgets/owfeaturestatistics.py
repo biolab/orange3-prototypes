@@ -59,7 +59,7 @@ class FeatureStatisticsTableModel(AbstractSortTableModel):
                     self.DISPERSION: 'Dispersion',
                     self.MIN: 'Min.',
                     self.MAX: 'Max.',
-                    self.MISSING: 'Missing values',
+                    self.MISSING: 'Missing',
                     }[self.value]
 
         @property
@@ -417,7 +417,7 @@ class OWFeatureStatistics(widget.OWWidget):
         # widget is not shown, size `sizeHint` is called on every row.
         hheader.setResizeContentsPrecision(5)
         # Set a nice default size so that headers have some space around titles
-        hheader.setDefaultSectionSize(120)
+        hheader.setDefaultSectionSize(100)
         # Set individual column behaviour in `set_data` since the logical
         # indices must be valid in the model, which requires data.
         hheader.setSectionResizeMode(QHeaderView.Interactive)
@@ -463,7 +463,7 @@ class OWFeatureStatistics(widget.OWWidget):
         self.mainArea.layout().addWidget(self.table_view)
 
     def sizeHint(self):
-        return QSize(900, 500)
+        return QSize(1050, 500)
 
     def _filter_table_variables(self):
         regex = QRegExp(self.filter_string)
