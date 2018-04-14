@@ -389,6 +389,84 @@ class FeatureStatisticsTableModel(AbstractSortTableModel):
         self.dataChanged.emit(start_idx, end_idx)
 
 
+class FeatureStatisticsTableView(QTableView):
+    HISTOGRAM_ASPECT_RATIO = (7, 3)
+    MINIMUM_HISTOGRAM_HEIGHT = 50
+    MAXIMUM_HISTOGRAM_HEIGHT = 80
+
+    def __init__(self, model, parent=None, **kwargs):
+        super().__init__(
+            parent=parent,
+            showGrid=False,
+            cornerButtonEnabled=False,
+            sortingEnabled=True,
+            selectionBehavior=QTableView.SelectRows,
+            selectionMode=QTableView.MultiSelection,
+            horizontalScrollMode=QTableView.ScrollPerPixel,
+            verticalScrollMode=QTableView.ScrollPerPixel,
+            focusPolicy=Qt.NoFocus,
+            **kwargs
+        )
+        self.setModel(model)
+
+        hheader = self.horizontalHeader()
+        hheader.setStretchLastSection(False)
+        # Contents precision specifies how many rows should be taken into
+        # account when computing the sizes, 0 being the visible rows. This is
+        # crucial, since otherwise the `ResizeToContents` section resize mode
+        # would call `sizeHint` on every single row in the data before first
+        # render. However this, this cannot be used here, since this only
+        # appears to work properly when the widget is actually shown. When the
+        # widget is not shown, size `sizeHint` is called on every row.
+        hheader.setResizeContentsPrecision(5)
+        # Set a nice default size so that headers have some space around titles
+        hheader.setDefaultSectionSize(100)
+        # Set individual column behaviour in `set_data` since the logical
+        # indices must be valid in the model, which requires data.
+        hheader.setSectionResizeMode(QHeaderView.Interactive)
+
+        columns = model.Columns
+        hheader.setSectionResizeMode(columns.ICON.index, QHeaderView.ResizeToContents)
+        hheader.setSectionResizeMode(columns.DISTRIBUTION.index, QHeaderView.Stretch)
+
+        vheader = self.verticalHeader()
+        vheader.setVisible(False)
+        vheader.setSectionResizeMode(QHeaderView.Fixed)
+        hheader.sectionResized.connect(self.bind_histogram_aspect_ratio)
+        hheader.sectionResized.connect(self.keep_row_centered)
+
+        self.setItemDelegateForColumn(
+            FeatureStatisticsTableModel.Columns.DISTRIBUTION,
+            DistributionDelegate(parent=self),
+        )
+
+    def bind_histogram_aspect_ratio(self, logical_index, _, new_size):
+        """Force the horizontal and vertical header to maintain the defined
+        aspect ratio specified for the histogram."""
+        # Prevent function being exectued more than once per resize
+        if logical_index is not self.model().Columns.DISTRIBUTION.index:
+            return
+        ratio_width, ratio_height = self.HISTOGRAM_ASPECT_RATIO
+        unit_width = new_size / ratio_width
+        new_height = unit_width * ratio_height
+        effective_height = max(new_height, self.MINIMUM_HISTOGRAM_HEIGHT)
+        effective_height = min(effective_height, self.MAXIMUM_HISTOGRAM_HEIGHT)
+        self.verticalHeader().setDefaultSectionSize(effective_height)
+
+    def keep_row_centered(self, logical_index, old_size, new_size):
+        """When resizing the widget when scrolled further down, the
+        positions of rows changes. Obviously, the user resized in order to
+        better see the row of interest. This keeps that row centered."""
+        # TODO: This does not work properly
+        # Prevent function being exectued more than once per resize
+        if logical_index is not self.model().Columns.DISTRIBUTION.index:
+            return
+        top_row = self.indexAt(self.rect().topLeft()).row()
+        bottom_row = self.indexAt(self.rect().bottomLeft()).row()
+        middle_row = top_row + (bottom_row - top_row) // 2
+        self.scrollTo(self.model().index(middle_row, 0), QTableView.PositionAtCenter)
+
+
 class DistributionDelegate(QStyledItemDelegate):
     def paint(self, painter, option, index):
         # type: (QPainter, QStyleOptionViewItem, QModelIndex) -> None
@@ -409,10 +487,6 @@ class DistributionDelegate(QStyledItemDelegate):
 
 
 class OWFeatureStatistics(widget.OWWidget):
-    HISTOGRAM_ASPECT_RATIO = (7, 3)
-    MINIMUM_HISTOGRAM_HEIGHT = 50
-    MAXIMUM_HISTOGRAM_HEIGHT = 80
-
     name = 'Feature Statistics'
     description = 'Show basic statistics for data features.'
     icon = 'icons/FeatureStatistics.svg'
@@ -479,76 +553,8 @@ class OWFeatureStatistics(widget.OWWidget):
 
         # Main area
         self.model = FeatureStatisticsTableModel(parent=self)
-        self.table_view = QTableView(
-            showGrid=False,
-            cornerButtonEnabled=False,
-            sortingEnabled=True,
-            selectionBehavior=QTableView.SelectRows,
-            selectionMode=QTableView.MultiSelection,
-            horizontalScrollMode=QTableView.ScrollPerPixel,
-            verticalScrollMode=QTableView.ScrollPerPixel,
-        )
-        self.table_view.setModel(self.model)
-        self.table_view.setFocusPolicy(Qt.NoFocus)
+        self.table_view = FeatureStatisticsTableView(self.model, parent=self)
         self.table_view.selectionModel().selectionChanged.connect(self.on_select)
-
-        hheader = self.table_view.horizontalHeader()
-        hheader.setStretchLastSection(False)
-        # Contents precision specifies how many rows should be taken into
-        # account when computing the sizes, 0 being the visible rows. This is
-        # crucial, since otherwise the `ResizeToContents` section resize mode
-        # would call `sizeHint` on every single row in the data before first
-        # render. However this, this cannot be used here, since this only
-        # appears to work properly when the widget is actually shown. When the
-        # widget is not shown, size `sizeHint` is called on every row.
-        hheader.setResizeContentsPrecision(5)
-        # Set a nice default size so that headers have some space around titles
-        hheader.setDefaultSectionSize(100)
-        # Set individual column behaviour in `set_data` since the logical
-        # indices must be valid in the model, which requires data.
-        hheader.setSectionResizeMode(QHeaderView.Interactive)
-
-        columns = self.model.Columns
-        hheader.setSectionResizeMode(columns.ICON.index, QHeaderView.ResizeToContents)
-        hheader.setSectionResizeMode(columns.DISTRIBUTION.index, QHeaderView.Stretch)
-
-        vheader = self.table_view.verticalHeader()
-        vheader.setVisible(False)
-        vheader.setSectionResizeMode(QHeaderView.Fixed)
-
-        def bind_histogram_aspect_ratio(logical_index, _, new_size):
-            """Force the horizontal and vertical header to maintain the defined
-            aspect ratio specified for the histogram."""
-            # Prevent function being exectued more than once per resize
-            if logical_index is not self.model.Columns.DISTRIBUTION.index:
-                return
-            ratio_width, ratio_height = self.HISTOGRAM_ASPECT_RATIO
-            unit_width = new_size / ratio_width
-            new_height = unit_width * ratio_height
-            effective_height = max(new_height, self.MINIMUM_HISTOGRAM_HEIGHT)
-            effective_height = min(effective_height, self.MAXIMUM_HISTOGRAM_HEIGHT)
-            vheader.setDefaultSectionSize(effective_height)
-
-        def keep_row_centered(logical_index, old_size, new_size):
-            """When resizing the widget when scrolled further down, the
-            positions of rows changes. Obviously, the user resized in order to
-            better see the row of interest. This keeps that row centered."""
-            # TODO: This does not work properly
-            # Prevent function being exectued more than once per resize
-            if logical_index is not self.model.Columns.DISTRIBUTION.index:
-                return
-            top_row = self.table_view.indexAt(self.table_view.rect().topLeft()).row()
-            bottom_row = self.table_view.indexAt(self.table_view.rect().bottomLeft()).row()
-            middle_row = top_row + (bottom_row - top_row) // 2
-            self.table_view.scrollTo(self.model.index(middle_row, 0), QTableView.PositionAtCenter)
-
-        hheader.sectionResized.connect(bind_histogram_aspect_ratio)
-        hheader.sectionResized.connect(keep_row_centered)
-
-        self.table_view.setItemDelegateForColumn(
-            FeatureStatisticsTableModel.Columns.DISTRIBUTION,
-            DistributionDelegate(parent=self),
-        )
 
         self.mainArea.layout().addWidget(self.table_view)
 
@@ -582,7 +588,6 @@ class OWFeatureStatistics(widget.OWWidget):
             self.color_var = None
 
         self.openContext(self.data)
-        self.table_view.setModel(self.model)
         # self._filter_table_variables()
         self.__color_var_changed()
 
