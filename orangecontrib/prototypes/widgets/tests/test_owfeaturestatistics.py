@@ -400,7 +400,9 @@ class TestFeatureStatisticsOutputs(WidgetTest):
         self.widget.table_view.selectRow(0)
         self.widget.unconditional_commit()
         self.assertIsNotNone(self.get_output(self.widget.Outputs.reduced_data))
+        self.assertIsNotNone(self.get_output(self.widget.Outputs.statistics))
 
         self.widget.table_view.clearSelection()
         self.widget.unconditional_commit()
         self.assertIsNone(self.get_output(self.widget.Outputs.reduced_data))
+        self.assertIsNone(self.get_output(self.widget.Outputs.statistics))

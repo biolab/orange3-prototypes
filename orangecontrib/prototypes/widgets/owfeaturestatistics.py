@@ -187,6 +187,50 @@ class FeatureStatisticsTableModel(AbstractSortTableModel):
             time_f=lambda x: ut.countnans(x, axis=0),
         )
 
+    def get_statistics_matrix(self, variables=None, return_labels=False):
+        """Get the numeric computed statistics in a single matrix. Optionally,
+        we can specify for which variables we want the stats. Also, we can get
+        the string column names as labels if desired.
+
+        Parameters
+        ----------
+        variables : Iterable[Union[Variable, int, str]]
+            Return statistics for only the variables specified. Accepts all
+            formats supported by `domain.index`
+        return_labels : bool
+            In addition to the statistics matrix, also return string labels for
+            the columns of the matrix e.g. 'Mean' or 'Dispersion', as specified
+            in `Columns`.
+
+        Returns
+        -------
+        Union[Tuple[List[str], np.ndarray], np.ndarray]
+
+        """
+        if self.data is None:
+            return np.atleast_2d([])
+
+        # If a list of variables is given, select only corresponding stats
+        if variables is not None and len(variables):
+            indices = [self.domain.index(var) for var in variables]
+        else:
+            indices = ...
+
+        matrix = np.vstack((
+            self._center[indices], self._dispersion[indices],
+            self._min[indices], self._max[indices], self._missing[indices],
+        )).T
+
+        # Return string labels for the returned matrix columns e.g. 'Mean',
+        # 'Dispersion' if requested
+        if return_labels:
+            labels = [self.Columns.CENTER.name, self.Columns.DISPERSION.name,
+                      self.Columns.MIN.name, self.Columns.MAX.name,
+                      self.Columns.MISSING.name]
+            return labels, matrix
+
+        return matrix
+
     def __compute_stat(self, matrices, discrete_f=None, continuous_f=None,
                        time_f=None, string_f=None, default_val=np.nan):
         """Apply functions to appropriate variable types. The default value is
@@ -378,7 +422,7 @@ class OWFeatureStatistics(widget.OWWidget):
 
     class Outputs:
         reduced_data = Output('Reduced Data', Table, default=True)
-        scores = Output('Statistics', Table)
+        statistics = Output('Statistics', Table)
 
     want_main_area = True
     buttons_area_orientation = Qt.Vertical
@@ -533,7 +577,7 @@ class OWFeatureStatistics(widget.OWWidget):
             if self.data.domain.class_vars:
                 self.color_var = self.data.domain.class_vars[0]
         else:
-            self.model = None
+            self.model.clear()
             self.color_var_model.set_domain(None)
             self.color_var = None
 
@@ -603,17 +647,30 @@ class OWFeatureStatistics(widget.OWWidget):
 
     def on_select(self):
         self.selected_rows = self.model.mapToSourceRows([
-            i.row() for i in self.table_view.selectionModel().selectedRows(0)
+            i.row() for i in self.table_view.selectionModel().selectedRows()
         ])
         self.commit()
 
     def commit(self):
         if not len(self.selected_rows):
             self.Outputs.reduced_data.send(None)
+            self.Outputs.statistics.send(None)
             return
 
+        # Send a table with only selected columns to output
         variables = self.model.variables[self.selected_rows]
         self.Outputs.reduced_data.send(self.data[:, variables])
+
+        # Send the statistics of the selected variables to ouput
+        labels, data = self.model.get_statistics_matrix(variables, return_labels=True)
+        var_names = np.atleast_2d([var.name for var in variables]).T
+        domain = Domain(
+            attributes=[ContinuousVariable(name) for name in labels],
+            metas=[StringVariable('Feature')]
+        )
+        statistics = Table(domain, data, metas=var_names)
+        statistics.name = '%s (Feature Statistics)' % self.data.name
+        self.Outputs.statistics.send(statistics)
 
     def send_report(self):
         pass
