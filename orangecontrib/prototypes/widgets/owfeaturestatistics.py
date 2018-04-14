@@ -12,28 +12,25 @@ from typing import Any, Optional  # pylint: disable=unused-import
 
 import numpy as np
 import scipy.stats as ss
-from AnyQt.QtCore import Qt, QSize, QRectF, QVariant, \
-    QModelIndex, pyqtSlot, QRegExp
+from AnyQt.QtCore import Qt, QSize, QRectF, QVariant, QModelIndex, pyqtSlot, \
+    QRegExp
 from AnyQt.QtGui import QPainter, QColor
 from AnyQt.QtWidgets import QStyleOptionViewItem
-from AnyQt.QtWidgets import QStyledItemDelegate, QGraphicsScene, \
-    QTableView, QHeaderView, QStyle
+from AnyQt.QtWidgets import QStyledItemDelegate, QGraphicsScene, QTableView, \
+    QHeaderView, QStyle
 
 import Orange.statistics.util as ut
 from Orange.canvas.report import plural
 from Orange.data import Table, StringVariable, DiscreteVariable, \
     ContinuousVariable, TimeVariable, Domain, Variable
 from Orange.widgets import widget, gui
-from Orange.widgets.settings import ContextSetting, \
-    DomainContextHandler
+from Orange.widgets.settings import ContextSetting, DomainContextHandler
 from Orange.widgets.utils.itemmodels import DomainModel, AbstractSortTableModel
 from Orange.widgets.utils.signals import Input
 from orangecontrib.prototypes.widgets.utils.histogram import Histogram
 
 
 class FeatureStatisticsTableModel(AbstractSortTableModel):
-    DistributionRole = next(gui.OrangeUserRole)
-
     CLASS_VAR, META, ATTRIBUTE = range(3)
     COLOR_FOR_ROLE = {
         CLASS_VAR: QColor(160, 160, 160),
@@ -75,14 +72,23 @@ class FeatureStatisticsTableModel(AbstractSortTableModel):
         super().__init__(parent)
         self.data = data  # type: Table
         self.domain = domain = data.domain  # type: Domain
-        self.target_var = None
+        self.target_var = None  # type: Optional[Variable]
 
-        self._attributes = domain.attributes + domain.class_vars + domain.metas
-        self.n_attributes = len(self._attributes)
+        self.__attributes = self.__filter_attributes(domain.attributes, self.data.X)
+        self.__class_vars = self.__filter_attributes(domain.class_vars, self.data._Y)
+        self.__metas = self.__filter_attributes(domain.metas, self.data.metas)
+        self.n_attributes = len(self.variables)
         self.n_instances = len(data)
 
         self.__distributions_cache = {}
         self.__compute_statistics()
+
+    @property
+    def variables(self):
+        matrices = [self.__attributes[0], self.__class_vars[0], self.__metas[0]]
+        if not any(m.size for m in matrices):
+            return []
+        return np.hstack(matrices)
 
     @staticmethod
     def _attr_indices(attrs):
@@ -96,85 +102,80 @@ class FeatureStatisticsTableModel(AbstractSortTableModel):
         string_var_idx = [i for i, attr in enumerate(attrs) if isinstance(attr, StringVariable)]
         return disc_var_idx, cont_var_idx, time_var_idx, string_var_idx
 
-    def __compute_statistics(self):
-        # We will compute statistics over all data at once
-        matrices = [self.data.X, self.data._Y, self.data.metas]
+    @staticmethod
+    def __filter_attributes(attributes, matrix):
+        """Filter out variables, which shouldn't be visualized."""
+        types = (StringVariable, TimeVariable)
+        attributes, matrix = np.asarray(attributes), matrix
+        mask = [not isinstance(attr, types) for attr in attributes]
+        return attributes[mask], matrix[:, mask]
 
+    def __compute_statistics(self):
         # Since data matrices can of mixed sparsity, we need to compute
         # attributes separately for each of them.
-        matrices = zip([
-            self.domain.attributes, self.domain.class_vars, self.domain.metas
-        ], matrices)
-        # Filter out any matrices with size 0, filter the zipped matrices to 
-        # eliminate variables in a single swoop
+        matrices = [self.__attributes, self.__class_vars, self.__metas]
+        # Filter out any matrices with size 0
         matrices = list(filter(lambda tup: tup[1].size, matrices))
 
-        def _apply_to_types(attrs_x_pair, discrete_f=None, continuous_f=None,
-                            time_f=None, string_f=None, default_val=np.nan):
-            """Apply functions to variable types e.g. discrete_f to discrete 
-            variables. Default value is returned if there is no function 
-            defined for specific variable types."""
-            attrs, x = attrs_x_pair
-            result = np.full(len(attrs), default_val)
-            disc_var_idx, cont_var_idx, time_var_idx, str_var_idx = self._attr_indices(attrs)
-            if discrete_f and x[:, disc_var_idx].size:
-                result[disc_var_idx] = discrete_f(x[:, disc_var_idx].astype(np.float64))
-            if continuous_f and x[:, cont_var_idx].size:
-                result[cont_var_idx] = continuous_f(x[:, cont_var_idx].astype(np.float64))
-            if time_f and x[:, time_var_idx].size:
-                result[time_var_idx] = time_f(x[:, time_var_idx].astype(np.float64))
-            if string_f and x[:, str_var_idx].size:
-                result[str_var_idx] = string_f(x[:, str_var_idx].astype(np.object))
-            return result
-
-        self._variable_types = [type(var) for var in self._attributes]
-        self._variable_names = [var.name.lower() for var in self._attributes]
-
-        # Compute the center
-        _center = partial(
-            _apply_to_types,
+        self._variable_types = [type(var).__name__ for var in self.variables]
+        self._variable_names = [var.name.lower() for var in self.variables]
+        self._center = self.__compute_stat(
+            matrices,
             discrete_f=lambda x: ss.mode(x)[0],
             continuous_f=lambda x: ut.nanmean(x, axis=0),
         )
-        self._center = np.hstack(map(_center, matrices))
 
         # Compute the dispersion
         def _entropy(x):
             p = [ut.bincount(row)[0] for row in x.T]
             p = [pk / np.sum(pk) for pk in p]
             return np.fromiter((ss.entropy(pk) for pk in p), dtype=np.float64)
-        _dispersion = partial(
-            _apply_to_types,
-            discrete_f=lambda x: _entropy(x),
+        self._dispersion = self.__compute_stat(
+            matrices,
+            discrete_f=_entropy,
             continuous_f=lambda x: np.sqrt(ut.nanvar(x, axis=0)) / ut.nanmean(x, axis=0),
         )
-        self._dispersion = np.hstack(map(_dispersion, matrices))
-
-        # Compute minimum values
-        _max = partial(
-            _apply_to_types,
-            discrete_f=lambda x: ut.nanmax(x, axis=0),
-            continuous_f=lambda x: ut.nanmax(x, axis=0),
-        )
-        self._max = np.hstack(map(_max, matrices))
-
-        # Compute maximum values
-        _min = partial(
-            _apply_to_types,
+        self._min = self.__compute_stat(
+            matrices,
             discrete_f=lambda x: ut.nanmin(x, axis=0),
             continuous_f=lambda x: ut.nanmin(x, axis=0),
         )
-        self._min = np.hstack(map(_min, matrices))
-
-        # Compute # of missing values
-        _missing = partial(
-            _apply_to_types,
+        self._max = self.__compute_stat(
+            matrices,
+            discrete_f=lambda x: ut.nanmax(x, axis=0),
+            continuous_f=lambda x: ut.nanmax(x, axis=0),
+        )
+        self._missing = self.__compute_stat(
+            matrices,
             discrete_f=lambda x: ut.countnans(x, axis=0),
             continuous_f=lambda x: ut.countnans(x, axis=0),
             string_f=lambda x: (x == StringVariable.Unknown).sum(axis=0),
             time_f=lambda x: ut.countnans(x, axis=0),
         )
-        self._missing = np.hstack(map(_missing, matrices))
+
+    def __compute_stat(self, matrices, discrete_f=None, continuous_f=None,
+                       time_f=None, string_f=None, default_val=np.nan):
+        """Apply functions to appropriate variable types. The default value is
+        returned if there is no function defined for specific variable types.
+        """
+        if not len(matrices):
+            return np.array([])
+
+        results = []
+        for variables, x in matrices:
+            result = np.full(len(variables), default_val)
+            disc_idx, cont_idx, time_idx, str_idx = self._attr_indices(variables)
+            if discrete_f and x[:, disc_idx].size:
+                result[disc_idx] = discrete_f(x[:, disc_idx].astype(np.float64))
+            if continuous_f and x[:, cont_idx].size:
+                result[cont_idx] = continuous_f(x[:, cont_idx].astype(np.float64))
+            if time_f and x[:, time_idx].size:
+                result[time_idx] = time_f(x[:, time_idx].astype(np.float64))
+            if string_f and x[:, str_idx].size:
+                result[str_idx] = string_f(x[:, str_idx].astype(np.object))
+            results.append(result)
+
+        return np.hstack(results)
 
     def sortColumnData(self, column):
         if column == self.Columns.ICON:
@@ -212,7 +213,7 @@ class FeatureStatisticsTableModel(AbstractSortTableModel):
             return QVariant()
 
         output = None
-        attribute = self._attributes[row]
+        attribute = self.variables[row]
 
         if column == self.Columns.ICON:
             if role == Qt.DecorationRole:
