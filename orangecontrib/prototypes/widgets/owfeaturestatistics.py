@@ -239,19 +239,29 @@ class FeatureStatisticsTableModel(AbstractSortTableModel):
         if not len(matrices):
             return np.array([])
 
+        def _to_float(data):
+            if not np.issubdtype(data.dtype, np.number):
+                data = data.astype(np.float64)
+            return data
+
+        def _to_object(data):
+            if data.dtype is not np.object:
+                data = data.astype(np.object)
+            return data
+
         results = []
         for variables, x in matrices:
             result = np.full(len(variables), default_val)
 
             disc_idx, cont_idx, time_idx, str_idx = self._attr_indices(variables)
             if discrete_f and x[:, disc_idx].size:
-                result[disc_idx] = discrete_f(x[:, disc_idx].astype(np.float64))
+                result[disc_idx] = discrete_f(_to_float(x[:, disc_idx]))
             if continuous_f and x[:, cont_idx].size:
-                result[cont_idx] = continuous_f(x[:, cont_idx].astype(np.float64))
+                result[cont_idx] = continuous_f(_to_float(x[:, cont_idx]))
             if time_f and x[:, time_idx].size:
-                result[time_idx] = time_f(x[:, time_idx].astype(np.float64))
+                result[time_idx] = time_f(_to_float(x[:, time_idx]))
             if string_f and x[:, str_idx].size:
-                result[str_idx] = string_f(x[:, str_idx].astype(np.object))
+                result[str_idx] = string_f(_to_object(x[:, str_idx]))
 
             results.append(result)
 
