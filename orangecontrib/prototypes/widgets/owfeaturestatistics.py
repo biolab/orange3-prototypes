@@ -45,6 +45,8 @@ class FeatureStatisticsTableModel(AbstractSortTableModel):
         ATTRIBUTE: QColor(255, 255, 255),
     }
 
+    HIDDEN_VAR_TYPES = (StringVariable, TimeVariable)
+
     class Columns(IntEnum):
         ICON, NAME, DISTRIBUTION, CENTER, DISPERSION, MIN, MAX, MISSING = range(8)
 
@@ -109,12 +111,10 @@ class FeatureStatisticsTableModel(AbstractSortTableModel):
         string_var_idx = [i for i, attr in enumerate(attrs) if isinstance(attr, StringVariable)]
         return disc_var_idx, cont_var_idx, time_var_idx, string_var_idx
 
-    @staticmethod
-    def __filter_attributes(attributes, matrix):
+    def __filter_attributes(self, attributes, matrix):
         """Filter out variables which shouldn't be visualized."""
-        types = (StringVariable, TimeVariable)
         attributes, matrix = np.asarray(attributes), matrix
-        mask = [not isinstance(attr, types) for attr in attributes]
+        mask = [not isinstance(attr, self.HIDDEN_VAR_TYPES) for attr in attributes]
         return attributes[mask], matrix[:, mask]
 
     def __compute_statistics(self):
@@ -455,10 +455,9 @@ class OWFeatureStatistics(widget.OWWidget):
         hheader.sectionResized.connect(bind_histogram_aspect_ratio)
         hheader.sectionResized.connect(keep_row_centered)
 
-        self.distribution_delegate = DistributionDelegate(parent=self)
         self.table_view.setItemDelegateForColumn(
             FeatureStatisticsTableModel.Columns.DISTRIBUTION,
-            self.distribution_delegate,
+            DistributionDelegate(parent=self),
         )
 
         self.mainArea.layout().addWidget(self.table_view)
@@ -512,8 +511,7 @@ class OWFeatureStatistics(widget.OWWidget):
         if self.model is not None:
             self.model.set_target_var(self.color_var)
 
-    @staticmethod
-    def _format_variables_string(variables):
+    def _format_variables_string(self, variables):
         agg = []
         for var_type_name, var_type in [
             ('categorical', DiscreteVariable),
@@ -521,10 +519,11 @@ class OWFeatureStatistics(widget.OWWidget):
             ('time', TimeVariable),
             ('string', StringVariable)
         ]:
-            var_type_list = [v for v in variables if isinstance(v, var_type)]
+            var_type_list = [v for v in variables if type(v) is var_type]
             if var_type_list:
+                shown = var_type in self.model.HIDDEN_VAR_TYPES
                 agg.append((
-                    '%d %s' % (len(var_type_list), var_type_name),
+                    '%d %s%s' % (len(var_type_list), var_type_name, ['', ' (not shown)'][shown]),
                     len(var_type_list)
                 ))
 
