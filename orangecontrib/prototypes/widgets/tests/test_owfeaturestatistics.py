@@ -1,3 +1,4 @@
+from collections import namedtuple
 from functools import wraps
 from itertools import chain
 from typing import Callable
@@ -11,74 +12,77 @@ from Orange.widgets.tests.utils import simulate
 from orangecontrib.prototypes.widgets.owfeaturestatistics import \
     OWFeatureStatistics
 
+VarDataPair = namedtuple('VarDataPair', ['variable', 'data'])
+
+
 # Continuous variable variations
-continuous_full = [
+continuous_full = VarDataPair(
     ContinuousVariable('continuous_full'),
     np.array([0, 1, 2, 3, 4], dtype=float),
-]
-continuous_missing = [
+)
+continuous_missing = VarDataPair(
     ContinuousVariable('continuous_missing'),
     np.array([0, 1, 2, np.nan, 4], dtype=float),
-]
-continuous_all_missing = [
+)
+continuous_all_missing = VarDataPair(
     ContinuousVariable('continuous_all_missing'),
     np.array([np.nan] * 5, dtype=float),
-]
-continuous_same = [
+)
+continuous_same = VarDataPair(
     ContinuousVariable('continuous_same'),
     np.array([3] * 5, dtype=float),
-]
+)
 continuous = [
     continuous_full, continuous_missing, continuous_all_missing,
     continuous_same
 ]
 
 # Unordered discrete variable variations
-rgb_full = [
+rgb_full = VarDataPair(
     DiscreteVariable('rgb_full', values=['r', 'g', 'b']),
     np.array([0, 1, 1, 1, 2], dtype=float),
-]
-rgb_missing = [
+)
+rgb_missing = VarDataPair(
     DiscreteVariable('rgb_missing', values=['r', 'g', 'b']),
     np.array([0, 1, 1, np.nan, 2], dtype=float),
-]
-rgb_all_missing = [
+)
+rgb_all_missing = VarDataPair(
     DiscreteVariable('rgb_all_missing', values=['r', 'g', 'b']),
     np.array([np.nan] * 5, dtype=float),
-]
-rgb_bins_missing = [
+)
+rgb_bins_missing = VarDataPair(
     DiscreteVariable('rgb_bins_missing', values=['r', 'g', 'b']),
     np.array([np.nan, 1, 1, 1, np.nan], dtype=float),
-]
-rgb_same = [
+)
+rgb_same = VarDataPair(
     DiscreteVariable('rgb_same', values=['r', 'g', 'b']),
     np.array([2] * 5, dtype=float),
-]
+)
 rgb = [
     rgb_full, rgb_missing, rgb_all_missing, rgb_bins_missing, rgb_same
 ]
 
 # Ordered discrete variable variations
-ints_full = [
+ints_full = VarDataPair(
     DiscreteVariable('ints_full', values=['2', '3', '4'], ordered=True),
     np.array([0, 1, 1, 1, 2], dtype=float),
-]
-ints_missing = [
+)
+ints_missing = VarDataPair(
     DiscreteVariable('ints_missing', values=['2', '3', '4'], ordered=True),
     np.array([0, 1, 1, np.nan, 2], dtype=float),
-]
-ints_all_missing = [
+)
+ints_all_missing = VarDataPair(
     DiscreteVariable('ints_all_missing', values=['2', '3', '4'], ordered=True),
     np.array([np.nan] * 5, dtype=float),
-]
-ints_bins_missing = [
+)
+ints_bins_missing = VarDataPair(
     DiscreteVariable('ints_bins_missing', values=['2', '3', '4'], ordered=True),
     np.array([np.nan, 1, 1, 1, np.nan], dtype=float),
-]
-ints_same = [
+)
+ints_same = VarDataPair(
     DiscreteVariable('ints_same', values=['2', '3', '4'], ordered=True),
     np.array([0] * 5, dtype=float),
-]
+)
 ints = [
     ints_full, ints_missing, ints_all_missing, ints_bins_missing, ints_same
 ]
@@ -86,43 +90,43 @@ ints = [
 discrete = list(chain(rgb, ints))
 
 # Time variable variations
-time_full = [
+time_full = VarDataPair(
     TimeVariable('time_full'),
     np.array([0, 1, 2, 3, 4], dtype=float),
-]
-time_missing = [
+)
+time_missing = VarDataPair(
     TimeVariable('time_missing'),
     np.array([0, np.nan, 2, 3, 4], dtype=float),
-]
-time_all_missing = [
+)
+time_all_missing = VarDataPair(
     TimeVariable('time_all_missing'),
     np.array([np.nan] * 5, dtype=float),
-]
-time_same = [
+)
+time_same = VarDataPair(
     TimeVariable('time_same'),
     np.array([4] * 5, dtype=float),
-]
+)
 time = [
     time_full, time_missing, time_all_missing, time_same
 ]
 
 # String variable variations
-string_full = [
+string_full = VarDataPair(
     StringVariable('string_full'),
     np.array(['a', 'b', 'c', 'd', 'e'], dtype=object),
-]
-string_missing = [
+)
+string_missing = VarDataPair(
     StringVariable('string_missing'),
     np.array(['a', 'b', 'c', StringVariable.Unknown, 'e'], dtype=object),
-]
-string_all_missing = [
+)
+string_all_missing = VarDataPair(
     StringVariable('string_all_missing'),
     np.array([StringVariable.Unknown] * 5, dtype=object),
-]
-string_same = [
+)
+string_same = VarDataPair(
     StringVariable('string_same'),
     np.array(['a'] * 5, dtype=object),
-]
+)
 string = [
     string_full, string_missing, string_all_missing, string_same
 ]
@@ -173,10 +177,10 @@ def table_dense_sparse(test_case):
     return _wrapper
 
 
-class TestOWFeatureStatistics(WidgetTest):
+class TestOWFeatureStatisticsTableTypes(WidgetTest):
     def setUp(self):
         self.widget = self.create_widget(
-            OWFeatureStatistics, stored_settings={"auto_apply": False}
+            OWFeatureStatistics, stored_settings={'auto_commit': False}
         )
 
     @table_dense_sparse
@@ -312,3 +316,91 @@ class TestOWFeatureStatistics(WidgetTest):
         # TODO: This does not actually test the crash because the histogram
         # code only runs when visible
         simulate.combobox_run_through_all(self.widget.cb_color_var)
+
+
+class TestFeatureStatisticsOutputs(WidgetTest):
+    def setUp(self):
+        self.widget = self.create_widget(
+            OWFeatureStatistics, stored_settings={'auto_commit': False}
+        )
+        self.data = make_table(
+            [continuous_full, continuous_missing],
+            target=[rgb_full, rgb_missing], metas=[ints_full, ints_missing]
+        )
+        self.send_signal('Data', self.data)
+
+    def test_sends_single_attribute_table_to_output(self):
+        # Check if selecting a single attribute row
+        self.widget.table_view.selectRow(0)
+        self.widget.unconditional_commit()
+
+        desired_domain = Domain(attributes=[continuous_full.variable])
+        output = self.get_output(self.widget.Outputs.reduced_data)
+        self.assertEqual(output.domain, desired_domain)
+
+    def test_sends_multiple_attribute_table_to_output(self):
+        # Check if selecting a single attribute row
+        self.widget.table_view.selectRow(0)
+        self.widget.table_view.selectRow(1)
+        self.widget.unconditional_commit()
+
+        desired_domain = Domain(attributes=[
+            continuous_full.variable, continuous_missing.variable,
+        ])
+        output = self.get_output(self.widget.Outputs.reduced_data)
+        self.assertEqual(output.domain, desired_domain)
+
+    def test_sends_single_class_var_table_to_output(self):
+        self.widget.table_view.selectRow(2)
+        self.widget.unconditional_commit()
+
+        desired_domain = Domain(attributes=[], class_vars=[rgb_full.variable])
+        output = self.get_output(self.widget.Outputs.reduced_data)
+        self.assertEqual(output.domain, desired_domain)
+
+    def test_sends_single_meta_table_to_output(self):
+        self.widget.table_view.selectRow(4)
+        self.widget.unconditional_commit()
+
+        desired_domain = Domain(attributes=[], metas=[ints_full.variable])
+        output = self.get_output(self.widget.Outputs.reduced_data)
+        self.assertEqual(output.domain, desired_domain)
+
+    def test_sends_multiple_var_types_table_to_output(self):
+        self.widget.table_view.selectRow(0)
+        self.widget.table_view.selectRow(2)
+        self.widget.table_view.selectRow(4)
+        self.widget.unconditional_commit()
+
+        desired_domain = Domain(
+            attributes=[continuous_full.variable],
+            class_vars=[rgb_full.variable],
+            metas=[ints_full.variable],
+        )
+        output = self.get_output(self.widget.Outputs.reduced_data)
+        self.assertEqual(output.domain, desired_domain)
+
+    def test_sends_all_samples_to_output(self):
+        """All rows should be sent to output for selected column."""
+        self.widget.table_view.selectRow(0)
+        self.widget.table_view.selectRow(2)
+        self.widget.unconditional_commit()
+
+        selected_vars = Domain(
+            attributes=[continuous_full.variable],
+            class_vars=[rgb_full.variable],
+        )
+
+        output = self.get_output(self.widget.Outputs.reduced_data)
+        np.testing.assert_equal(output.X, self.data[:, selected_vars].X)
+        np.testing.assert_equal(output.Y, self.data[:, selected_vars].Y)
+
+    def test_clearing_selection_sends_none_to_output(self):
+        """Clearing all the selected rows should send `None` to output."""
+        self.widget.table_view.selectRow(0)
+        self.widget.unconditional_commit()
+        self.assertIsNotNone(self.get_output(self.widget.Outputs.reduced_data))
+
+        self.widget.table_view.clearSelection()
+        self.widget.unconditional_commit()
+        self.assertIsNone(self.get_output(self.widget.Outputs.reduced_data))

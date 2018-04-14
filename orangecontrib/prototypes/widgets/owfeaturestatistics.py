@@ -7,7 +7,7 @@ TODO:
 """
 import locale
 from enum import IntEnum
-from typing import Any, Optional  # pylint: disable=unused-import
+from typing import Any, Optional, Tuple, List  # pylint: disable=unused-import
 
 import numpy as np
 import scipy.stats as ss
@@ -23,9 +23,10 @@ from Orange.canvas.report import plural
 from Orange.data import Table, StringVariable, DiscreteVariable, \
     ContinuousVariable, TimeVariable, Domain, Variable
 from Orange.widgets import widget, gui
-from Orange.widgets.settings import ContextSetting, DomainContextHandler
+from Orange.widgets.settings import ContextSetting, DomainContextHandler, \
+    Setting
 from Orange.widgets.utils.itemmodels import DomainModel, AbstractSortTableModel
-from Orange.widgets.utils.signals import Input
+from Orange.widgets.utils.signals import Input, Output
 from orangecontrib.prototypes.widgets.utils.histogram import Histogram
 
 
@@ -70,27 +71,59 @@ class FeatureStatisticsTableModel(AbstractSortTableModel):
         def from_index(cls, index):
             return cls(index)
 
-    def __init__(self, data, parent=None):
+    def __init__(self, data=None, parent=None):
         """
 
         Parameters
         ----------
-        data : Table
-        parent
+        data : Optional[Table]
+        parent : Optional[QWidget]
+
         """
         super().__init__(parent)
-        self.data = data  # type: Table
-        self.domain = domain = data.domain  # type: Domain
+
+        self.data = None  # type: Optional[Table]
+        self.domain = None  # type: Optional[Domain]
         self.target_var = None  # type: Optional[Variable]
+        self.n_attributes = self.n_instances = 0
+
+        self.__attributes = self.__class_vars = self.__metas = None
+        self.__distributions_cache = {}
+        # Clear model initially to set default values
+        self.clear()
+
+        self.set_data(data)
+
+    def set_data(self, data):
+        if data is None:
+            self.clear()
+            return
+
+        self.beginResetModel()
+        self.data = data
+        self.domain = domain = data.domain
+        self.target_var = None
 
         self.__attributes = self.__filter_attributes(domain.attributes, self.data.X)
         self.__class_vars = self.__filter_attributes(domain.class_vars, self.data._Y)
         self.__metas = self.__filter_attributes(domain.metas, self.data.metas)
+
         self.n_attributes = len(self.variables)
         self.n_instances = len(data)
 
         self.__distributions_cache = {}
         self.__compute_statistics()
+        self.endResetModel()
+
+    def clear(self):
+        self.beginResetModel()
+        self.data = self.domain = self.target_var = None
+        self.n_attributes = self.n_instances = 0
+        self.__attributes = (np.array([]), np.array([]))
+        self.__class_vars = (np.array([]), np.array([]))
+        self.__metas = (np.array([]), np.array([]))
+        self.__distributions_cache.clear()
+        self.endResetModel()
 
     @property
     def variables(self):
@@ -343,6 +376,10 @@ class OWFeatureStatistics(widget.OWWidget):
     class Inputs:
         data = Input('Data', Table, default=True)
 
+    class Outputs:
+        reduced_data = Output('Reduced Data', Table, default=True)
+        scores = Output('Statistics', Table)
+
     want_main_area = True
     buttons_area_orientation = Qt.Vertical
 
@@ -350,13 +387,15 @@ class OWFeatureStatistics(widget.OWWidget):
 
     auto_commit = ContextSetting(True)
     color_var = ContextSetting(None)  # type: Optional[Variable]
-    filter_string = ContextSetting('')
+    # filter_string = ContextSetting('')
+
+    sorting = Setting((0, Qt.DescendingOrder))
+    selected_rows = ContextSetting([])
 
     def __init__(self):
         super().__init__()
 
         self.data = None  # type: Optional[Table]
-        self.model = None  # type: Optional[FeatureStatisticsTableModel]
 
         # Information panel
         info_box = gui.vBox(self.controlArea, 'Info')
@@ -395,6 +434,7 @@ class OWFeatureStatistics(widget.OWWidget):
         )
 
         # Main area
+        self.model = FeatureStatisticsTableModel(parent=self)
         self.table_view = QTableView(
             showGrid=False,
             cornerButtonEnabled=False,
@@ -404,7 +444,9 @@ class OWFeatureStatistics(widget.OWWidget):
             horizontalScrollMode=QTableView.ScrollPerPixel,
             verticalScrollMode=QTableView.ScrollPerPixel,
         )
+        self.table_view.setModel(self.model)
         self.table_view.setFocusPolicy(Qt.NoFocus)
+        self.table_view.selectionModel().selectionChanged.connect(self.on_select)
 
         hheader = self.table_view.horizontalHeader()
         hheader.setStretchLastSection(False)
@@ -421,6 +463,10 @@ class OWFeatureStatistics(widget.OWWidget):
         # Set individual column behaviour in `set_data` since the logical
         # indices must be valid in the model, which requires data.
         hheader.setSectionResizeMode(QHeaderView.Interactive)
+
+        columns = self.model.Columns
+        hheader.setSectionResizeMode(columns.ICON.index, QHeaderView.ResizeToContents)
+        hheader.setSectionResizeMode(columns.DISTRIBUTION.index, QHeaderView.Stretch)
 
         vheader = self.table_view.verticalHeader()
         vheader.setVisible(False)
@@ -482,7 +528,7 @@ class OWFeatureStatistics(widget.OWWidget):
         self.data = data
 
         if data is not None:
-            self.model = FeatureStatisticsTableModel(data, parent=self)
+            self.model.set_data(data)
             self.color_var_model.set_domain(data.domain)
             if self.data.domain.class_vars:
                 self.color_var = self.data.domain.class_vars[0]
@@ -497,14 +543,6 @@ class OWFeatureStatistics(widget.OWWidget):
         self.__color_var_changed()
 
         self.set_info()
-
-        # The resize modes for individual columns must be set here, because
-        # the logical index must be valid in `setSectionResizeMode`. It is not
-        # valid when there is no data in the model.
-        if self.model:
-            columns, hheader = self.model.Columns, self.table_view.horizontalHeader()
-            hheader.setSectionResizeMode(columns.ICON.index, QHeaderView.ResizeToContents)
-            hheader.setSectionResizeMode(columns.DISTRIBUTION.index, QHeaderView.Stretch)
 
     @pyqtSlot(int)
     def __color_var_changed(self, *_):
@@ -563,8 +601,19 @@ class OWFeatureStatistics(widget.OWWidget):
             self.info_class.setText('')
             self.info_meta.setText('')
 
+    def on_select(self):
+        self.selected_rows = self.model.mapToSourceRows([
+            i.row() for i in self.table_view.selectionModel().selectedRows(0)
+        ])
+        self.commit()
+
     def commit(self):
-        pass
+        if not len(self.selected_rows):
+            self.Outputs.reduced_data.send(None)
+            return
+
+        variables = self.model.variables[self.selected_rows]
+        self.Outputs.reduced_data.send(self.data[:, variables])
 
     def send_report(self):
         pass
