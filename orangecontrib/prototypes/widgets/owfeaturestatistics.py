@@ -410,10 +410,9 @@ class FeatureStatisticsTableView(QTableView):
             cornerButtonEnabled=False,
             sortingEnabled=True,
             selectionBehavior=QTableView.SelectRows,
-            selectionMode=QTableView.MultiSelection,
+            selectionMode=QTableView.ExtendedSelection,
             horizontalScrollMode=QTableView.ScrollPerPixel,
             verticalScrollMode=QTableView.ScrollPerPixel,
-            focusPolicy=Qt.NoFocus,
             **kwargs
         )
         self.setModel(model)
@@ -442,8 +441,10 @@ class FeatureStatisticsTableView(QTableView):
         vheader.setVisible(False)
         vheader.setSectionResizeMode(QHeaderView.Fixed)
         hheader.sectionResized.connect(self.bind_histogram_aspect_ratio)
-        hheader.sectionResized.connect(self.keep_row_centered)
+        # TODO: This shifts the scrollarea a bit down when opening widget
+        # hheader.sectionResized.connect(self.keep_row_centered)
 
+        self.setItemDelegate(NoFocusRectDelegate(parent=self))
         self.setItemDelegateForColumn(
             FeatureStatisticsTableModel.Columns.DISTRIBUTION,
             DistributionDelegate(parent=self),
@@ -474,6 +475,15 @@ class FeatureStatisticsTableView(QTableView):
         bottom_row = self.indexAt(self.rect().bottomLeft()).row()
         middle_row = top_row + (bottom_row - top_row) // 2
         self.scrollTo(self.model().index(middle_row, 0), QTableView.PositionAtCenter)
+
+
+class NoFocusRectDelegate(QStyledItemDelegate):
+    """Removes the light blue background and border on a focused item."""
+
+    def paint(self, painter, option, index):
+        # type: (QPainter, QStyleOptionViewItem, QModelIndex) -> None
+        option.state &= ~QStyle.State_HasFocus
+        super().paint(painter, option, index)
 
 
 class DistributionDelegate(QStyledItemDelegate):

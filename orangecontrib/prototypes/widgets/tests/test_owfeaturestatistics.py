@@ -1,9 +1,11 @@
 from collections import namedtuple
-from functools import wraps
+from functools import wraps, partial
 from itertools import chain
-from typing import Callable
+from typing import Callable, List
 
 import numpy as np
+from AnyQt.QtCore import QItemSelection, QItemSelectionRange, \
+    QItemSelectionModel
 
 from Orange.data import Table, Domain, StringVariable, ContinuousVariable, \
     DiscreteVariable, TimeVariable
@@ -318,6 +320,21 @@ class TestOWFeatureStatisticsTableTypes(WidgetTest):
         simulate.combobox_run_through_all(self.widget.cb_color_var)
 
 
+def select_rows(rows: List[int], widget: OWFeatureStatistics):
+    """Since the widget sorts the rows, selecting rows isn't trivial."""
+    indices = widget.model.mapToSourceRows(rows)
+
+    selection = QItemSelection()
+    for idx in indices:
+        selection.append(QItemSelectionRange(
+            widget.model.index(idx, 0),
+            widget.model.index(idx, widget.model.columnCount() - 1)
+        ))
+
+    widget.table_view.selectionModel().select(
+        selection, QItemSelectionModel.ClearAndSelect)
+
+
 class TestFeatureStatisticsOutputs(WidgetTest):
     def setUp(self):
         self.widget = self.create_widget(
@@ -328,14 +345,11 @@ class TestFeatureStatisticsOutputs(WidgetTest):
             target=[rgb_full, rgb_missing], metas=[ints_full, ints_missing]
         )
         self.send_signal('Data', self.data)
-        self.cont_full_idx = self.widget.model.mapToSourceRows(0)
-        self.cont_miss_idx = self.widget.model.mapToSourceRows(1)
-        self.disc_full_idx = self.widget.model.mapToSourceRows(2)
-        self.ints_full_idx = self.widget.model.mapToSourceRows(4)
+        self.select_rows = partial(select_rows, widget=self.widget)
 
     def test_sends_single_attribute_table_to_output(self):
         # Check if selecting a single attribute row
-        self.widget.table_view.selectRow(self.cont_full_idx)
+        self.select_rows([0])
         self.widget.unconditional_commit()
 
         desired_domain = Domain(attributes=[continuous_full.variable])
@@ -344,8 +358,7 @@ class TestFeatureStatisticsOutputs(WidgetTest):
 
     def test_sends_multiple_attribute_table_to_output(self):
         # Check if selecting a single attribute row
-        self.widget.table_view.selectRow(self.cont_full_idx)
-        self.widget.table_view.selectRow(self.cont_miss_idx)
+        self.select_rows([0, 1])
         self.widget.unconditional_commit()
 
         desired_domain = Domain(attributes=[
@@ -355,7 +368,7 @@ class TestFeatureStatisticsOutputs(WidgetTest):
         self.assertEqual(output.domain, desired_domain)
 
     def test_sends_single_class_var_table_to_output(self):
-        self.widget.table_view.selectRow(self.disc_full_idx)
+        self.select_rows([2])
         self.widget.unconditional_commit()
 
         desired_domain = Domain(attributes=[], class_vars=[rgb_full.variable])
@@ -363,7 +376,7 @@ class TestFeatureStatisticsOutputs(WidgetTest):
         self.assertEqual(output.domain, desired_domain)
 
     def test_sends_single_meta_table_to_output(self):
-        self.widget.table_view.selectRow(self.ints_full_idx)
+        self.select_rows([4])
         self.widget.unconditional_commit()
 
         desired_domain = Domain(attributes=[], metas=[ints_full.variable])
@@ -371,9 +384,7 @@ class TestFeatureStatisticsOutputs(WidgetTest):
         self.assertEqual(output.domain, desired_domain)
 
     def test_sends_multiple_var_types_table_to_output(self):
-        self.widget.table_view.selectRow(self.cont_full_idx)
-        self.widget.table_view.selectRow(self.disc_full_idx)
-        self.widget.table_view.selectRow(self.ints_full_idx)
+        self.select_rows([0, 2, 4])
         self.widget.unconditional_commit()
 
         desired_domain = Domain(
@@ -386,8 +397,7 @@ class TestFeatureStatisticsOutputs(WidgetTest):
 
     def test_sends_all_samples_to_output(self):
         """All rows should be sent to output for selected column."""
-        self.widget.table_view.selectRow(self.cont_full_idx)
-        self.widget.table_view.selectRow(self.disc_full_idx)
+        self.select_rows([0, 2])
         self.widget.unconditional_commit()
 
         selected_vars = Domain(
@@ -401,7 +411,7 @@ class TestFeatureStatisticsOutputs(WidgetTest):
 
     def test_clearing_selection_sends_none_to_output(self):
         """Clearing all the selected rows should send `None` to output."""
-        self.widget.table_view.selectRow(0)
+        self.select_rows([0])
         self.widget.unconditional_commit()
         self.assertIsNotNone(self.get_output(self.widget.Outputs.reduced_data))
         self.assertIsNotNone(self.get_output(self.widget.Outputs.statistics))
@@ -417,15 +427,16 @@ class TestFeatureStatisticsUI(WidgetTest):
         self.widget = self.create_widget(
             OWFeatureStatistics, stored_settings={'auto_commit': False}
         )
+        self.widget.resetSettings()
         self.data1 = Table('iris')
         self.data2 = Table('zoo')
+        self.select_rows = partial(select_rows, widget=self.widget)
 
     def test_restores_previous_selection(self):
         """Widget should remember selection with domain context handler."""
         # Send data and select rows
         self.send_signal(self.widget.Inputs.data, self.data1)
-        self.widget.table_view.selectRow(0)
-        self.widget.table_view.selectRow(2)
+        self.select_rows([0, 2])
         self.assertEqual(len(self.widget.selected_rows), 2)
 
         # Sending new data clears selection
