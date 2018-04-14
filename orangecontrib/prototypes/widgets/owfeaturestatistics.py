@@ -263,7 +263,6 @@ class FeatureStatisticsTableModel(AbstractSortTableModel):
         elif column == self.Columns.NAME:
             return self._variable_names
         elif column == self.Columns.DISTRIBUTION:
-            # TODO Implement some form of sorting over the histograms
             return self._variable_names
         elif column == self.Columns.CENTER:
             return self._center
@@ -275,6 +274,16 @@ class FeatureStatisticsTableModel(AbstractSortTableModel):
             return self._max
         elif column == self.Columns.MISSING:
             return self._missing
+
+    def _argsortData(self, data, order):
+        """Always sort NaNs last."""
+        indices = np.argsort(data, kind='mergesort')
+        if order == Qt.DescendingOrder:
+            indices = indices[::-1]
+            if np.issubdtype(data.dtype, np.number):
+                indices = np.roll(indices, -np.isnan(data).sum())
+            return indices
+        return indices
 
     def headerData(self, section, orientation, role):
         # type: (int, Qt.Orientation, Qt.ItemDataRole) -> Any
@@ -588,9 +597,9 @@ class OWFeatureStatistics(widget.OWWidget):
         else:
             self.color_var_model.set_domain(None)
             self.color_var = None
+        self.model.set_data(data)
 
         self.openContext(self.data)
-        self.model.set_data(data)
         self.__restore_selection()
         self.__restore_sorting()
         # self._filter_table_variables()
