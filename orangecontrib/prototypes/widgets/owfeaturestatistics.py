@@ -7,7 +7,6 @@ TODO:
 """
 import locale
 from enum import IntEnum
-from functools import partial
 from typing import Any, Optional  # pylint: disable=unused-import
 
 import numpy as np
@@ -28,6 +27,14 @@ from Orange.widgets.settings import ContextSetting, DomainContextHandler
 from Orange.widgets.utils.itemmodels import DomainModel, AbstractSortTableModel
 from Orange.widgets.utils.signals import Input
 from orangecontrib.prototypes.widgets.utils.histogram import Histogram
+
+
+def _categorical_entropy(x):
+    """Compute the entropy of a dense/sparse matrix, column-wise. Assuming
+    categorical values."""
+    p = [ut.bincount(row)[0] for row in x.T]
+    p = [pk / np.sum(pk) for pk in p]
+    return np.fromiter((ss.entropy(pk) for pk in p), dtype=np.float64)
 
 
 class FeatureStatisticsTableModel(AbstractSortTableModel):
@@ -104,7 +111,7 @@ class FeatureStatisticsTableModel(AbstractSortTableModel):
 
     @staticmethod
     def __filter_attributes(attributes, matrix):
-        """Filter out variables, which shouldn't be visualized."""
+        """Filter out variables which shouldn't be visualized."""
         types = (StringVariable, TimeVariable)
         attributes, matrix = np.asarray(attributes), matrix
         mask = [not isinstance(attr, types) for attr in attributes]
@@ -124,15 +131,9 @@ class FeatureStatisticsTableModel(AbstractSortTableModel):
             discrete_f=lambda x: ss.mode(x)[0],
             continuous_f=lambda x: ut.nanmean(x, axis=0),
         )
-
-        # Compute the dispersion
-        def _entropy(x):
-            p = [ut.bincount(row)[0] for row in x.T]
-            p = [pk / np.sum(pk) for pk in p]
-            return np.fromiter((ss.entropy(pk) for pk in p), dtype=np.float64)
         self._dispersion = self.__compute_stat(
             matrices,
-            discrete_f=_entropy,
+            discrete_f=_categorical_entropy,
             continuous_f=lambda x: np.sqrt(ut.nanvar(x, axis=0)) / ut.nanmean(x, axis=0),
         )
         self._min = self.__compute_stat(
@@ -164,6 +165,7 @@ class FeatureStatisticsTableModel(AbstractSortTableModel):
         results = []
         for variables, x in matrices:
             result = np.full(len(variables), default_val)
+
             disc_idx, cont_idx, time_idx, str_idx = self._attr_indices(variables)
             if discrete_f and x[:, disc_idx].size:
                 result[disc_idx] = discrete_f(x[:, disc_idx].astype(np.float64))
@@ -173,6 +175,7 @@ class FeatureStatisticsTableModel(AbstractSortTableModel):
                 result[time_idx] = time_f(x[:, time_idx].astype(np.float64))
             if string_f and x[:, str_idx].size:
                 result[str_idx] = string_f(x[:, str_idx].astype(np.object))
+
             results.append(result)
 
         return np.hstack(results)
