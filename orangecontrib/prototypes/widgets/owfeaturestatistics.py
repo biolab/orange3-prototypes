@@ -5,6 +5,7 @@ TODO:
     or quartile coefficient of dispersion (Q3 - Q1) / (Q3 + Q1)
   - Standard deviation for nominal: try out Variation ratio (1 - n_mode/N)
 """
+import datetime
 import locale
 from enum import IntEnum
 from typing import Any, Optional, Tuple, List  # pylint: disable=unused-import
@@ -23,8 +24,7 @@ from Orange.canvas.report import plural
 from Orange.data import Table, StringVariable, DiscreteVariable, \
     ContinuousVariable, TimeVariable, Domain, Variable
 from Orange.widgets import widget, gui
-from Orange.widgets.settings import ContextSetting, DomainContextHandler, \
-    Setting
+from Orange.widgets.settings import ContextSetting, DomainContextHandler
 from Orange.widgets.utils.itemmodels import DomainModel, AbstractSortTableModel
 from Orange.widgets.utils.signals import Input, Output
 from orangecontrib.prototypes.widgets.utils.histogram import Histogram
@@ -38,6 +38,56 @@ def _categorical_entropy(x):
     return np.fromiter((ss.entropy(pk) for pk in p), dtype=np.float64)
 
 
+def format_time_diff(start, end, round_up_after=2):
+    """Return an approximate human readable time difference between two dates.
+
+    Parameters
+    ----------
+    start : int
+        Unix timestamp
+    end : int
+        Unix timestamp
+    round_up_after : int
+        The number of time units before we round up to the next, larger time
+        unit e.g. setting to 2 will allow up to 2 days worth of hours to be
+        shown, after that the difference is shown in days. Or put another way
+        we will show from 1-48 hours before switching to days.
+
+    Returns
+    -------
+    str
+
+    """
+    start = datetime.datetime.fromtimestamp(start)
+    end = datetime.datetime.fromtimestamp(end)
+    diff = abs(end - start)  # type: datetime.timedelta
+
+    # Get the different resolutions
+    seconds = diff.total_seconds()
+    minutes = seconds // 60
+    hours = minutes // 60
+    days = diff.days
+    weeks = days // 7
+    months = (end.year - start.year) * 12 + end.month - start.month
+    years = months // 12
+
+    # Check which resolution is most appropriate
+    if years >= round_up_after:
+        return '~%d years' % years
+    elif months >= round_up_after:
+        return '~%d months' % months
+    elif weeks >= round_up_after:
+        return '~%d weeks' % weeks
+    elif days >= round_up_after:
+        return '~%d days' % days
+    elif hours >= round_up_after:
+        return '~%d hours' % hours
+    elif minutes >= round_up_after:
+        return '~%d minutes' % minutes
+    else:
+        return '%d seconds' % seconds
+
+
 class FeatureStatisticsTableModel(AbstractSortTableModel):
     CLASS_VAR, META, ATTRIBUTE = range(3)
     COLOR_FOR_ROLE = {
@@ -46,7 +96,7 @@ class FeatureStatisticsTableModel(AbstractSortTableModel):
         ATTRIBUTE: QColor(255, 255, 255),
     }
 
-    HIDDEN_VAR_TYPES = (StringVariable, TimeVariable)
+    HIDDEN_VAR_TYPES = (StringVariable,)
 
     class Columns(IntEnum):
         ICON, NAME, DISTRIBUTION, CENTER, DISPERSION, MIN, MAX, MISSING = range(8)
@@ -160,25 +210,16 @@ class FeatureStatisticsTableModel(AbstractSortTableModel):
 
         self._variable_types = [type(var).__name__ for var in self.variables]
         self._variable_names = [var.name.lower() for var in self.variables]
-        self._center = self.__compute_stat(
+        self._min = self.__compute_stat(
             matrices,
-            discrete_f=lambda x: ss.mode(x)[0],
-            continuous_f=lambda x: ut.nanmean(x, axis=0),
+            discrete_f=lambda x: ut.nanmin(x, axis=0),
+            continuous_f=lambda x: ut.nanmin(x, axis=0),
+            time_f=lambda x: ut.nanmin(x, axis=0),
         )
         self._dispersion = self.__compute_stat(
             matrices,
             discrete_f=_categorical_entropy,
             continuous_f=lambda x: np.sqrt(ut.nanvar(x, axis=0)) / ut.nanmean(x, axis=0),
-        )
-        self._min = self.__compute_stat(
-            matrices,
-            discrete_f=lambda x: ut.nanmin(x, axis=0),
-            continuous_f=lambda x: ut.nanmin(x, axis=0),
-        )
-        self._max = self.__compute_stat(
-            matrices,
-            discrete_f=lambda x: ut.nanmax(x, axis=0),
-            continuous_f=lambda x: ut.nanmax(x, axis=0),
         )
         self._missing = self.__compute_stat(
             matrices,
@@ -186,6 +227,18 @@ class FeatureStatisticsTableModel(AbstractSortTableModel):
             continuous_f=lambda x: ut.countnans(x, axis=0),
             string_f=lambda x: (x == StringVariable.Unknown).sum(axis=0),
             time_f=lambda x: ut.countnans(x, axis=0),
+        )
+        self._max = self.__compute_stat(
+            matrices,
+            discrete_f=lambda x: ut.nanmax(x, axis=0),
+            continuous_f=lambda x: ut.nanmax(x, axis=0),
+            time_f=lambda x: ut.nanmax(x, axis=0),
+        )
+        self._center = self.__compute_stat(
+            matrices,
+            discrete_f=lambda x: ss.mode(x)[0],
+            continuous_f=lambda x: ut.nanmean(x, axis=0),
+            time_f=lambda x: ut.nanmean(x, axis=0),
         )
 
     def get_statistics_matrix(self, variables=None, return_labels=False):
@@ -367,16 +420,23 @@ class FeatureStatisticsTableModel(AbstractSortTableModel):
                     output = self._center[row]
                     if not np.isnan(output):
                         output = attribute.str_val(self._center[row])
+                elif isinstance(attribute, TimeVariable):
+                    output = attribute.str_val(self._center[row])
                 else:
                     output = self._center[row]
         elif column == self.Columns.DISPERSION:
             if role == Qt.DisplayRole:
-                output = self._dispersion[row]
+                if isinstance(attribute, TimeVariable):
+                    output = format_time_diff(self._min[row], self._max[row])
+                else:
+                    output = self._dispersion[row]
         elif column == self.Columns.MIN:
             if role == Qt.DisplayRole:
                 if isinstance(attribute, DiscreteVariable):
                     if attribute.ordered:
                         output = attribute.str_val(self._min[row])
+                elif isinstance(attribute, TimeVariable):
+                    output = attribute.str_val(self._min[row])
                 else:
                     output = self._min[row]
         elif column == self.Columns.MAX:
@@ -384,6 +444,8 @@ class FeatureStatisticsTableModel(AbstractSortTableModel):
                 if isinstance(attribute, DiscreteVariable):
                     if attribute.ordered:
                         output = attribute.str_val(self._max[row])
+                elif isinstance(attribute, TimeVariable):
+                    output = attribute.str_val(self._max[row])
                 else:
                     output = self._max[row]
         elif column == self.Columns.MISSING:
