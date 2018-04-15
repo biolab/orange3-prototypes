@@ -5,7 +5,7 @@ from typing import Callable, List
 
 import numpy as np
 from AnyQt.QtCore import QItemSelection, QItemSelectionRange, \
-    QItemSelectionModel
+    QItemSelectionModel, Qt
 
 from Orange.data import Table, Domain, StringVariable, ContinuousVariable, \
     DiscreteVariable, TimeVariable
@@ -185,6 +185,18 @@ class TestOWFeatureStatisticsTableTypes(WidgetTest):
             OWFeatureStatistics, stored_settings={'auto_commit': False}
         )
 
+    def force_render_table(self):
+        """Some fields e.g. histograms are only initialized when they actually
+        need to be rendered"""
+        model = self.widget.model
+        for i in range(model.rowCount()):
+            for j in range(model.columnCount()):
+                model.data(model.index(i, j), Qt.DisplayRole)
+
+    def run_through_variables(self):
+        simulate.combobox_run_through_all(
+            self.widget.cb_color_var, callback=self.force_render_table)
+
     @table_dense_sparse
     def test_runs_on_iris(self, prepare_table):
         self.send_signal('Data', prepare_table(Table('iris')))
@@ -193,131 +205,31 @@ class TestOWFeatureStatisticsTableTypes(WidgetTest):
         self.send_signal('Data', make_table(discrete))
         self.send_signal('Data', None)
 
-    # Only discrete variables
+    # No missing values
     @table_dense_sparse
-    def test_runs_on_discrete_with_no_target(self, prepare_table):
-        data = make_table(discrete)
+    def test_on_data_with_no_missing_values(self, prepare_table):
+        data = make_table([continuous_full, rgb_full, ints_full, time_full])
         self.send_signal('Data', prepare_table(data))
+        self.run_through_variables()
 
     @table_dense_sparse
-    def test_runs_on_discrete_with_discrete_target(self, prepare_table):
-        data = make_table(discrete, target=[ints_full])
+    def test_on_data_with_no_missing_values_full_domain(self, prepare_table):
+        data = make_table([continuous_full, time_full], [ints_full], [rgb_full])
         self.send_signal('Data', prepare_table(data))
+        self.run_through_variables()
+
+    # With missing values
+    @table_dense_sparse
+    def test_on_data_with_missing_continuous_values(self, prepare_table):
+        data = make_table([continuous_full, continuous_missing, rgb_full, ints_full, time_full])
+        self.send_signal('Data', prepare_table(data))
+        self.run_through_variables()
 
     @table_dense_sparse
-    def test_runs_on_discrete_with_continuous_target(self, prepare_table):
-        data = make_table(discrete, target=[continuous_full])
+    def test_on_data_with_missing_discrete_values(self, prepare_table):
+        data = make_table([continuous_full, rgb_full, rgb_missing, ints_full, time_full])
         self.send_signal('Data', prepare_table(data))
-
-    # Only continuous variables
-    @table_dense_sparse
-    def test_runs_on_continuous_with_no_target(self, prepare_table):
-        data = make_table(continuous)
-        self.send_signal('Data', prepare_table(data))
-
-    @table_dense_sparse
-    def test_runs_on_continuous_with_discrete_target(self, prepare_table):
-        data = make_table(continuous, target=[ints_full])
-        self.send_signal('Data', prepare_table(data))
-
-    @table_dense_sparse
-    def test_runs_on_continuous_with_continuous_target(self, prepare_table):
-        data = make_table(continuous, target=[continuous_full])
-        self.send_signal('Data', prepare_table(data))
-
-    # Only time variables
-    @table_dense_sparse
-    def test_runs_on_time_with_no_target(self, prepare_table):
-        data = make_table(time)
-        self.send_signal('Data', prepare_table(data))
-
-    @table_dense_sparse
-    def test_runs_on_time_with_discrete_target(self, prepare_table):
-        data = make_table(time, target=[ints_full])
-        self.send_signal('Data', prepare_table(data))
-
-    @table_dense_sparse
-    def test_runs_on_time_with_continuous_target(self, prepare_table):
-        data = make_table(time, target=[continuous_full])
-        self.send_signal('Data', prepare_table(data))
-
-    # With various metas
-    @table_dense_sparse
-    def test_runs_with_no_target_and_metas(self, prepare_table):
-        data = make_table(chain(continuous, discrete, time), metas=[
-            ints_missing,
-            rgb_same,
-            string_missing,
-            string_all_missing,
-            time_full,
-        ])
-        self.send_signal('Data', prepare_table(data))
-
-    @table_dense_sparse
-    def test_runs_with_target_and_metas(self, prepare_table):
-        data = make_table(chain(continuous, discrete, time), target=[
-            ints_same
-        ], metas=[
-            ints_missing,
-            rgb_same,
-            string_missing,
-            string_all_missing,
-            time_full,
-        ])
-        self.send_signal('Data', prepare_table(data))
-
-    # Various other convoluted input tables
-    @table_dense_sparse
-    def test_runs_with_multiple_targets(self, prepare_table):
-        data = make_table(chain(continuous, discrete, time), target=[
-            continuous_full,
-            rgb_full,
-            ints_full,
-        ], metas=[
-            ints_missing,
-            rgb_same,
-            string_missing,
-            string_all_missing,
-            time_full,
-        ])
-        self.send_signal('Data', prepare_table(data))
-        simulate.combobox_run_through_all(self.widget.cb_color_var)
-
-    @table_dense_sparse
-    def test_runs_with_missing_target_values(self, prepare_table):
-        data = make_table(chain(continuous, discrete, time), target=[
-            continuous_missing,
-            rgb_missing,
-            ints_missing,
-        ], metas=[
-            ints_missing,
-            rgb_same,
-            string_missing,
-            string_all_missing,
-            time_full,
-        ])
-        self.send_signal('Data', prepare_table(data))
-        # TODO: This does not actually test the crash because the histogram
-        # code only runs when visible
-        simulate.combobox_run_through_all(self.widget.cb_color_var)
-
-    @table_dense_sparse
-    def test_runs_with_all_missing_target_values(self, prepare_table):
-        data = make_table(chain(continuous, discrete, time), target=[
-            continuous_all_missing,
-            rgb_all_missing,
-            ints_all_missing,
-        ], metas=[
-            ints_missing,
-            rgb_same,
-            string_missing,
-            string_all_missing,
-            time_full,
-        ])
-        self.send_signal('Data', prepare_table(data))
-        # TODO: This does not actually test the crash because the histogram
-        # code only runs when visible
-        simulate.combobox_run_through_all(self.widget.cb_color_var)
+        self.run_through_variables()
 
 
 def select_rows(rows: List[int], widget: OWFeatureStatistics):

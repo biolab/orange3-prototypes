@@ -82,7 +82,7 @@ class FeatureStatisticsTableModel(AbstractSortTableModel):
         """
         super().__init__(parent)
 
-        self.data = None  # type: Optional[Table]
+        self.table = None  # type: Optional[Table]
         self.domain = None  # type: Optional[Domain]
         self.target_var = None  # type: Optional[Variable]
         self.n_attributes = self.n_instances = 0
@@ -100,13 +100,13 @@ class FeatureStatisticsTableModel(AbstractSortTableModel):
             return
 
         self.beginResetModel()
-        self.data = data
+        self.table = data
         self.domain = domain = data.domain
         self.target_var = None
 
-        self.__attributes = self.__filter_attributes(domain.attributes, self.data.X)
-        self.__class_vars = self.__filter_attributes(domain.class_vars, self.data._Y)
-        self.__metas = self.__filter_attributes(domain.metas, self.data.metas)
+        self.__attributes = self.__filter_attributes(domain.attributes, self.table.X)
+        self.__class_vars = self.__filter_attributes(domain.class_vars, self.table._Y)
+        self.__metas = self.__filter_attributes(domain.metas, self.table.metas)
 
         self.n_attributes = len(self.variables)
         self.n_instances = len(data)
@@ -117,7 +117,7 @@ class FeatureStatisticsTableModel(AbstractSortTableModel):
 
     def clear(self):
         self.beginResetModel()
-        self.data = self.domain = self.target_var = None
+        self.table = self.domain = self.target_var = None
         self.n_attributes = self.n_instances = 0
         self.__attributes = (np.array([]), np.array([]))
         self.__class_vars = (np.array([]), np.array([]))
@@ -147,7 +147,8 @@ class FeatureStatisticsTableModel(AbstractSortTableModel):
     def __filter_attributes(self, attributes, matrix):
         """Filter out variables which shouldn't be visualized."""
         attributes, matrix = np.asarray(attributes), matrix
-        mask = [not isinstance(attr, self.HIDDEN_VAR_TYPES) for attr in attributes]
+        mask = [idx for idx, attr in enumerate(attributes)
+                if not isinstance(attr, self.HIDDEN_VAR_TYPES)]
         return attributes[mask], matrix[:, mask]
 
     def __compute_statistics(self):
@@ -207,7 +208,7 @@ class FeatureStatisticsTableModel(AbstractSortTableModel):
         Union[Tuple[List[str], np.ndarray], np.ndarray]
 
         """
-        if self.data is None:
+        if self.table is None:
             return np.atleast_2d([])
 
         # If a list of variables is given, select only corresponding stats
@@ -322,8 +323,22 @@ class FeatureStatisticsTableModel(AbstractSortTableModel):
         if not 0 <= row <= self.n_attributes:
             return QVariant()
 
-        output = None
         attribute = self.variables[row]
+
+        if role == Qt.BackgroundRole:
+            if attribute in self.domain.attributes:
+                return self.COLOR_FOR_ROLE[self.ATTRIBUTE]
+            elif attribute in self.domain.metas:
+                return self.COLOR_FOR_ROLE[self.META]
+            elif attribute in self.domain.class_vars:
+                return self.COLOR_FOR_ROLE[self.CLASS_VAR]
+
+        elif role == Qt.TextAlignmentRole:
+            if column == self.Columns.NAME:
+                return Qt.AlignLeft | Qt.AlignVCenter
+            return Qt.AlignRight | Qt.AlignVCenter
+
+        output = None
 
         if column == self.Columns.ICON:
             if role == Qt.DecorationRole:
@@ -337,7 +352,7 @@ class FeatureStatisticsTableModel(AbstractSortTableModel):
                     if row not in self.__distributions_cache:
                         scene = QGraphicsScene(parent=self)
                         histogram = Histogram(
-                            data=self.data,
+                            data=self.table,
                             variable=attribute,
                             color_attribute=self.target_var,
                             border=(0, 0, 2, 0),
@@ -377,19 +392,6 @@ class FeatureStatisticsTableModel(AbstractSortTableModel):
                     self._missing[row],
                     100 * self._missing[row] / self.n_instances
                 )
-
-        if role == Qt.BackgroundRole:
-            if attribute in self.domain.attributes:
-                return self.COLOR_FOR_ROLE[self.ATTRIBUTE]
-            elif attribute in self.domain.metas:
-                return self.COLOR_FOR_ROLE[self.META]
-            elif attribute in self.domain.class_vars:
-                return self.COLOR_FOR_ROLE[self.CLASS_VAR]
-
-        elif role == Qt.TextAlignmentRole:
-            if column == self.Columns.NAME:
-                return Qt.AlignLeft | Qt.AlignVCenter
-            return Qt.AlignRight | Qt.AlignVCenter
 
         # Consistently format the text inside the table cells
         # The easiest way to check for NaN is to compare with itself
