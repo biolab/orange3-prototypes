@@ -417,10 +417,14 @@ class FeatureStatisticsTableModel(AbstractSortTableModel):
                 'We do not deal with non numeric values in sorting by ' \
                 'multiple values'
             if order == Qt.DescendingOrder:
-                data[:, :-1] = -(data[:, :-1].astype(np.float64))
+                data[:, -1] = -data[:, -1]
+
+            # In order to make sure NaNs always appear at the end, insert a
+            # indicator whether NaN or not
+            nans = np.isnan(data[:, -1]).astype(int)
+            data = np.insert(data, nans, -2, axis=1)
+
             indices = np.lexsort(np.flip(data.T, axis=0))
-            if order == Qt.DescendingOrder:
-                indices = indices[::-1]
 
         return indices
 
