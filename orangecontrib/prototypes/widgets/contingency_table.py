@@ -51,6 +51,8 @@ class ContingencyTable(QTableView):
 
         self.classesv = None
         self.classesh = None
+        self.headerv = None
+        self.headerh = None
         self.parent = parent
         self.tablemodel = tablemodel
 
@@ -91,22 +93,36 @@ class ContingencyTable(QTableView):
     def _set_item(self, i, j, item):
         self.tablemodel.setItem(i, j, item)
 
-    def initialize(self, classesv, classesh=None, corner_string=None):
-        # Maybe merge with __init__.
-        self.classesv = classesv
-        self.classesh = classesh or self.classesv
+    def initialize(self, *,
+                   variablev=None, variableh=None,
+                   classesv=None, classesh=None, headerh=None, headerv=None,
+                   corner_string=None):
+        if variablev is not None:
+            self.classesv = variablev.values
+            self.headerv = variablev.name
+        if variableh is not None:
+            self.classesh = variableh.values
+            self.headerh = variableh.name
+        if classesv is not None:
+            self.classesv = classesv
+        if classesh is not None:
+            self.classesh = classesh
+        if headerv is not None:
+            self.headerv = headerv
+        if headerh is not None:
+            self.headerh = headerh
         if corner_string is None:
             corner_string = unicodedata.lookup("N-ARY SUMMATION")
+        assert self.classesv is not None and self.classesh is not None
 
-        # TODO: Change "Predicted" and "Actual" to attribute names when headersh isn't None.
         item = self._item(0, 2)
-        item.setData("Predicted", Qt.DisplayRole)
+        item.setData(self.headerh, Qt.DisplayRole)
         item.setTextAlignment(Qt.AlignCenter)
         item.setFlags(Qt.NoItemFlags)
 
         self._set_item(0, 2, item)
         item = self._item(2, 0)
-        item.setData("Actual", Qt.DisplayRole)
+        item.setData(self.headerv, Qt.DisplayRole)
         item.setTextAlignment(Qt.AlignHCenter | Qt.AlignBottom)
         item.setFlags(Qt.NoItemFlags)
         self.setItemDelegateForColumn(0, gui.VerticalItemDelegate())

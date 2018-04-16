@@ -76,7 +76,7 @@ class OWContingencyTable(widget.OWWidget):
                 self.rows = self.feature_model[0]
                 self.columns = self.feature_model[0]
                 self.openContext(data)
-                self.tableview.initialize(self.rows.values, self.columns.values)
+                self.tableview.initialize(variablev=self.rows, variableh=self.columns)
                 self.table = contingency_table(self.data, self.columns, self.rows)
                 self.tableview.update_table(self.table.X, formatstr="{:.0f}")
         else:
@@ -110,7 +110,7 @@ class OWContingencyTable(widget.OWWidget):
         self.tableview.set_selection(self.selection)
         self.table = None
         if self.data and self.rows and self.columns:
-            self.tableview.initialize(self.rows.values, self.columns.values)
+            self.tableview.initialize(variablev=self.rows, variableh=self.columns)
             self.table = contingency_table(self.data, self.columns, self.rows)
             self.tableview.update_table(self.table.X, formatstr="{:.0f}")
 

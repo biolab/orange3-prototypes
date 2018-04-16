@@ -177,7 +177,8 @@ class OWConfusionMatrix(widget.OWWidget):
                 self.learners = ["Learner #{}".format(i + 1)
                                  for i in range(nmodels)]
 
-            self.tableview.initialize(class_values)
+            self.tableview.initialize(classesv=class_values, classesh=class_values,
+                                      headerv="Actual", headerh="Predicted")
             self.openContext(data.domain.class_var)
             if not prev_sel_learner or prev_sel_learner[0] >= len(self.learners):
                 if self.learners:
@@ -319,7 +320,6 @@ class OWConfusionMatrix(widget.OWWidget):
             colors[diag] = normalized[diag] / normalized[diag].max()
 
             tooltip = lambda classv, classh:"actual: {}\npredicted: {}".format(classv, classh)
-
             self.tableview.update_table(normalized, colsum=colsum, rowsum=rowsum, colors=colors, formatstr=formatstr,
                                         tooltip=tooltip)
 
