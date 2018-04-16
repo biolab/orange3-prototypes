@@ -160,7 +160,7 @@ class ContingencyTable(QTableView):
         self.selectionModel().select(
             selection, QItemSelectionModel.ClearAndSelect)
 
-    def update_table(self, matrix, colsum=None, rowsum=None, colors=None, formatstr="{}"):
+    def update_table(self, matrix, colsum=None, rowsum=None, colors=None, formatstr="{}", tooltip=None):
         def _isinvalid(x):
             return isnan(x) or isinf(x)
 
@@ -184,9 +184,8 @@ class ContingencyTable(QTableView):
                     255 if _isinvalid(col_val) else int(255 - 30 * col_val))
                 item.setData(QBrush(bkcolor), Qt.BackgroundRole)
                 item.setData("trbl", BorderRole)
-                # TODO: Make tooltips appropriate.
-                item.setToolTip("actual: {}\npredicted: {}".format(
-                    self.classesv[i], self.classesh[j]))
+                if tooltip is not None:
+                    item.setToolTip(tooltip(self.classesv[i], self.classesh[j]))
                 item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                 item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
                 self._set_item(i + 2, j + 2, item)

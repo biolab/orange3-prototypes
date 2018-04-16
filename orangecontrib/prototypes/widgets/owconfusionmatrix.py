@@ -318,7 +318,10 @@ class OWConfusionMatrix(widget.OWWidget):
             colors /= div
             colors[diag] = normalized[diag] / normalized[diag].max()
 
-            self.tableview.update_table(normalized, colsum, rowsum, colors, formatstr)
+            tooltip = lambda classv, classh:"actual: {}\npredicted: {}".format(classv, classh)
+
+            self.tableview.update_table(normalized, colsum=colsum, rowsum=rowsum, colors=colors, formatstr=formatstr,
+                                        tooltip=tooltip)
 
     def send_report(self):
         """Send report"""
