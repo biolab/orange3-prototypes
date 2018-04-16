@@ -59,13 +59,13 @@ class ContingencyTable(QTableView):
     Attributes
     ----------
     classesv : :obj:`list` of :obj:`str`
-        Class vertical headers.
+        Vertical class headers.
     classesh : :obj:`list` of :obj:`str`
-        Class horizontal headers.
+        Horizontal class headers.
     headerv : :obj:`str`, optional
-        Top vertical header.
+        Vertical top header.
     headerh : :obj:`str`, optional
-        Top horizontal header.
+        Horizontal top header.
     corner_string : str
         String that is top right and bottom left corner of the table.
         Default is ``unicodedata.lookup("N-ARY SUMMATION")``.
@@ -144,13 +144,13 @@ class ContingencyTable(QTableView):
         Parameters
         ----------
         classesv : :obj:`list` of :obj:`str`
-            Class vertical headers.
+            Vertical class headers.
         classesh : :obj:`list` of :obj:`str`
-            Class horizontal headers.
+            Horizontal class headers.
         headerv : :obj:`str`, optional
-            Top vertical header.
+            Vertical top header.
         headerh : :obj:`str`, optional
-            Top horizontal header.
+            Horizontal top header.
         """
         self.classesv = classesv
         self.classesh = classesh
