@@ -526,7 +526,7 @@ class FeatureStatisticsTableModel(AbstractSortTableModel):
         # Consistently format the text inside the table cells
         # The easiest way to check for NaN is to compare with itself
         if output != output:
-            output = 'NaN'
+            output = ''
         # Format ∞ properly
         elif output in (np.inf, -np.inf):
             output = '%s∞' % ['', '-'][output < 0]
