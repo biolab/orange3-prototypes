@@ -56,6 +56,8 @@ class ContingencyTable(QTableView):
         self.parent = parent
         self.tablemodel = tablemodel
 
+        self.corner_string = unicodedata.lookup("N-ARY SUMMATION")
+
         self.setModel(self.tablemodel)
         self.horizontalHeader().hide()
         self.verticalHeader().hide()
@@ -93,26 +95,21 @@ class ContingencyTable(QTableView):
     def _set_item(self, i, j, item):
         self.tablemodel.setItem(i, j, item)
 
-    def initialize(self, *,
-                   variablev=None, variableh=None,
-                   classesv=None, classesh=None, headerh=None, headerv=None,
-                   corner_string=None):
-        if variablev is not None:
-            self.classesv = variablev.values
-            self.headerv = variablev.name
-        if variableh is not None:
-            self.classesh = variableh.values
-            self.headerh = variableh.name
-        if classesv is not None:
-            self.classesv = classesv
-        if classesh is not None:
-            self.classesh = classesh
-        if headerv is not None:
-            self.headerv = headerv
-        if headerh is not None:
-            self.headerh = headerh
-        if corner_string is None:
-            corner_string = unicodedata.lookup("N-ARY SUMMATION")
+    def set_variables(self, variablev, variableh):
+        self.classesv = variablev.values
+        self.classesh = variableh.values
+        self.headerv = variablev.name
+        self.headerh = variableh.name
+        self.initialize()
+
+    def set_headers(self, classesv, classesh, headerv=None, headerh=None):
+        self.classesv = classesv
+        self.classesh = classesh
+        self.headerv = headerv
+        self.headerh = headerh
+        self.initialize()
+
+    def initialize(self):
         assert self.classesv is not None and self.classesh is not None
 
         item = self._item(0, 2)
@@ -140,8 +137,8 @@ class ContingencyTable(QTableView):
                 item.setFlags(Qt.NoItemFlags)
                 self._set_item(i, j, item)
 
-        for headers, ix in ((self.classesv + [corner_string], lambda p: (p + 2, 1)),
-                            (self.classesh + [corner_string], lambda p: (1, p + 2))):
+        for headers, ix in ((self.classesv + [self.corner_string], lambda p: (p + 2, 1)),
+                            (self.classesh + [self.corner_string], lambda p: (1, p + 2))):
             for p, label in enumerate(headers):
                 i, j = ix(p)
                 item = self._item(i, j)
@@ -157,7 +154,7 @@ class ContingencyTable(QTableView):
                 self._set_item(i, j, item)
 
         hor_header = self.horizontalHeader()
-        if len(' '.join(self.classesh + [corner_string])) < 120:
+        if len(' '.join(self.classesh + [self.corner_string])) < 120:
             hor_header.setSectionResizeMode(QHeaderView.ResizeToContents)
         else:
             hor_header.setDefaultSectionSize(60)

@@ -177,8 +177,7 @@ class OWConfusionMatrix(widget.OWWidget):
                 self.learners = ["Learner #{}".format(i + 1)
                                  for i in range(nmodels)]
 
-            self.tableview.initialize(classesv=class_values, classesh=class_values,
-                                      headerv="Actual", headerh="Predicted")
+            self.tableview.set_headers(class_values, class_values, "Actual", "Predicted")
             self.openContext(data.domain.class_var)
             if not prev_sel_learner or prev_sel_learner[0] >= len(self.learners):
                 if self.learners:
