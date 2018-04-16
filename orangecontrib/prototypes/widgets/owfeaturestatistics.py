@@ -208,8 +208,8 @@ class FeatureStatisticsTableModel(AbstractSortTableModel):
         # Filter out any matrices with size 0
         matrices = list(filter(lambda tup: tup[1].size, matrices))
 
-        self._variable_types = [type(var).__name__ for var in self.variables]
-        self._variable_names = [var.name.lower() for var in self.variables]
+        self._variable_types = np.array([type(var) for var in self.variables])
+        self._variable_names = np.array([var.name.lower() for var in self.variables])
         self._min = self.__compute_stat(
             matrices,
             discrete_f=lambda x: ut.nanmin(x, axis=0),
@@ -333,31 +333,95 @@ class FeatureStatisticsTableModel(AbstractSortTableModel):
         return np.hstack(results)
 
     def sortColumnData(self, column):
+        """Prepare the arrays with which we will sort the rows. If we want to
+        sort based on a single value e.g. the name, return a 1d array.
+        Sometimes we may want to sort by multiple criteria, comparing
+        continuous variances with discrete entropies makes no sense, so we want
+        to group those variable types together.
+        """
+        # Prepare indices for variable types so we can group them together
+        order = [DiscreteVariable, ContinuousVariable, TimeVariable, StringVariable]
+        mapping = {var: idx for idx, var in enumerate(order)}
+        vmapping = np.vectorize(mapping.__getitem__)
+        var_types_indices = vmapping(self._variable_types)
+
+        # Store the variable name sorted indices so we can pass a default
+        # order when sorting by multiple keys
+        var_name_indices = np.argsort(self._variable_names)
+
+        # Prepare vartype indices so ready when needed
+        disc_idx, cont_idx, time_idx, str_idx = self._attr_indices(self.variables)
+
+        # Sort by: (type)
         if column == self.Columns.ICON:
-            return self._variable_types
+            return var_types_indices
+        # Sort by: (name)
         elif column == self.Columns.NAME:
+            # We use `_variable_names` here and not the indices because the
+            # last (or single) row is actually sorted and we don't want to sort
+            # the indices
             return self._variable_names
+        # Sort by: (None)
         elif column == self.Columns.DISTRIBUTION:
-            return self._variable_names
+            return np.ones_like(var_types_indices)
+        # Sort by: (type, center)
         elif column == self.Columns.CENTER:
-            return self._center
+            # Sorting discrete or string values by mean makes no sense
+            vals = np.array(self._center)
+            vals[disc_idx] = var_name_indices[disc_idx]
+            vals[str_idx] = var_name_indices[str_idx]
+            return np.vstack((var_types_indices, vals)).T
+        # Sort by: (type, dispersion)
         elif column == self.Columns.DISPERSION:
-            return self._dispersion
+            # Sort time variables by their dispersion, which is not stored in
+            # the dispersion array
+            vals = np.array(self._dispersion)
+            vals[time_idx] = self._max[time_idx] - self._min[time_idx]
+            return np.vstack((var_types_indices, vals)).T
+        # Sort by: (type, min)
         elif column == self.Columns.MIN:
-            return self._min
+            # Sorting discrete or string values by min makes no sense
+            vals = np.array(self._min)
+            vals[disc_idx] = var_name_indices[disc_idx]
+            vals[str_idx] = var_name_indices[str_idx]
+            return np.vstack((var_types_indices, vals)).T
+        # Sort by: (type, max)
         elif column == self.Columns.MAX:
-            return self._max
+            # Sorting discrete or string values by min makes no sense
+            vals = np.array(self._max)
+            vals[disc_idx] = var_name_indices[disc_idx]
+            vals[str_idx] = var_name_indices[str_idx]
+            return np.vstack((var_types_indices, vals)).T
+        # Sort by: (missing)
         elif column == self.Columns.MISSING:
             return self._missing
 
+    def _sortColumnData(self, column):
+        """Allow sorting with 2d arrays."""
+        data = np.asarray(self.sortColumnData(column))
+        data = data[self.mapToSourceRows(Ellipsis)]
+
+        assert data.ndim <= 2, 'Data should be at most 2-dimensional'
+        return data
+
     def _argsortData(self, data, order):
-        """Always sort NaNs last."""
-        indices = np.argsort(data, kind='mergesort')
-        if order == Qt.DescendingOrder:
-            indices = indices[::-1]
+        if data.ndim == 1:
+            indices = np.argsort(data, kind='mergesort')
+            if order == Qt.DescendingOrder:
+                indices = indices[::-1]
+            # Always sort NaNs last
             if np.issubdtype(data.dtype, np.number):
                 indices = np.roll(indices, -np.isnan(data).sum())
-            return indices
+        else:
+            assert np.issubdtype(data.dtype, np.number), \
+                'We do not deal with non numeric values in sorting by ' \
+                'multiple values'
+            if order == Qt.DescendingOrder:
+                data[:, :-1] = -(data[:, :-1].astype(np.float64))
+            indices = np.lexsort(np.flip(data.T, axis=0))
+            if order == Qt.DescendingOrder:
+                indices = indices[::-1]
+
         return indices
 
     def headerData(self, section, orientation, role):
