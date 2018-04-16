@@ -46,6 +46,31 @@ class BorderedItemDelegate(QStyledItemDelegate):
 
 
 class ContingencyTable(QTableView):
+    """
+    A contingency table widget which can be used wherever ``QTableView`` could be used.
+
+    Parameters
+    ----------
+    parent : Orange.widgets.widget.OWWidget as a
+        The containing widget to which the table is connected.
+    tablemodel : AnyQt.QtGui.QtStandardItemModel
+        The model in which table data will be stored.
+
+    Attributes
+    ----------
+    classesv : :obj:`list` of :obj:`str`
+        Class vertical headers.
+    classesh : :obj:`list` of :obj:`str`
+        Class horizontal headers.
+    headerv : :obj:`str`, optional
+        Top vertical header.
+    headerh : :obj:`str`, optional
+        Top horizontal header.
+    corner_string : str
+        String that is top right and bottom left corner of the table.
+        Default is ``unicodedata.lookup("N-ARY SUMMATION")``.
+    """
+
     def __init__(self, parent, tablemodel):
         super().__init__(editTriggers=QTableView.NoEditTriggers)
 
@@ -96,6 +121,16 @@ class ContingencyTable(QTableView):
         self.tablemodel.setItem(i, j, item)
 
     def set_variables(self, variablev, variableh):
+        """
+        Sets class headers and top headers and initializes table structure.
+
+        Parameters
+        ----------
+        variablev : Orange.data.variable.DiscreteVariable
+            Class headers are set to ``variablev.values``, top header is set to ``variablev.name``.
+        variableh : Orange.data.variable.DiscreteVariable
+            Class headers are set to ``variableh.values``, top header is set to ``variableh.name``.
+        """
         self.classesv = variablev.values
         self.classesh = variableh.values
         self.headerv = variablev.name
@@ -103,6 +138,20 @@ class ContingencyTable(QTableView):
         self.initialize()
 
     def set_headers(self, classesv, classesh, headerv=None, headerh=None):
+        """
+        Sets class headers and top headers and initializes table structure.
+
+        Parameters
+        ----------
+        classesv : :obj:`list` of :obj:`str`
+            Class vertical headers.
+        classesh : :obj:`list` of :obj:`str`
+            Class horizontal headers.
+        headerv : :obj:`str`, optional
+            Top vertical header.
+        headerh : :obj:`str`, optional
+            Top horizontal header.
+        """
         self.classesv = classesv
         self.classesh = classesh
         self.headerv = headerv
@@ -110,6 +159,9 @@ class ContingencyTable(QTableView):
         self.initialize()
 
     def initialize(self):
+        """
+        Initializes table structure. Class headers must be set beforehand.
+        """
         assert self.classesv is not None and self.classesh is not None
 
         item = self._item(0, 2)
@@ -162,9 +214,25 @@ class ContingencyTable(QTableView):
         self.tablemodel.setColumnCount(len(self.classesh) + 3)
 
     def get_selection(self):
+        """
+        Get indexes of selected cells.
+
+        Returns
+        -------
+        :obj:`set` of :obj:`tuple` of :obj:`int`
+            Set of pairs of indexes.
+        """
         return {(ind.row() - 2, ind.column() - 2) for ind in self.selectedIndexes()}
 
     def set_selection(self, indexes):
+        """
+        Set indexes of selected cells.
+
+        Parameters
+        ----------
+        indexes : :obj:`set` of :obj:`tuple` of :obj:`int`
+            Set of pairs of indexes.
+        """
         selection = QItemSelection()
         index = self.model().index
         for row, col in indexes:
@@ -174,6 +242,25 @@ class ContingencyTable(QTableView):
             selection, QItemSelectionModel.ClearAndSelect)
 
     def update_table(self, matrix, colsum=None, rowsum=None, colors=None, formatstr="{}", tooltip=None):
+        """
+        Sets ``matrix`` as data of the table.
+
+        Parameters
+        ----------
+        matrix : numpy.array
+            2D array to be set as data.
+        colsum : :obj:`numpy.array`, optional
+            1D optional array with aggregate values of columns, defaults to sum.
+        rowsum : :obj:`numpy.array`, optional
+            1D optional array with aggregate values of rows, defaults to sum.
+        colors : :obj:`numpy.array`, optional
+            2D array with color values, defaults to no color.
+        formatstr : :obj:`str`, optional
+            Format string for cell data, defaults to ``"{}"``.
+        tooltip : :obj:`(str, str) -> str`, optional
+            Function which takes vertical class and horizontal class (strings) as arguments and returns
+            desired tooltip as a string. Defaults to no tooltips.
+        """
         def _isinvalid(x):
             return isnan(x) or isinf(x)
 
