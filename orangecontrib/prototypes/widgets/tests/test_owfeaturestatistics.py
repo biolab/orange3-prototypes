@@ -231,6 +231,12 @@ class TestOWFeatureStatisticsTableTypes(WidgetTest):
         self.send_signal('Data', prepare_table(data))
         self.run_through_variables()
 
+    @table_dense_sparse
+    def test_on_data_with_discrete_values_all_the_same(self, prepare_table):
+        data = make_table([continuous_full], [ints_same, rgb_same])
+        self.send_signal('Data', prepare_table(data))
+        self.run_through_variables()
+
 
 def select_rows(rows: List[int], widget: OWFeatureStatistics):
     """Since the widget sorts the rows, selecting rows isn't trivial."""
