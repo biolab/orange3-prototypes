@@ -227,7 +227,14 @@ class Histogram(QGraphicsWidget):
         else:
             edges = np.linspace(ut.nanmin(self.x), ut.nanmax(self.x), self.n_bins)
             edge_diff = edges[1] - edges[0]
-            return np.hstack((edges, [edges[-1] + edge_diff]))
+            edges = np.hstack((edges, [edges[-1] + edge_diff]))
+
+            # If the variable takes on a single value, we still need to spit
+            # out some reasonable bin edges
+            if np.all(edges == edges[0]):
+                edges = np.array([edges[0] - 1, edges[0], edges[0] + 1])
+
+            return edges
 
     def _get_bin_distributions(self, bin_indices):
         """Compute the distribution of instances within bins.
@@ -333,7 +340,9 @@ class Histogram(QGraphicsWidget):
 
             bins = np.arange(self.n_bins)[:, np.newaxis]
             edges = self.edges if self.attribute.is_discrete else self.edges[1:-1]
-            bin_indices = ut.digitize(self.x, bins=edges)
+            # Need to digitize on `right` here so the samples will be assigned
+            # to the correct bin for coloring
+            bin_indices = ut.digitize(self.x, bins=edges, right=True)
             mask = bin_indices == bins
 
             colors = []
