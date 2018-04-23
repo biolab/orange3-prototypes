@@ -9,6 +9,7 @@ from Orange.widgets.settings import (Setting, ContextSetting,
                                      DomainContextHandler)
 from Orange.widgets.utils.annotated_data import create_annotated_table, ANNOTATED_DATA_SIGNAL_NAME
 from Orange.widgets.utils.itemmodels import DomainModel
+from Orange.widgets.utils.signals import Input, Output
 from Orange.widgets.utils.sql import check_sql_input
 from Orange.widgets.visualize.owsieve import ChiSqStats
 from sklearn.metrics import adjusted_mutual_info_score, adjusted_rand_score
@@ -22,10 +23,13 @@ class OWContingencyTable(widget.OWWidget):
     icon = "icons/Contingency.svg"
     priority = 2010
 
-    inputs = [("Data", Table, "set_data", widget.Default)]
-    outputs = [("Contingency Table", Table, ),
-               ("Selected Data", Table),
-               (ANNOTATED_DATA_SIGNAL_NAME, Table)]
+    class Inputs:
+        data = Input("Data", Table)
+
+    class Outputs:
+        contingency = Output("Contingency Table", Table, default=True)
+        selected_data = Output("Selected Data", Table)
+        annotated_data = Output(ANNOTATED_DATA_SIGNAL_NAME, Table)
 
     settingsHandler = DomainContextHandler(metas_in_res=True)
     rows = ContextSetting(None)
@@ -62,6 +66,7 @@ class OWContingencyTable(widget.OWWidget):
         view = self.tableview = ContingencyTable(self, self.tablemodel)
         self.mainArea.layout().addWidget(view)
 
+    @Inputs.data
     @check_sql_input
     def set_data(self, data):
         if self.feature_model:
@@ -98,9 +103,9 @@ class OWContingencyTable(widget.OWWidget):
         else:
             selected_data = None
             annotated_data = create_annotated_table(self.data, [])
-        self.send("Contingency Table", self.table)
-        self.send("Selected Data", selected_data)
-        self.send(ANNOTATED_DATA_SIGNAL_NAME, annotated_data)
+        self.Outputs.contingency.send(self.table)
+        self.Outputs.selected_data.send(selected_data)
+        self.Outputs.annotated_data.send(annotated_data)
 
     def _invalidate(self):
         self.selection = self.tableview.get_selection()
