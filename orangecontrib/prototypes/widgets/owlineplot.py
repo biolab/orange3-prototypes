@@ -22,10 +22,6 @@ from Orange.widgets.utils.plot import OWPlotGUI, SELECT, PANNING, ZOOMING
 from Orange.widgets.widget import OWWidget, Input, Output, Msg
 
 
-# TODO:
-#  * Box plot item
-
-
 def ccw(a, b, c):
     """
     Checks whether three points are listed in a counterclockwise order.
@@ -240,7 +236,7 @@ class OWLinePlot(OWWidget):
         gui.checkBox(displaybox, self, "display_individual",
                      "Line plots",
                      callback=self.__update_visibility)
-        gui.checkBox(displaybox, self, "display_quartiles", "Box plot",
+        gui.checkBox(displaybox, self, "display_quartiles", "Error bars",
                      callback=self.__update_visibility)
 
         group_box = gui.widgetBox(self.controlArea, "Group by")
@@ -382,12 +378,11 @@ class OWLinePlot(OWWidget):
         self.graph.addItem(meancurve)
 
         q1, q2, q3 = np.nanpercentile(data.X, [25, 50, 75], axis=0)
-        # TODO: implement and use a box plot item
         errorbar = pg.ErrorBarItem(
             x=X, y=mean,
             bottom=np.clip(mean - q1, 0, mean - q1),
             top=np.clip(q3 - mean, 0, q3 - mean),
-            beam=0.5
+            beam=0.01
         )
         self.graph.addItem(errorbar)
         return items, mean, meancurve, errorbar
