@@ -72,27 +72,46 @@ def line_segment_rect_intersect(rect, item):
 
 
 class LinePlotItem(pg.PlotDataItem):
-    def __init__(self, index, x, y, pen, color):
+    def __init__(self, index, instance_id, x, y, pen):
         super().__init__(x=x, y=y, pen=pen, pxMode=True, symbol="o",
-                         symbolSize=pen.width(), symbolBrush=color,
+                         symbolSize=pen.width(), symbolBrush=pen.color(),
                          symbolPen=pen, antialias=True)
+        self._selected = False
+        self._in_subset = False
         self._pen = pen
-        self._color = color
         self.index = index
+        self.id = instance_id
         self.curve.setClickable(True, width=10)
 
+    def into_subset(self):
+        self._in_subset = True
+        self._change_pen()
+
+    def out_of_subset(self):
+        self._in_subset = False
+        self._change_pen()
+
     def select(self):
-        color = QColor(self._color)
-        color.setAlpha(255)
-        pen = QPen(self._pen)
-        pen.setWidth(2)
-        pen.setColor(color)
-        self.__change_pen(pen)
+        self._selected = True
+        self._change_pen()
 
     def deselect(self):
-        self.__change_pen(self._pen)
+        self._selected = False
+        self._change_pen()
 
-    def __change_pen(self, pen):
+    def _change_pen(self):
+        pen = QPen(self._pen)
+        if self._in_subset and self._selected:
+            color = QColor(self._pen.color())
+            color.setAlpha(255)
+            pen.setWidth(4)
+            pen.setColor(color)
+        elif not self._in_subset and self._selected:
+            color = QColor(self._pen.color())
+            color.setAlpha(255)
+            pen.setColor(color)
+        elif self._in_subset and not self._selected:
+            pen.setWidth(4)
         self.setPen(pen)
         self.setSymbolPen(pen)
 
@@ -144,6 +163,7 @@ class LinePlotGraph(pg.PlotWidget):
         super().__init__(parent, viewBox=LinePlotViewBox(self),
                          background="w", enableMenu=False)
         self._items = {}
+        self._items_by_id = {}
         self.selection = set()
         self.state = SELECT
         self.master = parent
@@ -181,8 +201,17 @@ class LinePlotGraph(pg.PlotWidget):
             self._items[i].select()
         self.master.selection_changed()
 
+    def select_subset(self, ids):
+        for i in ids:
+            self._items_by_id[i].into_subset()
+
+    def deselect_subset(self, ids):
+        for i in ids:
+            self._items_by_id[i].out_of_subset()
+
     def reset(self):
         self._items = {}
+        self._items_by_id = {}
         self.selection = set()
         self.state = SELECT
         self.clear()
@@ -190,6 +219,7 @@ class LinePlotGraph(pg.PlotWidget):
 
     def add_line_plot_item(self, item):
         self._items[item.index] = item
+        self._items_by_id[item.id] = item
         self.addItem(item)
 
 
@@ -205,6 +235,7 @@ class OWLinePlot(OWWidget):
 
     class Inputs:
         data = Input("Data", Table, default=True)
+        data_subset = Input("Data Subset", Table)
 
     class Outputs:
         selected_data = Output("Selected Data", Table, default=True)
@@ -228,6 +259,8 @@ class OWLinePlot(OWWidget):
         self.classes = []
 
         self.data = None
+        self.data_subset = None
+        self.subset_selection = []
         self.group_variables = []
         self.graph_variables = []
         self.__groups = None
@@ -354,6 +387,23 @@ class OWLinePlot(OWWidget):
         self.select_data_instances()
         self.commit()
 
+    @Inputs.data_subset
+    def set_data_subset(self, subset):
+        """
+        Set the supplementary input subset dataset.
+        """
+        self.data_subset = subset
+
+    def handleNewSignals(self):
+        if len(self.subset_selection) and self.data is not None:
+            self.graph.deselect_subset(self.subset_selection)
+        self.subset_selection = []
+        if self.data is not None and self.data_subset is not None:
+            intersection = set(self.data.ids).intersection(
+                set(self.data_subset.ids))
+            self.subset_selection = intersection
+            self.graph.select_subset(self.subset_selection)
+
     def select_data_instances(self):
         if self.data is None or not len(self.data) or not len(self.selection):
             return
@@ -365,12 +415,12 @@ class OWLinePlot(OWWidget):
         dark_pen = QPen(color.darker(110), 4)
         dark_pen.setCosmetic(True)
 
-        color.setAlpha(150)
+        color.setAlpha(120)
         light_pen = QPen(color, 1)
         light_pen.setCosmetic(True)
         items = []
         for index, instance in zip(indices, data):
-            item = LinePlotItem(index, X, instance.x, light_pen, color)
+            item = LinePlotItem(index, instance.id, X, instance.x, light_pen)
             item.sigClicked.connect(self.graph.select_by_click)
             items.append(item)
             self.graph.add_line_plot_item(item)

@@ -46,3 +46,10 @@ class TestOWLinePLot(WidgetTest, WidgetOutputsTestMixin):
         indices = random.sample(range(0, len(self.data)), 2)
         self.widget.graph.select(indices)
         self.send_signal(self.widget.Inputs.data, self.titanic)
+
+    def test_input_subset_data(self):
+        self.send_signal(self.widget.Inputs.data, self.data)
+        random.seed(42)
+        indices = random.sample(range(0, len(self.data)), 20)
+        self.send_signal(self.widget.Inputs.data_subset, self.data[indices])
+        self.send_signal(self.widget.Inputs.data, None)
