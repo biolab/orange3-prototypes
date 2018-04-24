@@ -1,5 +1,5 @@
 import sys
-
+from enum import IntEnum
 from types import SimpleNamespace as namespace
 from collections import namedtuple
 
@@ -193,6 +193,10 @@ class LinePlotGraph(pg.PlotWidget):
         self.addItem(item)
 
 
+class LinePlotDisplay(IntEnum):
+    INSTANCES, MEAN, INSTANCES_WITH_MEAN = 0, 1, 2
+
+
 class OWLinePlot(OWWidget):
     name = "Line Plot"
     description = "Visualization of data profiles (e.g., time series)."
@@ -210,9 +214,8 @@ class OWLinePlot(OWWidget):
 
     group_var = settings.Setting("")                #: Group by group_var's values
     selected_classes = settings.Setting([])         #: List of selected class indices
-    display_individual = settings.Setting(False)    #: Show individual profiles
-    display_average = settings.Setting(True)        #: Show average profile
-    display_quartiles = settings.Setting(True)      #: Show data quartiles
+    display_index = settings.Setting(LinePlotDisplay.INSTANCES)
+    display_quartiles = settings.Setting(False)
     auto_commit = settings.Setting(True)
     selection = settings.ContextSetting([])
 
@@ -233,10 +236,14 @@ class OWLinePlot(OWWidget):
         infobox = gui.widgetBox(self.controlArea, "Info")
         self.infoLabel = gui.widgetLabel(infobox, "No data on input.")
         displaybox = gui.widgetBox(self.controlArea, "Display")
-        gui.checkBox(displaybox, self, "display_individual",
-                     "Line plots",
-                     callback=self.__update_visibility)
-        gui.checkBox(displaybox, self, "display_quartiles", "Error bars",
+        radiobox = gui.radioButtons(displaybox, self, "display_index",
+                                    callback=self.__update_visibility)
+        gui.appendRadioButton(radiobox, "Line plot")
+        gui.appendRadioButton(radiobox, "Mean")
+        gui.appendRadioButton(radiobox, "Line plot with mean")
+
+        showbox = gui.widgetBox(self.controlArea, "Show")
+        gui.checkBox(showbox, self, "display_quartiles", "Error bars",
                      callback=self.__update_visibility)
 
         group_box = gui.widgetBox(self.controlArea, "Group by")
@@ -444,17 +451,15 @@ class OWLinePlot(OWWidget):
     def __update_visibility(self):
         if self.__groups is None:
             return
-        if self.classes and self.selected_classes:
-            selected = lambda i: i in self.selected_classes
-        else:
-            selected = lambda i: True
         for i, group in enumerate(self.__groups):
             if group is not None:
-                isselected = selected(i)
                 for item in group.profiles:
-                    item.setVisible(isselected and self.display_individual)
-                group.mean.setVisible(isselected)
-                group.boxplot.setVisible(isselected and self.display_quartiles)
+                    item.setVisible(self.display_index in (
+                        LinePlotDisplay.INSTANCES,
+                        LinePlotDisplay.INSTANCES_WITH_MEAN))
+                group.mean.setVisible(self.display_index in (
+                    LinePlotDisplay.MEAN, LinePlotDisplay.INSTANCES_WITH_MEAN))
+                group.boxplot.setVisible(self.display_quartiles)
 
     def __select_all_toggle(self):
         allselected = len(self.selected_classes) == len(self.classes)
