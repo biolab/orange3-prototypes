@@ -20,6 +20,7 @@ class TestOWLinePLot(WidgetTest, WidgetOutputsTestMixin):
     def setUp(self):
         self.widget = self.create_widget(OWLinePlot)
         self.titanic = Table("titanic")
+        self.housing = Table("housing")
 
     def _select_data(self):
         random.seed(42)
@@ -31,13 +32,13 @@ class TestOWLinePLot(WidgetTest, WidgetOutputsTestMixin):
         no_data_info = "No data on input."
         self.assertEqual(self.widget.infoLabel.text(), no_data_info)
         self.send_signal(self.widget.Inputs.data, self.data)
-        n_class_vars = len(self.data.domain.class_var.values)
-        self.assertEqual(self.widget.group_listbox.count(), n_class_vars)
+        self.assertEqual(self.widget.cb_attr.count(), 1)
         self.send_signal(self.widget.Inputs.data, None)
-        self.assertEqual(self.widget.group_listbox.count(), 0)
+        self.assertEqual(self.widget.cb_attr.count(), 0)
         self.assertEqual(self.widget.infoLabel.text(), no_data_info)
         self.send_signal(self.widget.Inputs.data, self.titanic)
         self.assertTrue(self.widget.Information.not_enough_attrs.is_shown())
+        self.send_signal(self.widget.Inputs.data, self.housing)
 
     def test_input_change(self):
         self.send_signal(self.widget.Inputs.data, self.data)

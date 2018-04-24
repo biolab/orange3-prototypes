@@ -254,9 +254,7 @@ class OWLinePlot(OWWidget):
             group_box, self, "selected_classes", "classes",
             selectionMode=QListWidget.MultiSelection,
             callback=self.__on_class_selection_changed)
-        self.unselectAllClassedQLB = gui.button(
-            group_box, self, "Unselect all",
-            callback=self.__select_all_toggle)
+        self.group_listbox.setVisible(False)
 
         self.gui = OWPlotGUI(self)
         self.box_zoom_select(self.controlArea)
@@ -461,21 +459,7 @@ class OWLinePlot(OWWidget):
                     LinePlotDisplay.MEAN, LinePlotDisplay.INSTANCES_WITH_MEAN))
                 group.boxplot.setVisible(self.display_quartiles)
 
-    def __select_all_toggle(self):
-        allselected = len(self.selected_classes) == len(self.classes)
-        if allselected:
-            self.selected_classes = []
-        else:
-            self.selected_classes = list(range(len(self.classes)))
-
-        self.__on_class_selection_changed()
-
     def __on_class_selection_changed(self):
-        mask = [i in self.selected_classes
-                for i in range(self.group_listbox.count())]
-        self.unselectAllClassedQLB.setText(
-            "Select all" if not all(mask) else "Unselect all")
-
         self.__update_visibility()
         self.graph.deselect_all()
 
