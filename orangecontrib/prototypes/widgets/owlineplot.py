@@ -164,6 +164,7 @@ class LinePlotGraph(pg.PlotWidget):
                          background="w", enableMenu=False)
         self._items = {}
         self._items_by_id = {}
+        self._items_added = False
         self.selection = set()
         self.state = SELECT
         self.master = parent
@@ -220,7 +221,13 @@ class LinePlotGraph(pg.PlotWidget):
     def add_line_plot_item(self, item):
         self._items[item.index] = item
         self._items_by_id[item.id] = item
-        self.addItem(item)
+
+    def add_items(self):
+        if self._items_added:
+            return
+        self._items_added = True
+        for item in self._items.values():
+            self.addItem(item)
 
 
 class LinePlotDisplay(IntEnum):
@@ -501,6 +508,9 @@ class OWLinePlot(OWWidget):
             return
         for i, group in enumerate(self.__groups):
             if group is not None:
+                if self.display_index in (LinePlotDisplay.INSTANCES,
+                                          LinePlotDisplay.INSTANCES_WITH_MEAN):
+                    self.graph.add_items()
                 for item in group.profiles:
                     item.setVisible(self.display_index in (
                         LinePlotDisplay.INSTANCES,
