@@ -63,7 +63,7 @@ class CircleItemDelegate(BorderedItemDelegate, gui.VerticalItemDelegate):
             gui.VerticalItemDelegate.paint(self, painter, option, index)
         elif index.column() == 1:
             BorderedItemDelegate.paint(self, painter, option, index)
-        elif 2 <= index.row() and 2 <= index.column() and area and 0 <= area <= 1:
+        elif 2 <= index.row() and 2 <= index.column() and area is not None and 0 <= area <= 1:
             QStyledItemDelegate.paint(self, painter, option, index)
             rect = option.rect
             max_radius = 20
