@@ -248,16 +248,17 @@ class ContingencyTable(QTableView):
                     item.setData("", BorderRole)
                 self._set_item(i, j, item)
 
-        hor_header = self.horizontalHeader()
-        if len(' '.join(self.classesh + [self.corner_string])) < 120:
-            hor_header.setSectionResizeMode(QHeaderView.ResizeToContents)
-        else:
-            hor_header.setDefaultSectionSize(60)
         if self.circles:
             self.resizeRowToContents(1)
+            self.horizontalHeader().setDefaultSectionSize(self.rowHeight(2))
+            self.resizeColumnToContents(1)
             self.tablemodel.setRowCount(len(self.classesv) + 2)
             self.tablemodel.setColumnCount(len(self.classesh) + 2)
         else:
+            if len(' '.join(self.classesh + [self.corner_string])) < 120:
+                self.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+            else:
+                self.horizontalHeader().setDefaultSectionSize(60)
             self.tablemodel.setRowCount(len(self.classesv) + 3)
             self.tablemodel.setColumnCount(len(self.classesh) + 3)
 
