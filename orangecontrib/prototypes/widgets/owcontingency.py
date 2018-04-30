@@ -1,5 +1,4 @@
 import numpy as np
-from AnyQt.QtGui import QStandardItemModel
 from Orange.data import (ContinuousVariable, DiscreteVariable, StringVariable,
                          Domain, Table)
 from Orange.data.filter import FilterDiscrete, Values
@@ -62,9 +61,8 @@ class OWContingencyTable(widget.OWWidget):
         self.apply_button = gui.auto_commit(
             self.controlArea, self, "auto_apply", "&Apply", box=False)
 
-        self.tablemodel = QStandardItemModel(self)
-        view = self.tableview = ContingencyTable(self, self.tablemodel)
-        self.mainArea.layout().addWidget(view)
+        self.tableview = ContingencyTable(self)
+        self.mainArea.layout().addWidget(self.tableview)
 
     @Inputs.data
     @check_sql_input

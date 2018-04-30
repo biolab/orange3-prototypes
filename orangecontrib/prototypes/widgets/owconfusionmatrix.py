@@ -4,12 +4,12 @@ import Orange
 import Orange.evaluation
 import numpy as np
 import sklearn.metrics as skl_metrics
-from AnyQt.QtCore import Qt, QSize, QItemSelectionModel, QItemSelection
-from AnyQt.QtGui import QStandardItemModel
+from AnyQt.QtCore import Qt, QSize
 from Orange.widgets import widget, settings, gui
 from Orange.widgets.utils.annotated_data import (create_annotated_table,
                                                  ANNOTATED_DATA_SIGNAL_NAME)
 from Orange.widgets.widget import Msg, Input, Output
+
 from orangecontrib.prototypes.widgets.contingency_table import ContingencyTable
 
 
@@ -105,9 +105,8 @@ class OWConfusionMatrix(widget.OWWidget):
                      items=self.quantities, label="Show: ",
                      orientation=Qt.Horizontal, callback=self._update)
 
-        self.tablemodel = QStandardItemModel(self)
-        view = self.tableview = ContingencyTable(self, self.tablemodel)
-        box.layout().addWidget(view)
+        self.tableview = ContingencyTable(self)
+        box.layout().addWidget(self.tableview)
 
         selbox = gui.hBox(box)
         gui.button(selbox, self, "Select Correct",
@@ -198,26 +197,13 @@ class OWConfusionMatrix(widget.OWWidget):
 
     def select_correct(self):
         """Select the diagonal elements of the matrix"""
-        selection = QItemSelection()
-        n = self.tablemodel.rowCount()
-        for i in range(2, n):
-            index = self.tablemodel.index(i, i)
-            selection.select(index, index)
-        self.tableview.selectionModel().select(
-            selection, QItemSelectionModel.ClearAndSelect)
+        self.tableview.set_selection({(i, i) for i in range(len(self.tableview.classesv))})
 
     def select_wrong(self):
         """Select the off-diagonal elements of the matrix"""
-        selection = QItemSelection()
-        n = self.tablemodel.rowCount()
-        for i in range(2, n):
-            for j in range(i + 1, n):
-                index = self.tablemodel.index(i, j)
-                selection.select(index, index)
-                index = self.tablemodel.index(j, i)
-                selection.select(index, index)
-        self.tableview.selectionModel().select(
-            selection, QItemSelectionModel.ClearAndSelect)
+        self.tableview.set_selection({(i, j)
+                                      for i in range(len(self.tableview.classesv))
+                                      for j in range(len(self.tableview.classesv)) if i != j})
 
     def select_none(self):
         """Reset selection"""
