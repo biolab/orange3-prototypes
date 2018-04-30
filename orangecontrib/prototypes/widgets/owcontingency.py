@@ -85,7 +85,7 @@ class OWContingencyTable(widget.OWWidget):
                 self.table = contingency_table(self.data, self.columns, self.rows)
                 self.tableview.update_table(self.table.X, formatstr="{:.0f}")
         else:
-            self.tablemodel.clear()
+            self.tableview.clear()
 
     def handleNewSignals(self):
         self._attribute_changed()

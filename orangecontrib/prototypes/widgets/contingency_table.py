@@ -364,3 +364,9 @@ class ContingencyTable(QTableView):
             self._set_item(len(self.classesv) + 2, len(self.classesh) + 2, _sum_item(int(rowsum.sum())))
 
         self.set_selection(selected_indexes)
+
+    def clear(self):
+        """
+        Clears the table.
+        """
+        self.tablemodel.clear()

@@ -192,7 +192,7 @@ class OWConfusionMatrix(widget.OWWidget):
         """Reset the widget, clear controls"""
         self.results = None
         self.data = None
-        self.tablemodel.clear()
+        self.tableview.clear()
         # Clear learners last. This action will invoke `_learner_changed`
         self.learners = []
 
