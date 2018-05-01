@@ -213,6 +213,7 @@ class LinePlotGraph(pg.PlotWidget):
     def reset(self):
         self._items = {}
         self._items_by_id = {}
+        self._items_added = False
         self.selection = set()
         self.state = SELECT
         self.clear()
