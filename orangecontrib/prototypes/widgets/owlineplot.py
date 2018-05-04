@@ -7,17 +7,18 @@ import numpy as np
 
 from AnyQt.QtCore import Qt, QSize, QRectF
 from AnyQt.QtGui import QPainter, QPen, QColor
-from AnyQt.QtWidgets import QListWidget, QApplication
+from AnyQt.QtWidgets import QApplication, QSizePolicy
 
 import pyqtgraph as pg
 from pyqtgraph.graphicsItems.ViewBox import ViewBox
 from pyqtgraph.Point import Point
 
-from Orange.data import Table
+from Orange.data import Table, DiscreteVariable
 from Orange.widgets import gui, settings
 from Orange.widgets.utils import colorpalette
 from Orange.widgets.utils.annotated_data import (create_annotated_table,
                                                  ANNOTATED_DATA_SIGNAL_NAME)
+from Orange.widgets.utils.itemmodels import DomainModel
 from Orange.widgets.utils.plot import OWPlotGUI, SELECT, PANNING, ZOOMING
 from Orange.widgets.widget import OWWidget, Input, Output, Msg
 
@@ -97,6 +98,10 @@ class LinePlotItem(pg.PlotDataItem):
 
     def deselect(self):
         self._selected = False
+        self._change_pen()
+
+    def setColor(self, color):
+        self._pen.setColor(color)
         self._change_pen()
 
     def _change_pen(self):
@@ -251,8 +256,7 @@ class OWLinePlot(OWWidget):
 
     settingsHandler = settings.PerfectDomainContextHandler()
 
-    group_var = settings.Setting("")                #: Group by group_var's values
-    selected_classes = settings.Setting([])         #: List of selected class indices
+    group_var = settings.ContextSetting(None)
     display_index = settings.Setting(LinePlotDisplay.INSTANCES)
     display_quartiles = settings.Setting(False)
     auto_commit = settings.Setting(True)
@@ -263,13 +267,9 @@ class OWLinePlot(OWWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-
-        self.classes = []
-
         self.data = None
         self.data_subset = None
         self.subset_selection = []
-        self.group_variables = []
         self.graph_variables = []
         self.__groups = None
 
@@ -287,15 +287,16 @@ class OWLinePlot(OWWidget):
         gui.checkBox(showbox, self, "display_quartiles", "Error bars",
                      callback=self.__update_visibility)
 
-        group_box = gui.widgetBox(self.controlArea, "Group by")
-        self.cb_attr = gui.comboBox(
-            group_box, self, "group_var", sendSelectedValue=True,
-            callback=self.update_group_var)
-        self.group_listbox = gui.listBox(
-            group_box, self, "selected_classes", "classes",
-            selectionMode=QListWidget.MultiSelection,
-            callback=self.__on_class_selection_changed)
-        self.group_listbox.setVisible(False)
+        self.group_vars = DomainModel(
+            placeholder="None", separators=False,
+            valid_types=DiscreteVariable)
+        self.group_view = gui.listView(
+            self.controlArea, self, "group_var", box="Group by",
+            model=self.group_vars, callback=self.__group_var_changed)
+        self.group_view.setEnabled(False)
+        self.group_view.setMinimumSize(QSize(30, 100))
+        self.group_view.setSizePolicy(QSizePolicy.Expanding,
+                                      QSizePolicy.Ignored)
 
         self.gui = OWPlotGUI(self)
         self.box_zoom_select(self.controlArea)
@@ -351,12 +352,15 @@ class OWLinePlot(OWWidget):
         """
         Clear/reset the widget state.
         """
-        self.cb_attr.clear()
-        self.group_listbox.clear()
         self.data = None
+        self.data_subset = None
         self.__groups = None
+        self.subset_selection = []
+        self.graph_variables = []
         self.graph.reset()
         self.infoLabel.setText("No data on input.")
+        self.group_vars.set_domain(None)
+        self.group_view.setEnabled(False)
 
     @Inputs.data
     def set_data(self, data):
@@ -369,6 +373,14 @@ class OWLinePlot(OWWidget):
 
         self.data = data
         if data is not None:
+            domain = data.domain
+            self.group_vars.set_domain(domain)
+            self.group_view.setEnabled(len(self.group_vars) > 1)
+            if domain.class_var and domain.class_var.is_discrete:
+                self.group_var = domain.class_var
+            else:
+                self.group_var = None
+
             n_instances = len(data)
             n_attrs = len(data.domain.attributes)
             self.infoLabel.setText("%i instances on input\n%i attributes" % (
@@ -379,20 +391,12 @@ class OWLinePlot(OWWidget):
             if len(self.graph_variables) < 1:
                 self.Information.not_enough_attrs()
             else:
-                groupvars = [var for var in data.domain.variables +
-                             data.domain.metas if var.is_discrete]
-
-                if len(groupvars) > 0:
-                    self.cb_attr.addItems([str(var) for var in groupvars])
-                    self.group_var = str(groupvars[0])
-                    self.group_variables = groupvars
-                    self.update_group_var()
-                else:
-                    self._setup_plot()
+                self._setup_plot()
 
         self.selection = []
         self.openContext(data)
         self.select_data_instances()
+        self.__group_var_changed()
         self.commit()
 
     @Inputs.data_subset
@@ -463,7 +467,7 @@ class OWLinePlot(OWWidget):
         X = np.arange(1, len(self.graph_variables)+1)
         groups = []
 
-        if not self.selected_classes:
+        if self.group_var is None:
             group_data = data[:, self.graph_variables]
             items, mean, meancurve, errorbar = self._plot_curve(
                 X, QColor(Qt.darkGray), group_data,
@@ -476,23 +480,19 @@ class OWLinePlot(OWWidget):
                     boxplot=errorbar)
             )
         else:
-            var = domain[self.group_var]
-            class_col_data, _ = data.get_column_view(var)
+            class_col_data, _ = data.get_column_view(self.group_var)
             group_indices = [np.flatnonzero(class_col_data == i)
-                             for i in range(len(self.classes))]
+                             for i in range(len(self.group_var.values))]
 
             for i, indices in enumerate(group_indices):
                 if len(indices) == 0:
                     groups.append(None)
                 else:
-                    if self.classes:
-                        color = self.class_colors[i]
-                    else:
-                        color = QColor(Qt.darkGray)
-
+                    values = self.group_var.values
+                    colors = colorpalette.ColorPaletteGenerator(len(values))
                     group_data = data[indices, self.graph_variables]
                     items, mean, meancurve, errorbar = self._plot_curve(
-                        X, color, group_data, indices)
+                        X, colors[i], group_data, indices)
 
                     groups.append(
                         namespace(
@@ -520,23 +520,17 @@ class OWLinePlot(OWWidget):
                     LinePlotDisplay.MEAN, LinePlotDisplay.INSTANCES_WITH_MEAN))
                 group.boxplot.setVisible(self.display_quartiles)
 
-    def __on_class_selection_changed(self):
-        self.__update_visibility()
-        self.graph.deselect_all()
-
-    def update_group_var(self):
-        data_attr, _ = self.data.get_column_view(self.group_var)
-        class_vals = self.data.domain[self.group_var].values
-        self.classes = list(class_vals)
-        self.class_colors = \
-            colorpalette.ColorPaletteGenerator(len(class_vals))
-        self.selected_classes = list(range(len(class_vals)))
-        for i in range(len(class_vals)):
-            item = self.group_listbox.item(i)
-            item.setIcon(colorpalette.ColorPixmap(self.class_colors[i]))
-
-        self._setup_plot()
-        self.__on_class_selection_changed()
+    def __group_var_changed(self):
+        if self.data is None or not len(self.graph_variables):
+            return
+        if self.group_var is None:
+            color = QColor(Qt.darkGray)
+            color.setAlpha(120)
+            for group in self.__groups:
+                for profile in group.profiles:
+                    profile.setColor(color)
+        else:
+            self._setup_plot()
 
     def commit(self):
         selected = self.data[self.selection] \

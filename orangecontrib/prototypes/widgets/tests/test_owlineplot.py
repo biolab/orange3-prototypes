@@ -32,9 +32,9 @@ class TestOWLinePLot(WidgetTest, WidgetOutputsTestMixin):
         no_data_info = "No data on input."
         self.assertEqual(self.widget.infoLabel.text(), no_data_info)
         self.send_signal(self.widget.Inputs.data, self.data)
-        self.assertEqual(self.widget.cb_attr.count(), 1)
+        self.assertEqual(self.widget.group_view.model().rowCount(), 2)
         self.send_signal(self.widget.Inputs.data, None)
-        self.assertEqual(self.widget.cb_attr.count(), 0)
+        self.assertEqual(self.widget.group_view.model().rowCount(), 1)
         self.assertEqual(self.widget.infoLabel.text(), no_data_info)
         self.send_signal(self.widget.Inputs.data, self.titanic)
         self.assertTrue(self.widget.Information.not_enough_attrs.is_shown())
