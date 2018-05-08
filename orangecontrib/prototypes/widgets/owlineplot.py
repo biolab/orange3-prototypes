@@ -5,13 +5,13 @@ from collections import namedtuple
 
 import numpy as np
 
-from AnyQt.QtCore import Qt, QSize, QRectF
+from AnyQt.QtCore import Qt, QSize, QLineF
 from AnyQt.QtGui import QPainter, QPen, QColor
-from AnyQt.QtWidgets import QApplication, QSizePolicy
+from AnyQt.QtWidgets import QApplication, QSizePolicy, QGraphicsLineItem
 
 import pyqtgraph as pg
 from pyqtgraph.graphicsItems.ViewBox import ViewBox
-from pyqtgraph.Point import Point
+from pyqtgraph.functions import mkPen
 
 from Orange.data import Table, DiscreteVariable
 from Orange.widgets import gui, settings
@@ -38,43 +38,23 @@ def intersects(a, b, c, d):
     return ccw(a, c, d) != ccw(b, c, d) and ccw(a, b, c) != ccw(a, b, d)
 
 
-def in_rect(a, b, c, x, y=None):
+def line_segments_line_intersect(p1, p2, item):
     """
-    Checks whether line segment (given points x and y) is contained within a
-    rectangle (given points a, b, c, d).
-
-    If y is None, only point x is considered.
-    """
-    x_in = a.x < x.x < b.x and a.y < x.y < c.y
-    return x_in if y is None else x_in and a.x < y.x < b.x and a.y < y.y < c.y
-
-
-def line_segment_rect_intersect(rect, item):
-    """
-    Checks if line segment (item.data) intersects with
-    rectangle (rect) or if both its endpoints are placed inside it.
+    Checks if any line segments (item.data) intersect line (p1, p2).
     """
     point = namedtuple("point", ["x", "y"])
-    rect_a = point(rect.x(), rect.y())
-    rect_b = point(rect.x() + rect.width(), rect.y())
-    rect_c = point(rect.x() + rect.width(), rect.y() + rect.height())
-    rect_d = point(rect.x(), rect.y() + rect.height())
-    b_data = None
     for i in range(len(item.xData) - 1):
-        a_data = point(item.xData[i], item.yData[i])
-        b_data = point(item.xData[i + 1], item.yData[i + 1])
-        if intersects(rect_a, rect_b, a_data, b_data) or \
-                intersects(rect_b, rect_c, a_data, b_data) or \
-                intersects(rect_c, rect_d, a_data, b_data) or \
-                intersects(rect_a, rect_d, a_data, b_data):
+        a = point(item.xData[i], item.yData[i])
+        b = point(item.xData[i + 1], item.yData[i + 1])
+        if intersects(point(p1.x(), p1.y()), point(p2.x(), p2.y()), a, b):
             return True
-    a_data = point(item.xData[0], item.yData[0])
-    return in_rect(rect_a, rect_b, rect_c, a_data, b_data)
+    return False
 
 
 class LinePlotColors:
     LIGHT_ALPHA = 120
     DEFAULT_COLOR = QColor(Qt.darkGray)
+    SELECTION_LINE = QColor(Qt.black)
 
     def __call__(self, n):
         return ColorPaletteGenerator(n)
@@ -142,27 +122,32 @@ class LinePlotViewBox(ViewBox):
         self.graph = graph
         self.setMouseMode(self.PanMode)
 
-    def _update_scale_box(self, button_down_pos, current_pos):
-        x, y = current_pos
-        if button_down_pos[0] == x:
-            x += 1
-        if button_down_pos[1] == y:
-            y += 1
-        self.updateScaleBox(button_down_pos, Point(x, y))
+        pen = mkPen(LinePlotColors.SELECTION_LINE, width=2)
+        self.selection_line = QGraphicsLineItem()
+        self.selection_line.setPen(pen)
+        self.selection_line.setZValue(1e9)
+        self.addItem(self.selection_line, ignoreBounds=True)
+
+    def update_selection_line(self, button_down_pos, current_pos):
+        p1 = self.childGroup.mapFromParent(button_down_pos)
+        p2 = self.childGroup.mapFromParent(current_pos)
+        self.selection_line.setLine(QLineF(p1, p2))
+        self.selection_line.resetTransform()
+        self.selection_line.show()
 
     def mouseDragEvent(self, event, axis=None):
         if self.graph.state == SELECT and axis is None:
             event.accept()
-            pos = event.pos()
             if event.button() == Qt.LeftButton:
-                self._update_scale_box(event.buttonDownPos(), event.pos())
+                self.update_selection_line(event.buttonDownPos(), event.pos())
                 if event.isFinish():
-                    self.rbScaleBox.hide()
-                    pix_rect = QRectF(event.buttonDownPos(event.button()), pos)
-                    val_rect = self.childGroup.mapRectFromParent(pix_rect)
-                    self.graph.select_by_rectangle(val_rect)
+                    self.selection_line.hide()
+                    p1 = self.childGroup.mapFromParent(
+                        event.buttonDownPos(event.button()))
+                    p2 = self.childGroup.mapFromParent(event.pos())
+                    self.graph.select_by_line(p1, p2)
                 else:
-                    self._update_scale_box(event.buttonDownPos(), event.pos())
+                    self.update_selection_line(event.buttonDownPos(), event.pos())
         elif self.graph.state == ZOOMING or self.graph.state == PANNING:
             event.ignore()
             super().mouseDragEvent(event, axis=axis)
@@ -187,11 +172,11 @@ class LinePlotGraph(pg.PlotWidget):
         self.state = SELECT
         self.master = parent
 
-    def select_by_rectangle(self, rect):
+    def select_by_line(self, p1, p2):
         selection = []
         for item in self.getViewBox().childGroup.childItems():
             if isinstance(item, LinePlotItem) and item.isVisible():
-                if line_segment_rect_intersect(rect, item):
+                if line_segments_line_intersect(p1, p2, item):
                     selection.append(item.index)
         self.select(selection)
 
