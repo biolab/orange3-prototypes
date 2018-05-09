@@ -152,6 +152,8 @@ class Histogram(QGraphicsWidget):
         if self.color_attribute is not None:
             self.target_var = data.domain[color_attribute]
             self.y = data.get_column_view(color_attribute)[0]
+            if not np.issubdtype(self.y.dtype, np.number):
+                self.y = self.y.astype(np.float64)
         else:
             self.target_var, self.y = None, None
 
@@ -248,6 +250,12 @@ class Histogram(QGraphicsWidget):
             # TODO This probably also isn't the best handling of sparse data...
             if sp.issparse(y):
                 y = np.squeeze(np.array(y.todense()))
+
+            # Since y can contain missing values, we need to filter them out as
+            # well as their corresponding `x` values
+            y_nan_mask = np.isnan(y)
+            y, bin_indices = y[~y_nan_mask], bin_indices[~y_nan_mask]
+
             y = one_hot(y)
             bins = np.arange(self.n_bins)[:, np.newaxis]
             mask = bin_indices == bins
