@@ -132,6 +132,8 @@ class Histogram(QGraphicsWidget):
         self.attribute = data.domain[variable]
 
         self.x = data.get_column_view(self.attribute)[0].astype(np.float64)
+        self.x_nans = np.isnan(self.x)
+        self.x = self.x[~self.x_nans]
 
         if self.attribute.is_discrete:
             self.n_bins = len(self.attribute.values)
@@ -152,6 +154,7 @@ class Histogram(QGraphicsWidget):
         if self.color_attribute is not None:
             self.target_var = data.domain[color_attribute]
             self.y = data.get_column_view(color_attribute)[0]
+            self.y = self.y[~self.x_nans]
             if not np.issubdtype(self.y.dtype, np.number):
                 self.y = self.y.astype(np.float64)
         else:
@@ -203,9 +206,10 @@ class Histogram(QGraphicsWidget):
         )
         self.__layout.setSpacing(bar_spacing)
 
-        self.edges, self.distributions = self._histogram()
-
-        self._draw_histogram()
+        # If the data contains any non-NaN values, we can draw a histogram
+        if self.x.size > 0:
+            self.edges, self.distributions = self._histogram()
+            self._draw_histogram()
 
     def _get_histogram_edges(self):
         """Get the edges in the histogram based on the attribute type.
@@ -227,7 +231,14 @@ class Histogram(QGraphicsWidget):
         else:
             edges = np.linspace(ut.nanmin(self.x), ut.nanmax(self.x), self.n_bins)
             edge_diff = edges[1] - edges[0]
-            return np.hstack((edges, [edges[-1] + edge_diff]))
+            edges = np.hstack((edges, [edges[-1] + edge_diff]))
+
+            # If the variable takes on a single value, we still need to spit
+            # out some reasonable bin edges
+            if np.all(edges == edges[0]):
+                edges = np.array([edges[0] - 1, edges[0], edges[0] + 1])
+
+            return edges
 
     def _get_bin_distributions(self, bin_indices):
         """Compute the distribution of instances within bins.
@@ -257,6 +268,14 @@ class Histogram(QGraphicsWidget):
             y, bin_indices = y[~y_nan_mask], bin_indices[~y_nan_mask]
 
             y = one_hot(y)
+            # In the event that y does not take up all the values and the
+            # largest discrete value does not appear at all, one hot encoding
+            # will produce too few columns. This causes problems, so we need to
+            # pad y with zeros to properly compute the distribution
+            if y.shape[1] != len(self.target_var.values):
+                n_missing_columns = len(self.target_var.values) - y.shape[1]
+                y = np.hstack((y, np.zeros((y.shape[0], n_missing_columns))))
+
             bins = np.arange(self.n_bins)[:, np.newaxis]
             mask = bin_indices == bins
             distributions = np.zeros((self.n_bins, y.shape[1]))
@@ -272,6 +291,7 @@ class Histogram(QGraphicsWidget):
         return distributions
 
     def _histogram(self):
+        assert self.x.size > 0, 'Cannot calculate histogram on empty array'
         edges = self._get_histogram_edges()
 
         if self.attribute.is_discrete:
@@ -283,7 +303,6 @@ class Histogram(QGraphicsWidget):
                     bin_indices.todense(), dtype=np.int64
                 ))
         elif self.attribute.is_continuous:
-            # TODO: Digitize throws nans into first bin. This is incorrect.
             bin_indices = ut.digitize(self.x, bins=edges[1:-1]).flatten()
 
         distributions = self._get_bin_distributions(bin_indices)
@@ -291,6 +310,18 @@ class Histogram(QGraphicsWidget):
         return edges, distributions
 
     def _draw_histogram(self):
+        # In case the data for the variable were all NaNs, then the
+        # distributions will be empty, and we don't need to display any bars
+        if self.x.size == 0:
+            return
+
+        # In case we have a target var, but the values are all NaNs, then there
+        # is no sense in displaying anything
+        if self.target_var:
+            y_nn = self.y[~np.isnan(self.y)]
+            if y_nn.size == 0:
+                return
+
         if self.distributions.ndim > 1:
             largest_bin_count = self.distributions.sum(axis=1).max()
         else:
@@ -325,7 +356,9 @@ class Histogram(QGraphicsWidget):
 
             bins = np.arange(self.n_bins)[:, np.newaxis]
             edges = self.edges if self.attribute.is_discrete else self.edges[1:-1]
-            bin_indices = ut.digitize(self.x, bins=edges)
+            # Need to digitize on `right` here so the samples will be assigned
+            # to the correct bin for coloring
+            bin_indices = ut.digitize(self.x, bins=edges, right=True)
             mask = bin_indices == bins
 
             colors = []

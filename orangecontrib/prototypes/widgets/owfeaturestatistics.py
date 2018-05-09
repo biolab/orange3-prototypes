@@ -370,28 +370,28 @@ class FeatureStatisticsTableModel(AbstractSortTableModel):
             vals = np.array(self._center)
             vals[disc_idx] = var_name_indices[disc_idx]
             vals[str_idx] = var_name_indices[str_idx]
-            return np.vstack((var_types_indices, vals)).T
+            return np.vstack((var_types_indices, np.zeros_like(vals), vals)).T
         # Sort by: (type, dispersion)
         elif column == self.Columns.DISPERSION:
             # Sort time variables by their dispersion, which is not stored in
             # the dispersion array
             vals = np.array(self._dispersion)
             vals[time_idx] = self._max[time_idx] - self._min[time_idx]
-            return np.vstack((var_types_indices, vals)).T
+            return np.vstack((var_types_indices, np.zeros_like(vals), vals)).T
         # Sort by: (type, min)
         elif column == self.Columns.MIN:
             # Sorting discrete or string values by min makes no sense
             vals = np.array(self._min)
             vals[disc_idx] = var_name_indices[disc_idx]
             vals[str_idx] = var_name_indices[str_idx]
-            return np.vstack((var_types_indices, vals)).T
+            return np.vstack((var_types_indices, np.zeros_like(vals), vals)).T
         # Sort by: (type, max)
         elif column == self.Columns.MAX:
             # Sorting discrete or string values by min makes no sense
             vals = np.array(self._max)
             vals[disc_idx] = var_name_indices[disc_idx]
             vals[str_idx] = var_name_indices[str_idx]
-            return np.vstack((var_types_indices, vals)).T
+            return np.vstack((var_types_indices, np.zeros_like(vals), vals)).T
         # Sort by: (missing)
         elif column == self.Columns.MISSING:
             return self._missing
@@ -420,9 +420,13 @@ class FeatureStatisticsTableModel(AbstractSortTableModel):
                 data[:, -1] = -data[:, -1]
 
             # In order to make sure NaNs always appear at the end, insert a
-            # indicator whether NaN or not
-            nans = np.isnan(data[:, -1]).astype(int)
-            data = np.insert(data, nans, -2, axis=1)
+            # indicator whether NaN or not. Note that the data array must
+            # contain an empty column of zeros at index -2 since inserting an
+            # extra column after the fact can result in a MemoryError for data
+            # with a large amount of variables
+            assert np.all(data[:, -2] == 0), \
+                'Add an empty column of zeros at index -2 to accomodate NaNs'
+            np.isnan(data[:, -1], out=data[:, -2])
 
             indices = np.lexsort(np.flip(data.T, axis=0))
 
