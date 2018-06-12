@@ -154,7 +154,7 @@ def contingency_table(data, columns, rows):
     return Table(domain, ct, metas=metas)
 
 
-def test():
+def main():
     from AnyQt.QtWidgets import QApplication
     app = QApplication([])
 
@@ -167,4 +167,4 @@ def test():
 
 
 if __name__ == "__main__":
-    test()
+    main()
