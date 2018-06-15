@@ -94,10 +94,8 @@ class ContingencyTable(QTableView):
 
     Parameters
     ----------
-    parent : Orange.widgets.widget.OWWidget as a
+    parent : Orange.widgets.widget.OWWidget
         The containing widget to which the table is connected.
-    tablemodel : AnyQt.QtGui.QtStandardItemModel
-        The model in which table data will be stored.
 
     Attributes
     ----------
