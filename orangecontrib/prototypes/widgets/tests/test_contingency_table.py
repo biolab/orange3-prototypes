@@ -16,7 +16,10 @@ class TestContingencyTable(GuiTest):
 
     def test_set_variables(self):
         self.table.set_variables(self.var1, self.var2)
-        self.assertEqual(self.var1.values + self.var2.values + [self.var1.name, self.var2.name], self._get_headers())
+        self.assertEqual(self.var1.name, self._get_row_label())
+        self.assertEqual(self.var2.name, self._get_column_label())
+        self.assertEqual(self.var1.values, self._get_row_headers())
+        self.assertEqual(self.var2.values, self._get_column_headers())
 
     def test_update_table(self):
         self.table.set_variables(self.var1, self.var2)
@@ -38,10 +41,6 @@ class TestContingencyTable(GuiTest):
 
     def _get_column_headers(self):
         return [self._get(1, j) for j in range(2, self.table.tablemodel.columnCount() - 1)]
-
-    def _get_headers(self):
-        return (self._get_row_headers() + self._get_column_headers()
-                + [self._get_row_label(), self._get_column_label()])
 
     def _get_data(self):
         return [self._get(i, j)
