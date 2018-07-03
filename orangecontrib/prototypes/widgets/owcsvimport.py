@@ -13,7 +13,7 @@ import traceback
 import warnings
 import logging
 import weakref
-
+from xml.sax.saxutils import escape
 from functools import singledispatch
 from concurrent import futures
 import typing
@@ -24,11 +24,11 @@ from typing import (
 from PyQt5.QtCore import (
     Qt, QFileInfo, QTimer, QSettings, QObject, QSize, QMimeDatabase, QMimeType
 )
-from PyQt5.QtGui import QStandardItem, QStandardItemModel
+from PyQt5.QtGui import QStandardItem, QStandardItemModel, QPalette
 from PyQt5.QtWidgets import (
     QLabel, QComboBox, QPushButton, QDialog, QDialogButtonBox, QGridLayout,
     QVBoxLayout, QSizePolicy, QStyle, QFileIconProvider, QFileDialog,
-    QApplication, QMessageBox
+    QApplication, QMessageBox, QTextBrowser
 )
 from PyQt5.QtCore import pyqtSlot as Slot, pyqtSignal as Signal
 
@@ -455,7 +455,14 @@ class OWCSVFileImport(widget.OWWidget):
     ]
 
     class Error(widget.OWWidget.Error):
-        error = widget.Msg("Unexpected error")
+        error = widget.Msg(
+            "Unexpected error"
+        )
+        encoding_error = widget.Msg(
+            "Encoding error\n"
+            "The file might be encoded in an unsupported encoding or it "
+            "might be binary"
+        )
 
     #: Paths and options of files accessed in a 'session'
     _session_items = settings.Setting(
@@ -469,6 +476,7 @@ class OWCSVFileImport(widget.OWWidget):
     MaxHistorySize = 50
 
     want_main_area = False
+    buttons_area_orientation = None
 
     def __init__(self, *args, **kwargs):
         super().__init__(self, *args, **kwargs)
@@ -507,8 +515,15 @@ class OWCSVFileImport(widget.OWWidget):
         # Info text
         ###########
         box = gui.widgetBox(self.controlArea, "Info", addSpace=False)
-        self.infoa = gui.widgetLabel(box, "No data loaded.")
-        self.infob = gui.widgetLabel(box, " ")
+        self.summary_text = QTextBrowser(
+            verticalScrollBarPolicy=Qt.ScrollBarAsNeeded,
+            readOnly=True,
+        )
+        self.summary_text.viewport().setBackgroundRole(QPalette.NoRole)
+        self.summary_text.setFrameStyle(QTextBrowser.NoFrame)
+        self.summary_text.setMinimumHeight(self.fontMetrics().ascent() * 2 + 4)
+        self.summary_text.viewport().setAutoFillBackground(False)
+        box.layout().addWidget(self.summary_text)
 
         button_box = QDialogButtonBox(
             orientation=Qt.Horizontal,
@@ -542,12 +557,11 @@ class OWCSVFileImport(widget.OWWidget):
             "button-layout: {:d};".format(QDialogButtonBox.MacLayout)
         )
         self.controlArea.layout().addWidget(button_box)
-        self.controlArea.layout().addStretch()
 
         self._restoreState()
-
         if self.current_item() is not None:
             self._invalidate()
+        self.setSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.Maximum)
 
     @Slot(int)
     def activate_recent(self, index):
@@ -847,6 +861,10 @@ class OWCSVFileImport(widget.OWWidget):
         if self.__watcher is not None:
             self.__cancel_task()
             self.__clear_running_state()
+            self.setStatusMessage("Cancelled")
+            self.summary_text.setText(
+                "<div>Cancelled<br/><small>Press 'Reload' to try again</small></div>"
+            )
 
     def __set_running_state(self):
         self.progressBarInit()
@@ -854,6 +872,11 @@ class OWCSVFileImport(widget.OWWidget):
         self.setStatusMessage("Running")
         self.cancel_button.setEnabled(True)
         self.load_button.setText("Restart")
+        path = self.current_item().path()
+        self.Error.clear()
+        self.summary_text.setText(
+            "<div>Loading: <i>{}</i><br/>".format(prettyfypath(path))
+        )
 
     def __clear_running_state(self, ):
         self.progressBarFinished()
@@ -863,16 +886,35 @@ class OWCSVFileImport(widget.OWWidget):
         self.load_button.setText("Reload")
 
     def __set_error_state(self, err):
-        self.Error.error(exc_info=err)
-        self.infoa.setText('Data was not loaded due to an error.')
-        self.infob.setText(
-            "Error: " + "".join(traceback.format_exception_only(type(err), err))
-        )
+        self.Error.clear()
+        if isinstance(err, UnicodeDecodeError):
+            self.Error.encoding_error(exc_info=err)
+        else:
+            self.Error.error(exc_info=err)
+
+        path = self.current_item().path()
+        basename = os.path.basename(path)
+        if isinstance(err, UnicodeDecodeError):
+            text = (
+                "<div><i>{basename}</i> was not loaded due to a text encoding "
+                "error. The file might be saved in an unknown or invalid "
+                "encoding, or it might be a binary file.</div>"
+            ).format(
+                basename=escape(basename)
+            )
+        else:
+            text = (
+                "<div><i>{basename}</i> was not loaded due to an error:"
+                "<p style='white-space: pre;'>{err}</p>"
+            ).format(
+                basename=escape(basename),
+                err="".join(traceback.format_exception_only(type(err), err))
+            )
+        self.summary_text.setText(text)
 
     def __clear_error_state(self):
         self.Error.error.clear()
-        self.infoa.setText("")
-        self.infob.setText("")
+        self.summary_text.setText("")
 
     def onDeleteWidget(self):
         """Reimplemented."""
@@ -923,7 +965,7 @@ class OWCSVFileImport(widget.OWWidget):
                         plural_2=pluralize(data.domain.attributes),
                         n_meta=len(data.domain.metas),
                         plural_3=pluralize(data.domain.metas))
-        self.infoa.setText(summary)
+        self.summary_text.setText(summary)
 
     def itemsFromSettings(self):
         # type: () -> List[Tuple[str, Options]]
@@ -1341,6 +1383,23 @@ def pathnormalize(p):
     Normalize a path (apply both path and case normalization.
     """
     return os.path.normcase(os.path.normpath(p))
+
+
+def prettyfypath(path):
+    """
+    Return the path with the $HOME prefix shortened to '~/' if applicable.
+
+    Example
+    -------
+    >>> prettyfypath("/home/user/file.dat")
+    '~/file.dat'
+    """
+    home = os.path.expanduser("~/")
+    home_n = pathnormalize(home)
+    path_n = pathnormalize(path)
+    if path_n.startswith(home_n):
+        path = os.path.join("~", os.path.relpath(path, home))
+    return path
 
 
 def pandas_to_table(df):
