@@ -1217,13 +1217,17 @@ def pandas_to_table(df):
         if pdtypes.is_categorical(series):
             coldata = series.values  # type: pd.Categorical
             categories = [str(c) for c in coldata.categories]
+            var = Orange.data.DiscreteVariable.make(
+                str(header), values=categories, ordered=coldata.ordered
+            )
+            # Remap the coldata into the var.values order/set
+            coldata = pd.Categorical(
+                coldata, categories=var.values, ordered=coldata.ordered
+            )
             codes = coldata.codes
             assert np.issubdtype(codes.dtype, np.integer)
             orangecol = np.array(codes, dtype=np.float)
             orangecol[codes < 0] = np.nan
-            var = Orange.data.DiscreteVariable.make(
-                str(header), values=categories, ordered=coldata.ordered
-            )
         elif pdtypes.is_datetime64_any_dtype(series):
             # Check that this converts tz local to UTC
             series = series.astype(np.dtype("M8[ns]"))
