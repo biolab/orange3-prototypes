@@ -69,6 +69,7 @@ if __name__ == '__main__':
             'AnyQt>=0.0.8',
             'serverfiles', # For OWIPythonConnector
             'ipython',
+            'qtconsole',  # OWIPythonConsole
             'pandas',
             'joblib',  # For SignificantGoups
             'plotly>=2.0.8',   # for OWParallelCoordinates
