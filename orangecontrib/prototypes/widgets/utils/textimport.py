@@ -538,8 +538,9 @@ class CSVImportWidget(QWidget):
         csize = style.sizeFromContents(
             QStyle.CT_ItemViewItem, opt, QSize(18, 18), self.dataview
         )
-        header.setDefaultSectionSize(csize.height())
-
+        header.ensurePolished()
+        header.setDefaultSectionSize(max(csize.height(),
+                                         header.minimumSectionSize()))
         layout.addWidget(self.optionswidget)
         form = self.optionswidget.layout()
         assert isinstance(form, QFormLayout)
