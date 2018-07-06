@@ -416,11 +416,6 @@ class OWCSVFileImport(widget.OWWidget):
     class Error(widget.OWWidget.Error):
         error = widget.Msg("Unexpected error")
 
-    class Information(widget.OWWidget.Information):
-        changed = widget.Msg(
-            "Settings changed. Press 'Reload' to apply changes."
-        )
-
     #: Paths and options of files accessed in a 'session'
     _session_items = settings.Setting(
         [], schema_only=True)  # type: List[Tuple[str, dict]]
@@ -750,98 +745,21 @@ class OWCSVFileImport(widget.OWWidget):
         if not isinstance(opts, Options):
             return
 
-        def dtype(coltype):
-            if coltype == ColumnType.Numeric:
-                return "float"
-            elif coltype == ColumnType.Categorical:
-                return "category"
-            elif coltype == ColumnType.Time:
-                # Parse as string, use post process to parse
-                return "object"
-            elif coltype == ColumnType.Text:
-                return "object"
-            elif coltype == ColumnType.Skip:
-                return None
+        task = state = TaskState()
+        state.future = ...
+        state.watcher = qconcurrent.FutureWatcher()
+        state.progressChanged.connect(self.__set_read_progress,
+                                      Qt.QueuedConnection)
 
-        dtypes = {i: dtype(c) for r, c in opts.columntypes for i in r}
-        dtypes = {i: dtp for i, dtp in dtypes.items()
-                  if dtp is not None and dtp != ColumnType.Auto}
+        def progress_(i, j):
+            task.emitProgressChangedOrCancel(i, j)
 
-        columns_ignored = {i for r, c in opts.columntypes for i in r
-                           if c == ColumnType.Skip}
-        dtcols = {i for r, c in opts.columntypes for i in r
-                  if c == ColumnType.Time}
-        parse_dates = sorted(dtcols)
-        if not parse_dates:
-            parse_dates = False
-
-        # fixup header indices to account for skipped rows (header row indices
-        # pick rows after skiprows)
-
-        hspec = sorted((i, s) for r, s in opts.rowspec for i in r)
-        headers = []
-        nskiped = 0
-        for row, state in hspec:
-            if state == RowSpec.Skipped:
-                nskiped += 1
-            elif state == RowSpec.Header:
-                headers.append(row - nskiped)
-
-        skiprows = [row for row, st in hspec if st == RowSpec.Skipped]
-        if not headers:
-            header = None
-            prefix = "X."
-
-        elif len(headers) == 1:
-            header = headers[0]
-            prefix = None
-        else:
-            header = headers
-            prefix = None
-
-        if not skiprows:
-            skiprows = None
-
-        state = TaskState()
-        state.progressChanged.connect(self.__set_read_progress)
-
-        def load(path, opts, header, skiprows, parse_dates, prefix,
-                 columns_ignored):
-            with _open(path, 'rb') as f:
-                file = TextReadWrapper(
-                    f, encoding=opts.encoding,
-                    progress_callback=state.emitProgressChangedOrCancel)
-                try:
-                    df = pd.read_csv(
-                        file, sep=opts.dialect.delimiter, dialect=opts.dialect,
-                        skipinitialspace=opts.dialect.skipinitialspace,
-                        header=header, skiprows=skiprows,
-                        dtype=dtypes, parse_dates=parse_dates, prefix=prefix,
-                        na_values=["?", "."],
-                    )
-                except TaskState.UserCancelException as e:
-                    # TODO: Is this enough to allow immediate gc of the stack?
-                    # Or just return None
-                    e = e.with_traceback(None)
-                    e.__context__ = None
-                    e.__cause__ = None
-                    raise e
-                else:
-                    if columns_ignored:
-                        # TODO: use 'usecols' parameter in `read_csv` call to
-                        # avoid loading/parsing the columns
-                        df = df.drop(
-                            columns=[df.columns[i] for i in columns_ignored
-                                     if i < len(df.columns)])
-                    return df
-                finally:
-                    file.detach()
-
-        f = self.__executor.submit(
-            load, path, opts, header, skiprows, parse_dates, prefix,
-            columns_ignored
+        task.future = self.__executor.submit(
+            clear_stack_on_cancel(load_csv),
+            path, opts, progress_,
         )
-        w = qconcurrent.FutureWatcher(f, )
+        task.watcher.setFuture(task.future)
+        w = task.watcher
         w.done.connect(self.__handle_result)
         w.progress = state
         self.__watcher = w
@@ -860,6 +778,7 @@ class OWCSVFileImport(widget.OWWidget):
         w.progress.cancel = True
         w.done.disconnect(self.__handle_result)
         w.progress.progressChanged.disconnect(self.__set_read_progress)
+        w.progress.deleteLater()
         # wait until completion
         futures.wait([w.future()])
         self.__watcher = None
@@ -934,8 +853,6 @@ class OWCSVFileImport(widget.OWWidget):
 
     def _update_status_messages(self, data):
         if data is None:
-            # self.infoa.setText("No data loaded.")
-            # self.infob.setText("")
             return
 
         def pluralize(seq):
@@ -952,10 +869,13 @@ class OWCSVFileImport(widget.OWWidget):
         self.infoa.setText(summary)
 
     def itemsFromSettings(self):
-        # Return items from local history.
+        # type: () -> List[Tuple[str, Options]]
+        """
+        Return items from local history.
+        """
         s = self._local_settings()
         items_ = QSettings_readArray(s, "recent", OWCSVFileImport.SCHEMA)
-        items = []  # type: List[Tuple[str, Optional[Options]]]
+        items = []  # type: List[Tuple[str, Options]]
         for item in items_:
             path = item.get("path", "")
             if not path:
@@ -1080,6 +1000,126 @@ def _open(path, mode, encoding=None):
             raise ValueError("Expected a single file in the archive.")
     else:
         return open(path, mode, encoding=encoding)
+
+
+def load_csv(path, opts, progres_callback=None):
+    # type: (typing.AnyStr, Options, ...) -> pd.DataFrame
+    def dtype(coltype):
+        # type: (ColumnType) -> Optional[str]
+        if coltype == ColumnType.Numeric:
+            return "float"
+        elif coltype == ColumnType.Categorical:
+            return "category"
+        elif coltype == ColumnType.Time:
+            return "object"
+        elif coltype == ColumnType.Text:
+            return "object"
+        elif coltype == ColumnType.Skip:
+            return None
+        elif coltype == ColumnType.Auto:
+            return None
+        else:
+            assert False
+
+    def expand(ranges):
+        # type: (Iterable[Tuple[range, T]]) -> Iterable[Tuple[int, T]]
+        return ((i, x) for r, x in ranges for i in r)
+
+    dtypes = {i: dtype(c) for i, c in expand(opts.columntypes)}
+    dtypes = {i: dtp for i, dtp in dtypes.items()
+              if dtp is not None and dtp != ColumnType.Auto}
+
+    columns_ignored = {i for i, c in expand(opts.columntypes)
+                       if c == ColumnType.Skip}
+    dtcols = {i for i, c in expand(opts.columntypes)
+              if c == ColumnType.Skip}
+    parse_dates = sorted(dtcols)
+
+    if not parse_dates:
+        parse_dates = False
+
+    # fixup header indices to account for skipped rows (header row indices
+    # pick rows after skiprows)
+
+    hspec = sorted(opts.rowspec, key=lambda t: t[0].start)
+    header_ranges = []
+    nskiped = 0
+    for range_, state in hspec:
+        if state == RowSpec.Skipped:
+            nskiped += len(range_)
+        elif state == RowSpec.Header:
+            header_ranges.append(
+                range(range_.start - nskiped, range_.stop - nskiped)
+            )
+    headers = [i for r in header_ranges for i in r]
+    skiprows = [row for r, st in hspec if st == RowSpec.Skipped for row in r]
+
+    if not headers:
+        header = None
+        prefix = "X."
+
+    elif len(headers) == 1:
+        header = headers[0]
+        prefix = None
+    else:
+        header = headers
+        prefix = None
+
+    if not skiprows:
+        skiprows = None
+
+    with _open(path, 'rb') as f:
+        file = TextReadWrapper(
+            f, encoding=opts.encoding,
+            progress_callback=progres_callback)
+        try:
+            df = pd.read_csv(
+                file, sep=opts.dialect.delimiter, dialect=opts.dialect,
+                skipinitialspace=opts.dialect.skipinitialspace,
+                header=header, skiprows=skiprows,
+                dtype=dtypes, parse_dates=parse_dates, prefix=prefix,
+                na_values=["?", "."],
+            )
+            if columns_ignored:
+                # TODO: use 'usecols' parameter in `read_csv` call to
+                # avoid loading/parsing the columns
+                df = df.drop(
+                    columns=[df.columns[i] for i in columns_ignored
+                             if i < len(df.columns)])
+            return df
+        finally:
+            file.detach()
+
+
+def clear_stack_on_cancel(f):
+    """
+    A decorator that catches the TaskState.UserCancelException exception
+    and clears the exception's traceback to remove local references.
+
+    Parameters
+    ----------
+    f : callable
+
+    Returns
+    -------
+    wrapped : callable
+    """
+    def wrapper(*args, **kwargs):
+        try:
+            return f(*args, **kwargs)
+        except TaskState.UserCancelException as e:
+            # TODO: Is this enough to allow immediate gc of the stack?
+            # How does it chain across cython code?
+            # Maybe just return None.
+            e = e.with_traceback(None)
+            e.__context__ = None
+            e.__cause__ = None
+            raise e
+        except BaseException as e:
+            traceback.clear_frames(e.__traceback__)
+            raise
+
+    return wrapper
 
 
 class TaskState(QObject):
