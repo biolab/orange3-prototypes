@@ -1,7 +1,6 @@
-from AnyQt.QtWidgets import QApplication, QFormLayout, QTableView,  QSplitter
+from AnyQt.QtWidgets import QApplication, QFormLayout, QTableView,  QSplitter, QSizePolicy
 from AnyQt.QtCore import Qt, QThread, pyqtSlot
-from PyQt5.QtGui import QDoubleValidator
-
+from PyQt5.QtGui import QSizePolicy
 import numpy as np
 import scipy.stats as st
 
@@ -153,11 +152,12 @@ class ExplainPredictions(object):
 class OWExplainPred(OWWidget):
 
     name = "Explain Predictions"
-    description = "Calculates attribute contributions to final prediction"
+    description = "Calculates attribute contributions to final prediction with an approximation algorithm for shapely value"
     #icon = "iconImage.png"
     priority = 200
-    error = settings.Setting(5)
-    p_val = settings.Setting(5)
+    gui_error = settings.Setting(5)
+    gui_p_val = settings.Setting(5)
+    resizing_enabled = False
 
     class Inputs:
         data = Input("Data", Table, default = True)
@@ -192,28 +192,21 @@ class OWExplainPred(OWWidget):
         )
 
         box = gui.vBox(self.controlArea, "Stopping criteria")
-        form = QFormLayout()
-        box.layout().addLayout(form)
-
-        self.error_spin = gui.spin(box, self, "error", 1, 100, callback = self._update_error_spin, 
+        self.error_spin = gui.spin(box, self, "gui_error", 1, 100, label = "Max error: ", callback = self._update_error_spin, 
                     controlWidth = 80, keyboardTracking=False)
         self.error_spin.setSuffix("%")
-
-        self.p_val_spin = gui.spin(box, self, "p_val", 1, 100, callback = self._update_p_val_spin,
+        self.p_val_spin = gui.spin(box, self, "gui_p_val", 1, 100, label = "P-value: ",  callback = self._update_p_val_spin,
                     controlWidth = 80, keyboardTracking = False)
         self.p_val_spin.setSuffix("%")
 
-        form.addRow("Max error: ", self.error_spin)
-        form.addRow("P-value: ", self.p_val_spin)
- 
-        cancel_button = gui.button(self.controlArea, self, "This is taking too long, stop.", callback = self.cancel, tooltip = "Displays results so far, may not be as accurate.")
-        
+        gui.rubber(self.controlArea)
+
+        cancel_button = gui.button(self.controlArea, self, "This is taking too long, stop.", callback = self.from_button, tooltip = "Displays results so far, may not be as accurate.")
 
         predictions_box = gui.vBox(self.mainArea, "Explaining for prediction")
         self.predict_info = gui.widgetLabel(predictions_box, "")
 
         self.mainArea.layout().addWidget(self.dataview)
-
 
 
     @Inputs.data
@@ -259,22 +252,23 @@ class OWExplainPred(OWWidget):
         self.predict_info.setText("")
         if self.data is not None and self.model is not None and self.toExplain is not None:
             #calculate contributions
-            if self.explanations is None:
-                e = ExplainPredictions(self.data, self.model, batchSize = min(int(len(self.data.X)/5), 100))
-                self._task = task = Task()
+            #if self.explanations is None:
+            print ("am handling new signals")
+            e = ExplainPredictions(self.data, self.model, batchSize = min(int(len(self.data.X)/5), 100), pError = self.gui_p_val/100, error = self.gui_error/100 )
+            self._task = task = Task()
 
-                def callback():
-                    nonlocal task
-                    if task.canceled :
-                        #TODO: return current results
-                        return True
-                    return False
-                    #set_progress(finished*100)
+            def callback():
+                nonlocal task
+                if task.canceled :
+                    #TODO: return current results
+                    return True
+                return False
+                #set_progress(finished*100)
 
-                explain_func = partial(e.anytime_explain, self.toExplain, callback = callback)
-                task.future = self._executor.submit(explain_func)
-                task.watcher = FutureWatcher(task.future)
-                task.watcher.done.connect(self._task_finished)
+            explain_func = partial(e.anytime_explain, self.toExplain, callback = callback)
+            task.future = self._executor.submit(explain_func)
+            task.watcher = FutureWatcher(task.future)
+            task.watcher.done.connect(self._task_finished)
 
         else:
             self.Outputs.explanations.send(None)
@@ -311,11 +305,15 @@ class OWExplainPred(OWWidget):
             model = TableModel(self.explanations, parent = None)
             self.dataview.setModel(model)
 
+    def from_button(self):
+        print ("kejm from d batn")
+        self.cancel()
 
     def cancel(self):
         """
         Cancel the current task (if any).
         """
+        print ("canceling")
         if self._task is not None:
             self._task.cancel()
             assert self._task.future.done()
@@ -339,10 +337,14 @@ class OWExplainPred(OWWidget):
 
 
     def _update_error_spin(self):
-        pass
+        print ("error_spin update")
+        self.cancel()
+        self.handleNewSignals()
 
     def _update_p_val_spin(self):
-        pass
+        print ("p_val_spin update")
+        self.cancel()
+        self.handleNewSignals()
 
     def onDeleteWidget(self):
         self.cancel()
