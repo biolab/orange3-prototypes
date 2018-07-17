@@ -41,26 +41,20 @@ class ExplainPredictions(object):
     Class used to explain individual predictions by determining the importance of attribute values. All interactions between atributes are accounted for by calculating Shapely value.
     Parameters:
 
-    model : 
-        model to be used with classification, usinng predict method
-    data : matrix
-        dataset without target values
-    target: 
-        target values of given dataset
-    error : float
-        desired error 
-    pError : float
-        p value of error
-    batchSize : int
-        size of batch to be used in classification, bigger batch size speeds up the calculations and improves estimations of variance
-    maxIter : int
-        maximum number of iterations per attribute
-    minIter : int
-        minimum number of iterations per attiribute
-
-    Return: 
-        array dimensions numInstancesToPredict * numAttributes. Field i,j is Shapely value for i-th instance, value of j-th atribute.
-
+    :param data: table with dataset 
+    :type: Orange data table
+    :param model: model to be used for prediction
+    :type model: Orange model
+    :param pError: p value of error
+    :type pError: float
+    :param error: desired max error of approximation algorithm
+    :type error: float
+    :param batchSize: size of batch used in prediction, bigger batch speeds up the calculations
+    :type batchSize: int
+    :param maxIter: maximum number of iterations
+    :type maxIter: int
+    :param minIter: minimum number of iterations
+    :type minIter:int
     """
 
     def __init__(self, data, model, pError=0.05, error=0.05, batchSize=100, maxIter=59000, minIter=100):
@@ -266,9 +260,7 @@ class OWExplainPred(OWWidget):
         if self.data is not None and self.model is not None and self.toExplain is not None:
             #calculate contributions
             if self.explanations is None:
-
                 e = ExplainPredictions(self.data, self.model, batchSize = min(int(len(self.data.X)/5), 100))
-
                 self._task = task = Task()
 
                 def callback():
@@ -280,11 +272,8 @@ class OWExplainPred(OWWidget):
                     #set_progress(finished*100)
 
                 explain_func = partial(e.anytime_explain, self.toExplain, callback = callback)
-
                 task.future = self._executor.submit(explain_func)
-
                 task.watcher = FutureWatcher(task.future)
-
                 task.watcher.done.connect(self._task_finished)
 
         else:
