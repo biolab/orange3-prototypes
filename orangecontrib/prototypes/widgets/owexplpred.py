@@ -96,6 +96,8 @@ class ExplainPredictions(object):
         atr_indices = np.asarray(range(noAtr)).reshape((1, noAtr))
         batchMxSize = self.batchSize * noAtr
         zSq = abs(st.norm.ppf(self.pError/2))**2
+        atr_err = np.zeros((1, noAtr), dtype=float)
+        atr_err.fill(np.nan)
 
         tiled_inst = Table.from_numpy(instance.domain,
                                       np.tile(instance.X, (self.batchSize, 1)), np.full((self.batchSize, 1), instance.Y[0]))
@@ -141,7 +143,7 @@ class ExplainPredictions(object):
             neededIter = zSq * var[0, a] / (self.error**2)
             if (neededIter <= steps[0, a]) and (steps[0, a] >= self.minIter) or (steps[0, a] > self.maxIter):
                 iterations_reached[0, a] = self.maxIter + 1
-
+                atr_err[0,a] = np.sqrt( zSq * var[0,a] / steps[0,a])
 
         expl[0, :] = expl[0, :]/steps[0, :]
 
@@ -151,10 +153,8 @@ class ExplainPredictions(object):
         table = Table.from_list(domain, np.asarray(
             self.atr_names.values).reshape(-1, 1))
         ordered = np.argsort(np.abs(expl[0]))[::-1]
-        print (table.Y[:,0].shape)
-        print (expl.T.shape)
-        table.Y[:,0] = expl.T[ordered][:,0]
-        table.Y[:,1] = np.sqrt( zSq * var[0,:] / steps[0,:])
+        table.Y[:, 0] = expl.T[ordered][:, 0]
+        table.Y[:,1] = atr_err.T[ordered][:,0]
         table.X = table.X[ordered]
         return classValue, table
 
@@ -267,6 +267,8 @@ class OWExplainPred(OWWidget):
         if sample is not None and len(sample.X) != 1:
             self.toExplain = None
             self.Warning.sample_too_big()
+            print (sample.X)
+            print (len(sample.X))
 
     def handleNewSignals(self):
         if self._task is not None:
@@ -276,7 +278,6 @@ class OWExplainPred(OWWidget):
         self.dataview.setModel(None)
         self.predict_info.setText("")
         self.Warning.selection_not_matching.clear()
-        print("out")
         if self.data is not None and self.toExplain is not None:
             print(domain_equal(self.data.domain, self.toExplain.domain))
             if domain_equal(self.data.domain, self.toExplain.domain):
@@ -385,7 +386,14 @@ class OWExplainPred(OWWidget):
 
 def domain_equal(domain1, domain2):
     """checks if two domains have the same attributes and target values"""
-    if domain1.class_var.name != domain2.class_var.name:
+
+    if len(domain1.class_vars) != len(domain2.class_vars):
+        return False
+    for idx in range(len(domain1.class_vars)):
+        if domain1.class_vars[idx].name != domain2.class_vars[idx].name:
+            return False
+
+    if len(domain1.attributes) != len(domain2.attributes):
         return False
     for idx in range(len(domain1.attributes)):
         if domain1.attributes[idx].name != domain2.attributes[idx].name:
