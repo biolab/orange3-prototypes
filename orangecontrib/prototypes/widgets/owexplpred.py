@@ -137,13 +137,11 @@ class ExplainPredictions(object):
         expl[0,:] = expl[0,:]/steps[0,:]
 
         #creating return array
-        domain = Domain([self.atr_names], [ContinuousVariable('contribuitons')])
+        domain = Domain([self.atr_names], [ContinuousVariable('contributions')])
         table = Table.from_list(domain, np.asarray(self.atr_names.values).reshape(-1, 1))
-        ordered = np.argsort(np.abs(expl.T))[::-1]
+        ordered = np.argsort(np.abs(expl[0]))[::-1]
         table.Y = expl.T[ordered]
         table.X = table.X[ordered]
-        print (steps)
-        print (ordered)
         return classValue, table
 
     def _get_predictions(self, inst, classValue):
@@ -176,9 +174,9 @@ class OWExplainPred(OWWidget):
         explanations = Output("Explanations", Table)
   
     class Warning(OWWidget.Warning):
-        empty_data = widget.Msg("Empty dataset")
-        sample_too_big = widget.Msg("Too many samples to explain")
-        empty_model = widget.Msg("No model provided")
+        empty_data = widget.Msg("Empty dataset.")
+        sample_too_big = widget.Msg("Too many samples to explain.")
+        selection_not_matching = widget.Msg("Pick a sample to explain.")
     
 
     def __init__(self):
@@ -247,13 +245,16 @@ class OWExplainPred(OWWidget):
         """Set input 'Sample', checks if size is appropriate"""
         self.toExplain = sample
         self.explanations = None
+        self.Warning.selection_not_matching.clear()
+        self.Warning.sample_too_big.clear()
         if sample is not None:
-            if len(sample.X) == 1:
-                self.Warning.sample_too_big.clear()
+            if len(sample.X[0]) != len(self.data.X[0]):
+                self.Warning.selection_not_matching()
             else:
-                print ("sample too big: " + str(self.toExplain))
-                self.toExplain = None
-                self.Warning.sample_too_big()
+                if len(sample.X) != 1:
+                    print ("sample too big: " + str(self.toExplain))
+                    self.toExplain = None
+                    self.Warning.sample_too_big()
 
     def handleNewSignals(self):
         if self._task is not None:
