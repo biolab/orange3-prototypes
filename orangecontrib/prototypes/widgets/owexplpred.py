@@ -389,7 +389,6 @@ def domain_equal(domain1, domain2):
 def main():
     app = QApplication([])
     w = OWExplainPred()
-    #data = Orange.data.Table("iris.tab")
     data = Orange.data.Table("iris.tab")
     data_subset = data[:20]
     w.set_data(data_subset)
