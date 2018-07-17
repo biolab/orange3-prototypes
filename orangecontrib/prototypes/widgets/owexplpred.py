@@ -70,7 +70,6 @@ class ExplainPredictions(object):
     """
 
     def __init__(self, data, model, pError=0.05, error=0.05, batchSize=100, maxIter=59000, minIter=100, seed=0):
-
         self.model = model
         self.data = data
         self.pError = pError
@@ -231,7 +230,7 @@ class OWExplainPred(OWWidget):
         cancel_button = gui.button(self.controlArea,
                                    self,
                                    "Stop computation",
-                                   callback=self.from_button,
+                                   callback=self.cancel,
                                    tooltip="Displays results so far, may not be as accurate.")
 
         predictions_box = gui.vBox(self.mainArea, "Model prediction")
@@ -274,7 +273,6 @@ class OWExplainPred(OWWidget):
         self.predict_info.setText("")
         self.Warning.selection_not_matching.clear()
         if self.data is not None and self.toExplain is not None:
-            print(domain_equal(self.data.domain, self.toExplain.domain))
             if domain_equal(self.data.domain, self.toExplain.domain):
                 if self.model is not None:
                     # calculate contributions
@@ -332,10 +330,6 @@ class OWExplainPred(OWWidget):
             self.Outputs.explanations.send(self.explanations)
             model = TableModel(self.explanations, parent=None)
             self.dataview.setModel(model)
-
-    def from_button(self):
-        print("button cancel")
-        self.cancel()
 
     def cancel(self):
         """
