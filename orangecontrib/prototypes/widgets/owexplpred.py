@@ -142,15 +142,19 @@ class ExplainPredictions(object):
             if (neededIter <= steps[0, a]) and (steps[0, a] >= self.minIter) or (steps[0, a] > self.maxIter):
                 iterations_reached[0, a] = self.maxIter + 1
 
+
         expl[0, :] = expl[0, :]/steps[0, :]
 
         # creating return array
         domain = Domain([self.atr_names], [
-                        ContinuousVariable('contributions')])
+                        ContinuousVariable('contributions'), ContinuousVariable('errors')])
         table = Table.from_list(domain, np.asarray(
             self.atr_names.values).reshape(-1, 1))
         ordered = np.argsort(np.abs(expl[0]))[::-1]
-        table.Y = expl.T[ordered]
+        print (table.Y[:,0].shape)
+        print (expl.T.shape)
+        table.Y[:,0] = expl.T[ordered][:,0]
+        table.Y[:,1] = np.sqrt( zSq * var[0,:] / steps[0,:])
         table.X = table.X[ordered]
         return classValue, table
 
@@ -198,13 +202,11 @@ class OWExplainPred(OWWidget):
         self._task = None
         self._executor = ThreadExecutor()
 
-        self.dataview = QTableView(
-            verticalScrollBarPolicy=Qt.ScrollBarAlwaysOn,
-            horizontalScrollBarPolicy=Qt.ScrollBarAlwaysOn,
-            horizontalScrollMode=QTableView.ScrollPerPixel,
-            selectionMode=QTableView.NoSelection,
-            focusPolicy=Qt.StrongFocus
-        )
+        self.dataview = QTableView(verticalScrollBarPolicy=Qt.ScrollBarAlwaysOn,
+                                   horizontalScrollBarPolicy=Qt.ScrollBarAlwaysOn,
+                                   horizontalScrollMode=QTableView.ScrollPerPixel,
+                                   selectionMode=QTableView.NoSelection,
+                                   focusPolicy=Qt.StrongFocus)
 
         box = gui.vBox(self.controlArea, "Stopping criteria")
         self.error_spin = gui.spin(box,
