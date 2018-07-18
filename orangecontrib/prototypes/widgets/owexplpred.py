@@ -70,7 +70,7 @@ class ExplainPredictions:
 
     """
 
-    def __init__(self, data, model, p_val=0.05, error=0.05, batch_size=100, max_iter=59000, min_iter=500, seed=667892):
+    def __init__(self, data, model, p_val=0.05, error=0.05, batch_size=500, max_iter=59000, min_iter=1000, seed=667892):
         self.model = model
         self.data = data
         self.p_val = p_val
@@ -98,11 +98,11 @@ class ExplainPredictions:
         atr_err = np.zeros((1, no_atr), dtype=float)
         atr_err.fill(np.nan)
 
-        tiled_x = np.tile(instance.X, (self.batch_size, 1))
-        tiled_metas = np.tile(instance.metas, (self.batch_size, 1))
-        tiled_w = np.tile(instance.W, (self.batch_size, 1))
-        tiled_y = np.tile(instance.Y, (self.batch_size, 1))
-        tiled_inst = Table.from_numpy(instance.domain, tiled_x, tiled_y, tiled_metas, tiled_w)
+        tiled_x = np.tile(instance._x, (self.batch_size, 1))
+        tiled_metas = np.tile(instance._metas, (self.batch_size, 1))
+        tiled_y = np.tile(instance._y, (self.batch_size, 1))
+        tiled_inst = Table.from_numpy(
+            instance.domain, tiled_x, tiled_y, tiled_metas)
 
         inst1 = copy.deepcopy(tiled_inst)
         inst2 = copy.deepcopy(tiled_inst)
@@ -110,13 +110,15 @@ class ExplainPredictions:
 
         while not(all(iterations_reached[0, :] > self.max_iter)):
             if not(any(iterations_reached[0, :] > self.max_iter)):
-                a = np.argmax(prng.multinomial(1, pvals=(var[0, :]/(np.sum(var[0, :])))))
+                a = np.argmax(prng.multinomial(
+                    1, pvals=(var[0, :]/(np.sum(var[0, :])))))
             else:
                 a = np.argmin(iterations_reached[0, :])
 
-            perm = (prng.random_sample(batch_mx_size).reshape(self.batch_size, no_atr)) > 0.5
-            rand_data = self.data.X[prng.randint(0, 
-                data_rows, size=self.batch_size), :]
+            perm = (prng.random_sample(batch_mx_size).reshape(
+                self.batch_size, no_atr)) > 0.5
+            rand_data = self.data.X[prng.randint(0,
+                                                 data_rows, size=self.batch_size), :]
             inst1.X = np.copy(tiled_inst.X)
             inst1.X[perm] = rand_data[perm]
             inst2.X = np.copy(inst1.X)
@@ -130,8 +132,8 @@ class ExplainPredictions:
             expl[0, a] += diff
 
             # update variance
-            steps[0, a] +=self.batch_size
-            iterations_reached[0, a] +=self.batch_size
+            steps[0, a] += self.batch_size
+            iterations_reached[0, a] += self.batch_size
             d = diff - mu[0, a]
             mu[0, a] += d / steps[0, a]
             M2[0, a] += d * (diff - mu[0, a])
@@ -151,11 +153,12 @@ class ExplainPredictions:
         # creating return array
         ordered = np.argsort(expl[0])[::-1]
         domain = Domain([], [ContinuousVariable('contributions'),
-                         ContinuousVariable('max error')],
-                        metas = [StringVariable(name = "attributes")])
+                             ContinuousVariable('max error')],
+                        metas=[StringVariable(name="attributes")])
         table = Table.from_numpy(domain, np.empty((no_atr, 0), dtype=np.float64),
-                                Y = np.hstack((expl.T,np.sqrt(z_sq * var[0,:] / steps[0,:]).reshape(-1, 1))),
-                                metas = np.asarray(self.atr_names).reshape(-1, 1))
+                                 Y=np.hstack(
+                                     (expl.T, np.sqrt(z_sq * var[0, :] / steps[0, :]).reshape(-1, 1))),
+                                 metas=np.asarray(self.atr_names).reshape(-1, 1))
         table.Y = table.Y[ordered]
         table.metas = table.metas[ordered]
         return class_value, table
@@ -285,17 +288,18 @@ class OWExplainPred(OWWidget):
                     e = ExplainPredictions(self.data,
                                            self.model,
                                            batch_size=min(
-                                               int(len(self.data.X) / 5), 100),
+                                               int(len(self.data.X)), 500),
                                            p_val=self.gui_p_val / 100,
                                            error=self.gui_error / 100)
                     self._task = task = Task()
+
                     def callback():
                         nonlocal task
                         if task.canceled:
                             return True
                         return False
                     explain_func = partial(
-                        e.anytime_explain, self.to_explain, callback=callback)
+                        e.anytime_explain, self.to_explain[0], callback=callback)
                     task.future = self._executor.submit(explain_func)
                     task.watcher = FutureWatcher(task.future)
                     task.watcher.done.connect(self._task_finished)
