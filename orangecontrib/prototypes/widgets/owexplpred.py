@@ -9,6 +9,7 @@ from AnyQt.QtWidgets import (
 from AnyQt.QtCore import Qt, QThread, pyqtSlot
 from PyQt5.QtGui import QSizePolicy
 import numpy as np
+from numpy.random import RandomState
 import scipy.stats as st
 
 import Orange
@@ -18,7 +19,7 @@ from Orange.widgets import gui, widget, settings
 from Orange.widgets.utils.itemmodels import TableModel
 from Orange.widgets.utils.sql import check_sql_input
 from Orange.base import Model
-from Orange.data import DiscreteVariable, ContinuousVariable, Domain, Table
+from Orange.data import DiscreteVariable, ContinuousVariable, StringVariable, Domain, Table
 from Orange.widgets.utils.concurrent import (
     ThreadExecutor, FutureWatcher, methodinvoke
 )
@@ -36,7 +37,7 @@ class Task:
         concurrent.futures.wait([self.future])
 
 
-class ExplainPredictions(object):
+class ExplainPredictions:
     """
     Class used to explain individual predictions by determining the importance of attribute values.
     All interactions between atributes are accounted for by calculating Shapely value.
@@ -49,87 +50,88 @@ class ExplainPredictions(object):
         model to be used for prediction
     error: float
         desired error 
-    pError : float
+    p_val : float
         p value of error
-    batchSize : int
+    batch_size : int
         size of batch to be used in making predictions, bigger batch size speeds up the calculations and improves estimations of variance
-    maxIter : int
+    max_iter : int
         maximum number of iterations per attribute
-    minIter : int
+    min_iter : int
         minimum number of iterations per attiribute
     seed : int
-        seed for the numpy.random generator, default is 0
+        seed for the numpy.random generator, default is 667892
 
     Returns:
     -------
-    classValue: float
+    class_value: float
         either index of predicted class or predicted value
     table: Orange.data.Table
         table containing atributes and corresponding contributions
 
     """
 
-    def __init__(self, data, model, pError=0.05, error=0.05, batchSize=100, maxIter=59000, minIter=100, seed=0):
+    def __init__(self, data, model, p_val=0.05, error=0.05, batch_size=100, max_iter=59000, min_iter=500, seed=667892):
         self.model = model
         self.data = data
-        self.pError = pError
+        self.p_val = p_val
         self.error = error
-        self.batchSize = batchSize
-        self.maxIter = maxIter
-        self.minIter = minIter
-        self.atr_names = DiscreteVariable(name='attributes',
-                                          values=[var.name for var in data.domain.attributes])
-        np.random.seed(seed)
+        self.batch_size = batch_size
+        self.max_iter = max_iter
+        self.min_iter = min_iter
+        self.atr_names = [var.name for var in data.domain.attributes]
+        self.seed = seed
 
     def anytime_explain(self, instance, callback=None):
-        dataRows, noAtr = self.data.X.shape
-        classValue = self.model(instance)[0]
+        data_rows, no_atr = self.data.X.shape
+        class_value = self.model(instance)[0]
+        prng = RandomState(self.seed)
 
         # placeholders
-        steps = np.zeros((1, noAtr), dtype=float)
-        mu = np.zeros((1, noAtr), dtype=float)
-        M2 = np.zeros((1, noAtr), dtype=float)
-        expl = np.zeros((1, noAtr), dtype=float)
-        var = np.ones((1, noAtr), dtype=float)
+        steps = np.zeros((1, no_atr), dtype=float)
+        mu = np.zeros((1, no_atr), dtype=float)
+        M2 = np.zeros((1, no_atr), dtype=float)
+        expl = np.zeros((1, no_atr), dtype=float)
+        var = np.ones((1, no_atr), dtype=float)
 
-        atr_indices = np.asarray(range(noAtr)).reshape((1, noAtr))
-        batchMxSize = self.batchSize * noAtr
-        zSq = abs(st.norm.ppf(self.pError/2))**2
-        atr_err = np.zeros((1, noAtr), dtype=float)
+        batch_mx_size = self.batch_size * no_atr
+        z_sq = abs(st.norm.ppf(self.p_val/2))**2
+        atr_err = np.zeros((1, no_atr), dtype=float)
         atr_err.fill(np.nan)
 
-        tiled_inst = Table.from_numpy(instance.domain,
-                                      np.tile(instance.X, (self.batchSize, 1)), np.full((self.batchSize, 1), instance.Y[0]))
+        tiled_x = np.tile(instance.X, (self.batch_size, 1))
+        tiled_metas = np.tile(instance.metas, (self.batch_size, 1))
+        tiled_w = np.tile(instance.W, (self.batch_size, 1))
+        tiled_y = np.tile(instance.Y, (self.batch_size, 1))
+        tiled_inst = Table.from_numpy(instance.domain, tiled_x, tiled_y, tiled_metas, tiled_w)
+
         inst1 = copy.deepcopy(tiled_inst)
         inst2 = copy.deepcopy(tiled_inst)
-        iterations_reached = np.zeros((1, noAtr))
+        iterations_reached = np.zeros((1, no_atr))
 
-        while not(all(iterations_reached[0, :] > self.maxIter)):
-            if not(any(iterations_reached[0, :] > self.maxIter)):
-                a = np.random.choice(atr_indices[0], p=(
-                    var[0, :]/(np.sum(var[0, :]))))
+        while not(all(iterations_reached[0, :] > self.max_iter)):
+            if not(any(iterations_reached[0, :] > self.max_iter)):
+                a = np.argmax(prng.multinomial(1, pvals=(var[0, :]/(np.sum(var[0, :])))))
             else:
                 a = np.argmin(iterations_reached[0, :])
 
-            perm = np.random.choice([True, False], batchMxSize, replace=True)
-            perm = np.reshape(perm, (self.batchSize, noAtr))
-            rand_data = self.data.X[np.random.randint(
-                dataRows, size=self.batchSize), :]
+            perm = (prng.random_sample(batch_mx_size).reshape(self.batch_size, no_atr)) > 0.5
+            rand_data = self.data.X[prng.randint(0, 
+                data_rows, size=self.batch_size), :]
             inst1.X = np.copy(tiled_inst.X)
             inst1.X[perm] = rand_data[perm]
             inst2.X = np.copy(inst1.X)
 
             inst1.X[:, a] = tiled_inst.X[:, a]
             inst2.X[:, a] = rand_data[:, a]
-            f1 = self._get_predictions(inst1, classValue)
-            f2 = self._get_predictions(inst2, classValue)
+            f1 = self._get_predictions(inst1, class_value)
+            f2 = self._get_predictions(inst2, class_value)
 
             diff = np.sum(f1 - f2)
             expl[0, a] += diff
 
             # update variance
-            steps[0, a] += self.batchSize
-            iterations_reached[0, a] += self.batchSize
+            steps[0, a] +=self.batch_size
+            iterations_reached[0, a] +=self.batch_size
             d = diff - mu[0, a]
             mu[0, a] += d / steps[0, a]
             M2[0, a] += d * (diff - mu[0, a])
@@ -139,30 +141,32 @@ class ExplainPredictions(object):
                 break
 
             # exclude from sampling if necessary
-            neededIter = zSq * var[0, a] / (self.error**2)
-            if (neededIter <= steps[0, a]) and (steps[0, a] >= self.minIter) or (steps[0, a] > self.maxIter):
-                iterations_reached[0, a] = self.maxIter + 1
-                atr_err[0, a] = np.sqrt(zSq * var[0, a] / steps[0, a])
+            needed_iter = z_sq * var[0, a] / (self.error**2)
+            if (needed_iter <= steps[0, a]) and (steps[0, a] >= self.min_iter) or (steps[0, a] > self.max_iter):
+                iterations_reached[0, a] = self.max_iter + 1
+                atr_err[0, a] = np.sqrt(z_sq * var[0, a] / steps[0, a])
 
         expl[0, :] = expl[0, :]/steps[0, :]
 
         # creating return array
-        domain = Domain([self.atr_names], [
-                        ContinuousVariable('contributions'), ContinuousVariable('errors')])
-        table = Table.from_list(domain, np.asarray(
-            self.atr_names.values).reshape(-1, 1))
-        table.Y[:, 0] = expl.T[:, 0]
-        table.Y[:, 1] = atr_err.T[:, 0]
-        table.X = table.X
-        return classValue, table
+        ordered = np.argsort(expl[0])[::-1]
+        domain = Domain([], [ContinuousVariable('contributions'),
+                         ContinuousVariable('max error')],
+                        metas = [StringVariable(name = "attributes")])
+        table = Table.from_numpy(domain, np.empty((no_atr, 0), dtype=np.float64),
+                                Y = np.hstack((expl.T,np.sqrt(z_sq * var[0,:] / steps[0,:]).reshape(-1, 1))),
+                                metas = np.asarray(self.atr_names).reshape(-1, 1))
+        table.Y = table.Y[ordered]
+        table.metas = table.metas[ordered]
+        return class_value, table
 
-    def _get_predictions(self, inst, classValue):
+    def _get_predictions(self, inst, class_value):
         if isinstance(self.data.domain.class_vars[0], ContinuousVariable):
             # regression
             return self.model(inst)
         else:
             # classification
-            predictions = (self.model(inst) == classValue) * 1
+            predictions = (self.model(inst) == class_value) * 1
             return predictions
 
 
@@ -183,17 +187,16 @@ class OWExplainPred(OWWidget):
     class Outputs:
         explanations = Output("Explanations", Table)
 
-    class Warning(OWWidget.Warning):
-        empty_data = widget.Msg("Empty dataset.")
+    class Error(OWWidget.Error):
         sample_too_big = widget.Msg("Too many samples to explain.")
         selection_not_matching = widget.Msg(
-            "Domain of dataset and the sample to be explained does not match")
+            "Data and Sample domains do not match.")
 
     def __init__(self):
         super().__init__()
         self.data = None
         self.model = None
-        self.toExplain = None
+        self.to_explain = None
         self.explanations = None
 
         self._task = None
@@ -257,12 +260,12 @@ class OWExplainPred(OWWidget):
     @check_sql_input
     def set_sample(self, sample):
         """Set input 'Sample', checks if size is appropriate"""
-        self.toExplain = sample
+        self.to_explain = sample
         self.explanations = None
-        self.Warning.sample_too_big.clear()
+        self.Error.sample_too_big.clear()
         if sample is not None and len(sample.X) != 1:
-            self.toExplain = None
-            self.Warning.sample_too_big()
+            self.to_explain = None
+            self.Error.sample_too_big()
 
     def handleNewSignals(self):
         if self._task is not None:
@@ -271,31 +274,33 @@ class OWExplainPred(OWWidget):
 
         self.dataview.setModel(None)
         self.predict_info.setText("")
-        self.Warning.selection_not_matching.clear()
-        if self.data is not None and self.toExplain is not None:
-            if domain_equal(self.data.domain, self.toExplain.domain):
+        self.Error.selection_not_matching.clear()
+        if self.data is not None and self.to_explain is not None:
+
+            self.to_explain = self.to_explain.transform(self.data.domain)
+
+            if not(any(np.isnan(self.to_explain.X[0]))):
                 if self.model is not None:
                     # calculate contributions
                     e = ExplainPredictions(self.data,
                                            self.model,
-                                           batchSize=min(
+                                           batch_size=min(
                                                int(len(self.data.X) / 5), 100),
-                                           pError=self.gui_p_val / 100,
+                                           p_val=self.gui_p_val / 100,
                                            error=self.gui_error / 100)
                     self._task = task = Task()
-
                     def callback():
                         nonlocal task
                         if task.canceled:
                             return True
                         return False
                     explain_func = partial(
-                        e.anytime_explain, self.toExplain, callback=callback)
+                        e.anytime_explain, self.to_explain, callback=callback)
                     task.future = self._executor.submit(explain_func)
                     task.watcher = FutureWatcher(task.future)
                     task.watcher.done.connect(self._task_finished)
             else:
-                self.Warning.selection_not_matching()
+                self.Error.selection_not_matching()
         else:
             self.Outputs.explanations.send(None)
 
@@ -324,9 +329,9 @@ class OWExplainPred(OWWidget):
             for key in self.results.keys():
                 self.results[key] = None
         else:
-            classValue = results[0]
+            class_value = results[0]
             self.explanations = results[1]
-            self._print_prediction(classValue)
+            self._print_prediction(class_value)
             self.Outputs.explanations.send(self.explanations)
             model = TableModel(self.explanations, parent=None)
             self.dataview.setModel(model)
@@ -342,19 +347,19 @@ class OWExplainPred(OWWidget):
             self._task.watcher.done.disconnect(self._task_finished)
             self._task_finished(self._task.future)
 
-    def _print_prediction(self, classValue):
+    def _print_prediction(self, class_value):
         """
         Parameters
         ----------
-        classValue: float 
+        class_value: float 
             Number representing either index of predicted class value, looked up in domain, or predicted value (regression)
         """
         name = self.data.domain.class_vars[0].name
         if isinstance(self.data.domain.class_vars[0], ContinuousVariable):
-            self.predict_info.setText(name + ":      " + str(classValue))
+            self.predict_info.setText(name + ":      " + str(class_value))
         else:
             self.predict_info.setText(
-                name + ":      " + self.data.domain.class_vars[0].values[int(classValue)])
+                name + ":      " + self.data.domain.class_vars[0].values[int(class_value)])
 
     def _update_error_spin(self):
         self.cancel()
@@ -367,23 +372,6 @@ class OWExplainPred(OWWidget):
     def onDeleteWidget(self):
         self.cancel()
         super().onDeleteWidget()
-
-
-def domain_equal(domain1, domain2):
-    """checks if two domains have the same attributes and target values"""
-
-    if len(domain1.class_vars) != len(domain2.class_vars):
-        return False
-    for idx in range(len(domain1.class_vars)):
-        if domain1.class_vars[idx].name != domain2.class_vars[idx].name:
-            return False
-
-    if len(domain1.attributes) != len(domain2.attributes):
-        return False
-    for idx in range(len(domain1.attributes)):
-        if domain1.attributes[idx].name != domain2.attributes[idx].name:
-            return False
-    return True
 
 
 def main():
