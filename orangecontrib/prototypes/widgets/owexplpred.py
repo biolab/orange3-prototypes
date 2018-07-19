@@ -5,9 +5,8 @@ import concurrent.futures
 from functools import partial
 
 from AnyQt.QtWidgets import (
-    QApplication, QFormLayout, QTableView,  QSplitter, QSizePolicy)
-from AnyQt.QtCore import Qt, QThread, pyqtSlot
-from PyQt5.QtGui import QSizePolicy
+    QApplication, QFormLayout, QTableView,  QSplitter)
+from AnyQt.QtCore import Qt, QThread, pyqtSlot, QMetaObject, Q_ARG
 import numpy as np
 from numpy.random import RandomState
 import scipy.stats as st
@@ -70,7 +69,7 @@ class ExplainPredictions:
 
     """
 
-    def __init__(self, data, model, p_val=0.05, error=0.05, batch_size=500, max_iter=59000, min_iter=1000, seed=667892):
+    def __init__(self, data, model, p_val=0.05, error=0.05, batch_size=500, max_iter=10000, min_iter=1000, seed=667892):
         self.model = model
         self.data = data
         self.p_val = p_val
@@ -108,6 +107,7 @@ class ExplainPredictions:
         inst2 = copy.deepcopy(tiled_inst)
         iterations_reached = np.zeros((1, no_atr))
 
+        worst_case = self.max_iter*no_atr
         while not(all(iterations_reached[0, :] > self.max_iter)):
             if not(any(iterations_reached[0, :] > self.max_iter)):
                 a = np.argmax(prng.multinomial(
@@ -139,7 +139,8 @@ class ExplainPredictions:
             M2[0, a] += d * (diff - mu[0, a])
             var[0, a] = M2[0, a] / (steps[0, a] - 1)
 
-            if (callback()):
+            prog = 1 - np.sum(self.max_iter - iterations_reached)/worst_case
+            if (callback(int(prog*100))):
                 break
 
             # exclude from sampling if necessary
@@ -192,8 +193,10 @@ class OWExplainPred(OWWidget):
 
     class Error(OWWidget.Error):
         sample_too_big = widget.Msg("Too many samples to explain.")
-        selection_not_matching = widget.Msg(
-            "Data and Sample domains do not match.")
+
+    class Warning(OWWidget.Warning):
+        unknowns_increased = widget.Msg(
+            "Number of unknown values increased, Data and Sample domains mismatch.")
 
     def __init__(self):
         super().__init__()
@@ -277,36 +280,46 @@ class OWExplainPred(OWWidget):
 
         self.dataview.setModel(None)
         self.predict_info.setText("")
-        self.Error.selection_not_matching.clear()
+        self.Warning.unknowns_increased.clear()
         if self.data is not None and self.to_explain is not None:
 
+            num_nan = np.count_nonzero(np.isnan(self.to_explain.X[0]))
+
             self.to_explain = self.to_explain.transform(self.data.domain)
+            if num_nan != np.count_nonzero(np.isnan(self.to_explain.X[0])):
+                self.Warning.unknowns_increased()
+            if self.model is not None:
+                # calculate contributions
+                e = ExplainPredictions(self.data,
+                                       self.model,
+                                       batch_size=min(
+                                           int(len(self.data.X)), 500),
+                                       p_val=self.gui_p_val / 100,
+                                       error=self.gui_error / 100)
+                self._task = task = Task()
 
-            if not(any(np.isnan(self.to_explain.X[0]))):
-                if self.model is not None:
-                    # calculate contributions
-                    e = ExplainPredictions(self.data,
-                                           self.model,
-                                           batch_size=min(
-                                               int(len(self.data.X)), 500),
-                                           p_val=self.gui_p_val / 100,
-                                           error=self.gui_error / 100)
-                    self._task = task = Task()
+                def callback(progress):
+                    nonlocal task
+                    if task.canceled:
+                        return True
+                    # update progress bar
+                    QMetaObject.invokeMethod(
+                        self, "set_progress_value", Qt.QueuedConnection, Q_ARG(int, progress))
+                    return False
 
-                    def callback():
-                        nonlocal task
-                        if task.canceled:
-                            return True
-                        return False
-                    explain_func = partial(
-                        e.anytime_explain, self.to_explain[0], callback=callback)
-                    task.future = self._executor.submit(explain_func)
-                    task.watcher = FutureWatcher(task.future)
-                    task.watcher.done.connect(self._task_finished)
-            else:
-                self.Error.selection_not_matching()
+                explain_func = partial(
+                    e.anytime_explain, self.to_explain[0], callback=callback)
+                task.future = self._executor.submit(explain_func)
+                task.watcher = FutureWatcher(task.future)
+                task.watcher.done.connect(self._task_finished)
+
+                self.progressBarInit(processEvents=None)
         else:
             self.Outputs.explanations.send(None)
+
+    @pyqtSlot(int)
+    def set_progress_value(self, value):
+        self.progressBarSet(value, processEvents=False)
 
     @pyqtSlot(concurrent.futures.Future)
     def _task_finished(self, f):
@@ -322,6 +335,7 @@ class OWExplainPred(OWWidget):
         assert f.done()
 
         self._task = None
+        self.progressBarFinished(processEvents=False)
 
         try:
             results = f.result()
