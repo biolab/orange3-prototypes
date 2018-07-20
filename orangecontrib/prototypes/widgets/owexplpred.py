@@ -70,7 +70,7 @@ class ExplainPredictions:
 
     """
 
-    def __init__(self, data, model, p_val=0.05, error=0.05, batch_size=500, max_iter=10000, min_iter=1000, seed=667892):
+    def __init__(self, data, model, p_val=0.05, error=0.05, batch_size=500, max_iter=100000, min_iter=1000, seed=667892):
         self.model = model
         self.data = data
         self.p_val = p_val
@@ -111,28 +111,25 @@ class ExplainPredictions:
         time_point = time.time()
         update_table = False
 
-
-        domain = Domain([], [ContinuousVariable("Score"),
-                             ContinuousVariable("Error")],
-                        metas=[StringVariable(name="Feature")]) 
+        domain = Domain([ContinuousVariable("Score"),
+                         ContinuousVariable("Error")],
+                        metas=[StringVariable(name="Feature")])
 
         if update_prediction is not None:
             update_prediction(class_value)
 
-
-        def create_res_table():           
+        def create_res_table():
             expl_scaled = (expl[0, :]/steps[0, :]).reshape(1, -1)
             # creating return array
             ordered = np.argsort(expl_scaled[0])[::-1]
-            ips = np.hstack((expl_scaled.T, np.sqrt(z_sq * var[0, :] / steps[0, :]).reshape(-1, 1)))
+            ips = np.hstack((expl_scaled.T, np.sqrt(
+                z_sq * var[0, :] / steps[0, :]).reshape(-1, 1)))
             ips[np.isinf(ips)] = np.nan
-            table = Table.from_numpy(domain, np.empty((no_atr, 0), dtype=np.float64),
-                                     Y=ips,
+            table = Table.from_numpy(domain, ips,
                                      metas=np.asarray(self.atr_names).reshape(-1, 1))
-            table.Y = table.Y[ordered]
+            table.X = table.X[ordered]
             table.metas = table.metas[ordered]
             return table
-
 
         while not(all(iterations_reached[0, :] > self.max_iter)):
             if not(any(iterations_reached[0, :] > self.max_iter)):
@@ -182,10 +179,7 @@ class ExplainPredictions:
             if (needed_iter <= steps[0, a]) and (steps[0, a] >= self.min_iter) or (steps[0, a] > self.max_iter):
                 iterations_reached[0, a] = self.max_iter + 1
 
-
         return class_value, create_res_table()
-
-
 
     def _get_predictions(self, inst, class_value):
         if isinstance(self.data.domain.class_vars[0], ContinuousVariable):
@@ -203,8 +197,8 @@ class OWExplainPred(OWWidget):
     description = "Computes attribute contributions to the final prediction with an approximation algorithm for shapely value"
     #icon = "iconImage.png"
     priority = 200
-    gui_error = settings.Setting(5)
-    gui_p_val = settings.Setting(5)
+    gui_error = settings.Setting(0.05)
+    gui_p_val = settings.Setting(0.05)
 
     class Inputs:
         data = Input("Data", Table, default=True)
@@ -251,9 +245,11 @@ class OWExplainPred(OWWidget):
         self.error_spin = gui.spin(criteria_box,
                                    self,
                                    "gui_error",
+                                   0,
                                    1,
-                                   100,
+                                   step=0.01,
                                    label="Error < ",
+                                   spinType=float,
                                    callback=self._update_error_spin,
                                    controlWidth=80,
                                    keyboardTracking=False)
@@ -261,9 +257,11 @@ class OWExplainPred(OWWidget):
         self.p_val_spin = gui.spin(criteria_box,
                                    self,
                                    "gui_p_val",
+                                   0,
                                    1,
-                                   100,
+                                   step=0.01,
                                    label="Error p-value < ",
+                                   spinType=float,
                                    callback=self._update_p_val_spin,
                                    controlWidth=80, keyboardTracking=False)
 
@@ -302,7 +300,10 @@ class OWExplainPred(OWWidget):
     def set_predictor(self, model):
         """Set input 'Model'"""
         self.model = model
+        self.model_info.setText("Model: N/A")
         self.explanations = None
+        if model is not None:
+            self.model_info.setText("Model: " + str(model.name))
 
     @Inputs.sample
     @check_sql_input
@@ -331,55 +332,58 @@ class OWExplainPred(OWWidget):
         self.predict_info.setText("")
         self.Warning.unknowns_increased.clear()
         if self.data is not None and self.to_explain is not None:
-
-            num_nan = np.count_nonzero(np.isnan(self.to_explain.X[0]))
-
-            self.to_explain = self.to_explain.transform(self.data.domain)
-            if num_nan != np.count_nonzero(np.isnan(self.to_explain.X[0])):
-                self.Warning.unknowns_increased()
-            if self.model is not None:
-                # calculate contributions
-                e = ExplainPredictions(self.data,
-                                       self.model,
-                                       batch_size=min(
-                                           int(len(self.data.X)), 500),
-                                       p_val=self.gui_p_val / 100,
-                                       error=self.gui_error / 100)
-                self._task = task = Task()
-
-                def callback(progress):
-                    nonlocal task
-                    if task.canceled:
-                        return True
-                    # update progress bar
-                    QMetaObject.invokeMethod(
-                        self, "set_progress_value", Qt.QueuedConnection, Q_ARG(int, progress))
-                    return False
-
-                def callback_update(table):
-                    QMetaObject.invokeMethod(
-                        self, "update_view", Qt.QueuedConnection, Q_ARG(Orange.data.Table, table))
-
-                def callback_prediction(class_value):
-                    QMetaObject.invokeMethod(
-                        self, "update_model_prediction", Qt.QueuedConnection, Q_ARG(float, class_value))
-
-                explain_func = partial(
-                    e.anytime_explain, self.to_explain[0], callback=callback, update_func = callback_update, update_prediction = callback_prediction)
-                task.future = self._executor.submit(explain_func)
-                task.watcher = FutureWatcher(task.future)
-                task.watcher.done.connect(self._task_finished)
-                self.cancel_button.setDisabled(False)
-
-                self.progressBarInit(processEvents=None)
+            self.commit()
         else:
-            self.Outputs.explanations.send(None)
+            self.commit_output()
+
+    def commit(self):
+        num_nan = np.count_nonzero(np.isnan(self.to_explain.X[0]))
+
+        self.to_explain = self.to_explain.transform(self.data.domain)
+        if num_nan != np.count_nonzero(np.isnan(self.to_explain.X[0])):
+            self.Warning.unknowns_increased()
+        if self.model is not None:
+            # calculate contributions
+            e = ExplainPredictions(self.data,
+                                   self.model,
+                                   batch_size=min(
+                                       len(self.data.X), 500),
+                                   p_val=self.gui_p_val,
+                                   error=self.gui_error)
+            self._task = task = Task()
+
+        def callback(progress):
+            nonlocal task
+            if task.canceled:
+                return True
+            # update progress bar
+            QMetaObject.invokeMethod(
+                self, "set_progress_value", Qt.QueuedConnection, Q_ARG(int, progress))
+            return False
+
+        def callback_update(table):
+            QMetaObject.invokeMethod(
+                self, "update_view", Qt.QueuedConnection, Q_ARG(Orange.data.Table, table))
+
+        def callback_prediction(class_value):
+            QMetaObject.invokeMethod(
+                self, "update_model_prediction", Qt.QueuedConnection, Q_ARG(float, class_value))
+
+        explain_func = partial(
+            e.anytime_explain, self.to_explain[0], callback=callback, update_func=callback_update, update_prediction=callback_prediction)
+        task.future = self._executor.submit(explain_func)
+        task.watcher = FutureWatcher(task.future)
+        task.watcher.done.connect(self._task_finished)
+        self.cancel_button.setDisabled(False)
+        self.progressBarInit(processEvents=None)
 
     @pyqtSlot(Orange.data.Table)
     def update_view(self, table):
-        self.dataview.setModel(TableModel(table, parent = None))
+        self.explanations = table
+        self.dataview.setModel(TableModel(table, parent=None))
+        self.commit_output()
 
-    @pyqtSlot(float)    
+    @pyqtSlot(float)
     def update_model_prediction(self, value):
         self._print_prediction(value)
 
@@ -415,9 +419,15 @@ class OWExplainPred(OWWidget):
                 self.results[key] = None
         else:
             self.explanations = results[1]
-            self.Outputs.explanations.send(self.explanations)
+            self.commit_output()
             model = TableModel(self.explanations, parent=None)
             self.dataview.setModel(model)
+
+    def commit_output(self):
+        """
+        Sends best-so-far results forward
+        """
+        self.Outputs.explanations.send(self.explanations)
 
     def cancel(self):
         """
