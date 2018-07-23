@@ -7,7 +7,7 @@ import time
 
 from AnyQt.QtWidgets import (
     QApplication, QFormLayout, QTableView,  QSplitter)
-from AnyQt.QtCore import Qt, QThread, pyqtSlot, QMetaObject, Q_ARG
+from AnyQt.QtCore import Qt, QThread, pyqtSlot, QMetaObject, Q_ARG, QAbstractProxyModel
 import numpy as np
 from numpy.random import RandomState
 import scipy.stats as st
@@ -59,7 +59,7 @@ class ExplainPredictions:
     min_iter : int
         minimum number of iterations per attiribute
     seed : int
-        seed for the numpy.random generator, default is 667892
+        seed for the numpy.random generator, default is 42
 
     Returns:
     -------
@@ -70,7 +70,7 @@ class ExplainPredictions:
 
     """
 
-    def __init__(self, data, model, p_val=0.05, error=0.05, batch_size=500, max_iter=100000, min_iter=1000, seed=667892):
+    def __init__(self, data, model, p_val=0.05, error=0.05, batch_size=500, max_iter=100000, min_iter=1000, seed=42):
         self.model = model
         self.data = data
         self.p_val = p_val
@@ -80,6 +80,14 @@ class ExplainPredictions:
         self.min_iter = min_iter
         self.atr_names = [var.name for var in data.domain.attributes]
         self.seed = seed
+        #variables, saved for possible restart
+        self.saved = False
+        self.steps = None
+        self.mu = None
+        self.M2 = None
+        self.expl = None
+        self.var = None
+        self.iterations_reached = None
 
     def tile_instance(self, instance):
         tiled_x = np.tile(instance._x, (self.batch_size, 1))
@@ -87,17 +95,22 @@ class ExplainPredictions:
         tiled_y = np.tile(instance._y, (self.batch_size, 1))
         return Table.from_numpy(instance.domain, tiled_x, tiled_y, tiled_metas)
 
+    def initArrays(self, no_atr):
+        if not self.saved:
+            self.saved = True
+            self.steps = np.zeros((1, no_atr), dtype=float)
+            self.mu = np.zeros((1, no_atr), dtype=float)
+            self.M2 = np.zeros((1, no_atr), dtype=float)
+            self.expl = np.zeros((1, no_atr), dtype=float)
+            self.var = np.ones((1, no_atr), dtype=float)
+            self.iterations_reached = np.zeros((1, no_atr))
+
     def anytime_explain(self, instance, callback=None, update_func=None, update_prediction=None):
         data_rows, no_atr = self.data.X.shape
         class_value = self.model(instance)[0]
         prng = RandomState(self.seed)
 
-        # placeholders
-        steps = np.zeros((1, no_atr), dtype=float)
-        mu = np.zeros((1, no_atr), dtype=float)
-        M2 = np.zeros((1, no_atr), dtype=float)
-        expl = np.zeros((1, no_atr), dtype=float)
-        var = np.ones((1, no_atr), dtype=float)
+        self.initArrays(no_atr)
 
         batch_mx_size = self.batch_size * no_atr
         z_sq = abs(st.norm.ppf(self.p_val/2))**2
@@ -105,7 +118,6 @@ class ExplainPredictions:
         tiled_inst = self.tile_instance(instance)
         inst1 = copy.deepcopy(tiled_inst)
         inst2 = copy.deepcopy(tiled_inst)
-        iterations_reached = np.zeros((1, no_atr))
 
         worst_case = self.max_iter*no_atr
         time_point = time.time()
@@ -119,24 +131,27 @@ class ExplainPredictions:
             update_prediction(class_value)
 
         def create_res_table():
-            expl_scaled = (expl[0, :]/steps[0, :]).reshape(1, -1)
+            nonzero = self.steps != 0
+            expl_scaled = (self.expl[nonzero]/self.steps[nonzero]).reshape(1, -1)
             # creating return array
             ordered = np.argsort(expl_scaled[0])[::-1]
             ips = np.hstack((expl_scaled.T, np.sqrt(
-                z_sq * var[0, :] / steps[0, :]).reshape(-1, 1)))
-            ips[np.isinf(ips)] = np.nan
+                z_sq * self.var[nonzero] / self.steps[nonzero]).reshape(-1, 1)))
             table = Table.from_numpy(domain, ips,
-                                     metas=np.asarray(self.atr_names).reshape(-1, 1))
+                                     metas=np.asarray(self.atr_names)[nonzero[0]].reshape(-1, 1))
             table.X = table.X[ordered]
             table.metas = table.metas[ordered]
             return table
 
-        while not(all(iterations_reached[0, :] > self.max_iter)):
-            if not(any(iterations_reached[0, :] > self.max_iter)):
+        while not(all(self.iterations_reached[0, :] > self.max_iter)):
+            prog = 1 - np.sum(self.max_iter - self.iterations_reached)/worst_case
+            if (callback(int(prog*100))):
+                break
+            if not(any(self.iterations_reached[0, :] > self.max_iter)):
                 a = np.argmax(prng.multinomial(
-                    1, pvals=(var[0, :]/(np.sum(var[0, :])))))
+                    1, pvals=(self.var[0, :]/(np.sum(self.var[0, :])))))
             else:
-                a = np.argmin(iterations_reached[0, :])
+                a = np.argmin(self.iterations_reached[0, :])
 
             perm = (prng.random_sample(batch_mx_size).reshape(
                 self.batch_size, no_atr)) > 0.5
@@ -152,19 +167,15 @@ class ExplainPredictions:
             f2 = self._get_predictions(inst2, class_value)
 
             diff = np.sum(f1 - f2)
-            expl[0, a] += diff
+            self.expl[0, a] += diff
 
             # update variance
-            steps[0, a] += self.batch_size
-            iterations_reached[0, a] += self.batch_size
-            d = diff - mu[0, a]
-            mu[0, a] += d / steps[0, a]
-            M2[0, a] += d * (diff - mu[0, a])
-            var[0, a] = M2[0, a] / (steps[0, a] - 1)
-
-            prog = 1 - np.sum(self.max_iter - iterations_reached)/worst_case
-            if (callback(int(prog*100))):
-                break
+            self.steps[0, a] += self.batch_size
+            self.iterations_reached[0, a] += self.batch_size
+            d = diff - self.mu[0, a]
+            self.mu[0, a] += d / self.steps[0, a]
+            self.M2[0, a] += d * (diff - self.mu[0, a])
+            self.var[0, a] = self.M2[0, a] / (self.steps[0, a] - 1)
 
             if time.time() - time_point > 1:
                 update_table = True
@@ -175,9 +186,9 @@ class ExplainPredictions:
                 update_func(create_res_table())
 
             # exclude from sampling if necessary
-            needed_iter = z_sq * var[0, a] / (self.error**2)
-            if (needed_iter <= steps[0, a]) and (steps[0, a] >= self.min_iter) or (steps[0, a] > self.max_iter):
-                iterations_reached[0, a] = self.max_iter + 1
+            needed_iter = z_sq * self.var[0, a] / (self.error**2)
+            if (needed_iter <= self.steps[0, a]) and (self.steps[0, a] >= self.min_iter) or (self.steps[0, a] > self.max_iter):
+                self.iterations_reached[0, a] = self.max_iter + 1
 
         return class_value, create_res_table()
 
@@ -221,6 +232,7 @@ class OWExplainPred(OWWidget):
         self.model = None
         self.to_explain = None
         self.explanations = None
+        self.stop = True
 
         self._task = None
         self._executor = ThreadExecutor()
@@ -229,11 +241,12 @@ class OWExplainPred(OWWidget):
                                    sortingEnabled=True,
                                    selectionMode=QTableView.NoSelection,
                                    focusPolicy=Qt.StrongFocus)
-        domain = Domain([], [ContinuousVariable("Score"),
-                             ContinuousVariable("Error")],
+        domain = Domain([ContinuousVariable("Score"),
+                         ContinuousVariable("Error")],
                         metas=[StringVariable(name="Feature")])
         self.placeholder_table_model = TableModel(
             Table.from_domain(domain), parent=None)
+
         self.dataview.setModel(self.placeholder_table_model)
 
         info_box = gui.vBox(self.controlArea, "Info")
@@ -269,10 +282,10 @@ class OWExplainPred(OWWidget):
 
         self.cancel_button = gui.button(self.controlArea,
                                         self,
-                                        "Stop computation",
-                                        callback=self.cancel,
+                                        "Stop Computation",
+                                        callback=self.toggle_button,
                                         autoDefault=True,
-                                        tooltip="Displays results so far, may not be as accurate.")
+                                        tooltip="Stops and restarts computation")
         self.cancel_button.setDisabled(True)
 
         predictions_box = gui.vBox(self.mainArea, "Model prediction")
@@ -287,14 +300,18 @@ class OWExplainPred(OWWidget):
         self.data = data
         self.explanations = None
         self.data_info.setText("Data: N/A")
+        self.e = None
         if data is not None:
             model = TableModel(data, parent=None)
-            self.data_info.setText("Data: " + str(data.X.shape[0])
-                                   + " instance(s) and "
-                                   + str(data.X.shape[1])
-                                   + " feature(s) and "
-                                   + str(data.metas.shape[1])
-                                   + "  meta attribute(s)")
+            if data.X.shape[0] == 1:
+                inst = "1 instance and "
+            else:
+                inst = str(data.X.shape[0]) + " instances and "
+            if data.X.shape[1] == 1:
+                feat = "1 feature "
+            else:
+                feat = str(data.X.shape[1]) + " features"
+            self.data_info.setText("Data: " + inst + feat)
 
     @Inputs.model
     def set_predictor(self, model):
@@ -302,6 +319,7 @@ class OWExplainPred(OWWidget):
         self.model = model
         self.model_info.setText("Model: N/A")
         self.explanations = None
+        self.e = None
         if model is not None:
             self.model_info.setText("Model: " + str(model.name))
 
@@ -318,10 +336,13 @@ class OWExplainPred(OWWidget):
                 self.to_explain = None
                 self.Error.sample_too_big()
             else:
-                self.sample_info.setText("Sample: " + str(sample.X.shape[1])
-                                         + " feature(s) and "
-                                         + str(sample.metas.shape[1])
-                                         + "  meta attribute(s)")
+                if sample.X.shape[1] == 1:
+                    feat = "1 feature"
+                else:
+                    feat = str(sample.X.shape[1]) + " features"
+                self.sample_info.setText("Sample: " + feat)
+                if self.e is not None:
+                    self.e.saved = False
 
     def handleNewSignals(self):
         if self._task is not None:
@@ -331,12 +352,17 @@ class OWExplainPred(OWWidget):
         self.dataview.setModel(self.placeholder_table_model)
         self.predict_info.setText("")
         self.Warning.unknowns_increased.clear()
+        self.stop = True
+        self.cancel_button.setText("Stop Computation")
+        self.commit_calc_or_output()
+
+    def commit_calc_or_output(self):
         if self.data is not None and self.to_explain is not None:
-            self.commit()
+            self.commit_calc()
         else:
             self.commit_output()
 
-    def commit(self):
+    def commit_calc(self):
         num_nan = np.count_nonzero(np.isnan(self.to_explain.X[0]))
 
         self.to_explain = self.to_explain.transform(self.data.domain)
@@ -344,43 +370,50 @@ class OWExplainPred(OWWidget):
             self.Warning.unknowns_increased()
         if self.model is not None:
             # calculate contributions
-            e = ExplainPredictions(self.data,
-                                   self.model,
-                                   batch_size=min(
-                                       len(self.data.X), 500),
-                                   p_val=self.gui_p_val,
-                                   error=self.gui_error)
+            if self.e is None:
+                self.e = ExplainPredictions(self.data,
+                                       self.model,
+                                       batch_size=min(
+                                           len(self.data.X), 500),
+                                       p_val=self.gui_p_val,
+                                       error=self.gui_error)
             self._task = task = Task()
 
-        def callback(progress):
-            nonlocal task
-            if task.canceled:
-                return True
-            # update progress bar
-            QMetaObject.invokeMethod(
-                self, "set_progress_value", Qt.QueuedConnection, Q_ARG(int, progress))
-            return False
+            def callback(progress):
+                nonlocal task
+                if task.canceled:
+                    return True
+                # update progress bar
+                QMetaObject.invokeMethod(
+                    self, "set_progress_value", Qt.QueuedConnection, Q_ARG(int, progress))
+                return False
 
-        def callback_update(table):
-            QMetaObject.invokeMethod(
-                self, "update_view", Qt.QueuedConnection, Q_ARG(Orange.data.Table, table))
+            def callback_update(table):
+                QMetaObject.invokeMethod(
+                    self, "update_view", Qt.QueuedConnection, Q_ARG(Orange.data.Table, table))
 
-        def callback_prediction(class_value):
-            QMetaObject.invokeMethod(
-                self, "update_model_prediction", Qt.QueuedConnection, Q_ARG(float, class_value))
+            def callback_prediction(class_value):
+                QMetaObject.invokeMethod(
+                    self, "update_model_prediction", Qt.QueuedConnection, Q_ARG(float, class_value))
 
-        explain_func = partial(
-            e.anytime_explain, self.to_explain[0], callback=callback, update_func=callback_update, update_prediction=callback_prediction)
-        task.future = self._executor.submit(explain_func)
-        task.watcher = FutureWatcher(task.future)
-        task.watcher.done.connect(self._task_finished)
-        self.cancel_button.setDisabled(False)
-        self.progressBarInit(processEvents=None)
+            self.was_canceled = False
+            explain_func = partial(
+                self.e.anytime_explain, self.to_explain[0], callback=callback, update_func=callback_update, update_prediction=callback_prediction)
+            task.future = self._executor.submit(explain_func)
+            task.watcher = FutureWatcher(task.future)
+            task.watcher.done.connect(self._task_finished)
+            self.cancel_button.setDisabled(False)
+            self.progressBarInit(processEvents=None)
 
     @pyqtSlot(Orange.data.Table)
     def update_view(self, table):
         self.explanations = table
-        self.dataview.setModel(TableModel(table, parent=None))
+        model = TableModel(table, parent=None)
+        header = self.dataview.horizontalHeader()
+        model.sort(
+            header.sortIndicatorSection(),
+            header.sortIndicatorOrder())
+        self.dataview.setModel(model)
         self.commit_output()
 
     @pyqtSlot(float)
@@ -406,7 +439,9 @@ class OWExplainPred(OWWidget):
 
         self._task = None
         self.progressBarFinished(processEvents=False)
-        self.cancel_button.setDisabled(True)
+
+        if not self.was_canceled:
+            self.cancel_button.setDisabled(True)
 
         try:
             results = f.result()
@@ -421,13 +456,29 @@ class OWExplainPred(OWWidget):
             self.explanations = results[1]
             self.commit_output()
             model = TableModel(self.explanations, parent=None)
+            header = self.dataview.horizontalHeader()
+            model.sort(
+            header.sortIndicatorSection(),
+            header.sortIndicatorOrder())
             self.dataview.setModel(model)
+
+
 
     def commit_output(self):
         """
         Sends best-so-far results forward
         """
         self.Outputs.explanations.send(self.explanations)
+
+    def toggle_button(self):
+        if self.stop :
+            self.stop = False
+            self.cancel_button.setText("Restart Computation")
+            self.cancel()
+        else:
+            self.stop = True
+            self.cancel_button.setText("Stop Computation")
+            self.commit_calc_or_output()
 
     def cancel(self):
         """
@@ -438,6 +489,7 @@ class OWExplainPred(OWWidget):
             assert self._task.future.done()
             # disconnect the `_task_finished` slot
             self._task.watcher.done.disconnect(self._task_finished)
+            self.was_canceled = True
             self._task_finished(self._task.future)
 
     def _print_prediction(self, class_value):
