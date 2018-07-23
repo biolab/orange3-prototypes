@@ -508,10 +508,12 @@ class OWExplainPred(OWWidget):
 
     def _update_error_spin(self):
         self.cancel()
+        self.e = None
         self.handleNewSignals()
 
     def _update_p_val_spin(self):
         self.cancel()
+        self.e = None
         self.handleNewSignals()
 
     def onDeleteWidget(self):
