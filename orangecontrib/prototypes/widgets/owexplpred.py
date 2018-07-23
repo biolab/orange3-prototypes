@@ -104,6 +104,8 @@ class ExplainPredictions:
             self.expl = np.zeros((1, no_atr), dtype=float)
             self.var = np.ones((1, no_atr), dtype=float)
             self.iterations_reached = np.zeros((1, no_atr))
+        else:
+            self.iterations_reached = np.copy(self.steps)
 
     def anytime_explain(self, instance, callback=None, update_func=None, update_prediction=None):
         data_rows, no_atr = self.data.X.shape
@@ -233,6 +235,7 @@ class OWExplainPred(OWWidget):
         self.to_explain = None
         self.explanations = None
         self.stop = True
+        self.e = None
 
         self._task = None
         self._executor = ThreadExecutor()
@@ -258,7 +261,7 @@ class OWExplainPred(OWWidget):
         self.error_spin = gui.spin(criteria_box,
                                    self,
                                    "gui_error",
-                                   0,
+                                   0.01,
                                    1,
                                    step=0.01,
                                    label="Error < ",
@@ -270,7 +273,7 @@ class OWExplainPred(OWWidget):
         self.p_val_spin = gui.spin(criteria_box,
                                    self,
                                    "gui_p_val",
-                                   0,
+                                   0.01,
                                    1,
                                    step=0.01,
                                    label="Error p-value < ",
@@ -508,12 +511,14 @@ class OWExplainPred(OWWidget):
 
     def _update_error_spin(self):
         self.cancel()
-        self.e = None
+        if self.e is not None:
+            self.e.error = self.gui_error
         self.handleNewSignals()
 
     def _update_p_val_spin(self):
         self.cancel()
-        self.e = None
+        if self.e is not None:
+            self.e.p_val = self.gui_p_val
         self.handleNewSignals()
 
     def onDeleteWidget(self):
