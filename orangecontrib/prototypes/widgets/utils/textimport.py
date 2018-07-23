@@ -35,7 +35,7 @@ from collections import defaultdict
 
 import typing
 from typing import (
-    List, Tuple, Dict, Iterator, Optional, Any, Union
+    List, Tuple, Dict, Iterator, Optional, Any, Union, Callable
 )
 
 from PyQt5.QtCore import (
@@ -50,9 +50,9 @@ from PyQt5.QtGui import (
 )
 from PyQt5.QtWidgets import (
     QWidget, QComboBox, QFormLayout, QHBoxLayout, QVBoxLayout, QLineEdit,
-    QHeaderView, QFrame, QTableView, QMenu, QAction, QActionGroup,
+    QHeaderView, QFrame, QTableView, QMenu, QLabel, QAction, QActionGroup,
     QStyleOptionFrame, QStyle, QStyledItemDelegate, QStyleOptionViewItem,
-    QApplication, QAbstractItemView, QToolTip, QStyleOption,
+    QApplication, QAbstractItemView, QToolTip, QStyleOption
 )
 
 __all__ = ["ColumnType", "RowSpec", "CSVOptionsWidget", "CSVImportWidget"]
@@ -544,6 +544,41 @@ class CSVImportWidget(QWidget):
         layout.addWidget(self.optionswidget)
         form = self.optionswidget.layout()
         assert isinstance(form, QFormLayout)
+        number_sep_layout = QHBoxLayout()
+        self.grouping_sep_edit_cb = TextEditCombo(
+            editable=True, objectName="grouping-separator-combo-box",
+            toolTip="Thousands group separator",
+            minimumContentsLength=1,
+            sizeAdjustPolicy=QComboBox.AdjustToMinimumContentsLength
+        )
+        # TODO: Render space and empty string as SPACE and NONE
+        # TODO: Treat all space (THIN SPACE, NO-BREAK SPACE, ...) the same?
+        # for now only allow a limited set
+        self.grouping_sep_edit_cb.addItems(["", ".", ",", " ", "'"])
+        self.grouping_sep_edit_cb.setValidator(
+            QRegExpValidator(QRegExp(r"(\.|,| |')?"), self)
+        )
+        self.grouping_sep_edit_cb.activated[str].connect(
+            self.__group_sep_activated)
+
+        self.decimal_sep_edit_cb = TextEditCombo(
+            editable=True, objectName="decimal-separator-combo-box",
+            toolTip="Decimal separator",
+            minimumContentsLength=1,
+            sizeAdjustPolicy=QComboBox.AdjustToMinimumContentsLength
+        )
+        self.decimal_sep_edit_cb.setValidator(
+            QRegExpValidator(QRegExp(r"(\.|,)"), self))
+        self.decimal_sep_edit_cb.addItems([".", ","])
+        self.decimal_sep_edit_cb.activated[str].connect(
+            self.__decimal_sep_activated)
+
+        number_sep_layout.addWidget(QLabel("Grouping:"))
+        number_sep_layout.addWidget(self.grouping_sep_edit_cb)
+        number_sep_layout.addWidget(QLabel("Decimal:"))
+        number_sep_layout.addWidget(self.decimal_sep_edit_cb)
+        number_sep_layout.addStretch(10)
+        form.addRow("Number separators:", number_sep_layout)
 
         self.column_type_edit_cb = QComboBox(
             enabled=False, objectName="column-type-edit-combo-box"
@@ -611,6 +646,71 @@ class CSVImportWidget(QWidget):
         # type: () -> str
         """Return the curent text encoding."""
         return self.optionswidget.encoding()
+
+    def setNumbersFormat(self, groupsep, decimalsep):
+        changed = False
+
+        if groupsep != self.grouping_sep_edit_cb.text():
+            self.grouping_sep_edit_cb.setText(groupsep)
+            changed = True
+
+        if decimalsep != self.grouping_sep_edit_cb.text():
+            self.decimal_sep_edit_cb.setText(decimalsep)
+            changed = True
+
+        if changed:
+            self.__update_numbers_format()
+            self.optionsChanged.emit()
+
+    def numbersFormat(self):
+        group = self.grouping_sep_edit_cb.text()
+        decimal = self.decimal_sep_edit_cb.text()
+        return {"group": group, "decimal": decimal}
+
+    def __decimal_sep_activated(self, sep):
+        group_sep = self.grouping_sep_edit_cb.text()
+        preferred_replace = {".": ",", ",": "."}
+        if sep == group_sep and sep in preferred_replace:
+            self.grouping_sep_edit_cb.setText(preferred_replace[sep])
+        elif sep == group_sep:
+            cb = self.grouping_sep_edit_cb
+            cb.setCurrentIndex((cb.currentIndex() + 1) % cb.count())
+
+        self.__update_numbers_format()
+        self.optionsEdited.emit()
+        self.optionsChanged.emit()
+
+    def __group_sep_activated(self, sep):
+        decimal_sep = self.decimal_sep_edit_cb.text()
+        preferred_replace = {".": ",", ",": "."}
+        if sep == decimal_sep and sep in preferred_replace:
+            self.decimal_sep_edit_cb.setText(preferred_replace[sep])
+        elif sep == decimal_sep:
+            cb = self.decimal_sep_edit_cb
+            cb.setCurrentIndex((cb.currentIndex() + 1) % cb.count())
+        self.__update_numbers_format()
+
+        self.optionsEdited.emit()
+        self.optionsChanged.emit()
+
+    def __update_numbers_format(self):
+        groupsep = self.grouping_sep_edit_cb.text()
+        decimalsep = self.decimal_sep_edit_cb.text()
+
+        model = self.__previewmodel
+        if model is None:
+            return
+        parser = number_parser(groupsep, decimalsep)
+
+        # update the delegates
+        view = self.dataview
+        for i in range(model.columnCount()):
+            coltype = model.headerData(
+                i, Qt.Horizontal, TablePreviewModel.ColumnTypeRole)
+            if coltype == ColumnType.Numeric:
+                # delegate = dataview.itemDelegateForColumn(i)
+                delegate = ColumnValidateItemDelegate(view, converter=parser)
+                view.setItemDelegateForColumn(i, delegate)
 
     def columnTypes(self):
         # type: () -> Dict[int, ColumnType]
@@ -911,10 +1011,12 @@ class CSVImportWidget(QWidget):
         # type: (List[int], ColumnType) -> None
         view = self.dataview
         model = view.model()  # type: QAbstractTableModel
-
+        numbersformat = self.numbersFormat()
+        numberconverter = number_parser(
+            numbersformat["group"], numbersformat["decimal"])
         if coltype == ColumnType.Numeric:
             delegate = ColumnValidateItemDelegate(self.dataview,
-                                                  converter=float)
+                                                  converter=numberconverter)
         elif coltype == ColumnType.Text:
             delegate = ColumnValidateItemDelegate(self.dataview,
                                                   converter=str.strip)
@@ -1252,6 +1354,19 @@ class ColumnValidateItemDelegate(PreviewItemDelegate):
             return False
         else:
             return True
+
+
+def number_parser(groupsep, decimalsep):
+    # type: (str, str) -> Callable[[str], float]
+    if groupsep == "" and decimalsep == ".":
+        return float
+    elif groupsep == "":
+        return lambda value: float(value.replace(decimalsep, "."))
+    elif decimalsep != groupsep and decimalsep != "" and groupsep != "":
+        table = {ord(groupsep): None, ord(decimalsep): ord(".")}
+        return lambda value: float(value.translate(table))
+    else:
+        return float
 
 
 class TablePreviewModel(QAbstractTableModel):
