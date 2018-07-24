@@ -163,7 +163,8 @@ class LinePlotViewBox(ViewBox):
                     p2 = self.childGroup.mapFromParent(event.pos())
                     self.graph.select_by_line(p1, p2)
                 else:
-                    self.update_selection_line(event.buttonDownPos(), event.pos())
+                    self.update_selection_line(
+                        event.buttonDownPos(), event.pos())
         elif self.graph.state == ZOOMING or self.graph.state == PANNING:
             event.ignore()
             super().mouseDragEvent(event, axis=axis)
