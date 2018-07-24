@@ -404,11 +404,11 @@ class OWExplainPred(OWWidget):
             explain_func = partial(
                 self.e.anytime_explain, self.to_explain[0], callback=callback, update_func=callback_update, update_prediction=callback_prediction)
 
+            self.progressBarInit(processEvents=None)
             task.future = self._executor.submit(explain_func)
             task.watcher = FutureWatcher(task.future)
             task.watcher.done.connect(self._task_finished)
             self.cancel_button.setDisabled(False)
-            self.progressBarInit(processEvents=None)
 
     @pyqtSlot(Orange.data.Table)
     def update_view(self, table):
