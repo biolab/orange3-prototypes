@@ -6,7 +6,7 @@ from functools import partial
 import time
 
 from AnyQt.QtWidgets import (
-    QApplication, QFormLayout, QTableView,  QSplitter)
+    QApplication, QFormLayout, QTableView,  QSplitter, QHeaderView)
 from AnyQt.QtCore import Qt, QThread, pyqtSlot, QMetaObject, Q_ARG, QAbstractProxyModel
 import numpy as np
 from numpy.random import RandomState
@@ -222,7 +222,7 @@ class OWExplainPred(OWWidget):
         explanations = Output("Explanations", Table)
 
     class Error(OWWidget.Error):
-        sample_too_big = widget.Msg("Too many samples to explain.")
+        sample_too_big = widget.Msg("Can only explain one sample at the time.")
 
     class Warning(OWWidget.Warning):
         unknowns_increased = widget.Msg(
@@ -244,6 +244,10 @@ class OWExplainPred(OWWidget):
                                    sortingEnabled=True,
                                    selectionMode=QTableView.NoSelection,
                                    focusPolicy=Qt.StrongFocus)
+
+        self.dataview.sortByColumn(1, Qt.DescendingOrder)
+        self.dataview.horizontalHeader().setResizeMode(QHeaderView.Stretch)
+
         domain = Domain([ContinuousVariable("Score"),
                          ContinuousVariable("Error")],
                         metas=[StringVariable(name="Feature")])
