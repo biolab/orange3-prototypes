@@ -382,6 +382,7 @@ class OWExplainPred(OWWidget):
                                        error=self.gui_error)
             self._task = task = Task()
 
+
             def callback(progress):
                 nonlocal task
                 if task.canceled:
@@ -402,6 +403,7 @@ class OWExplainPred(OWWidget):
             self.was_canceled = False
             explain_func = partial(
                 self.e.anytime_explain, self.to_explain[0], callback=callback, update_func=callback_update, update_prediction=callback_prediction)
+
             task.future = self._executor.submit(explain_func)
             task.watcher = FutureWatcher(task.future)
             task.watcher.done.connect(self._task_finished)
@@ -456,14 +458,7 @@ class OWExplainPred(OWWidget):
             for key in self.results.keys():
                 self.results[key] = None
         else:
-            self.explanations = results[1]
-            self.commit_output()
-            model = TableModel(self.explanations, parent=None)
-            header = self.dataview.horizontalHeader()
-            model.sort(
-            header.sortIndicatorSection(),
-            header.sortIndicatorOrder())
-            self.dataview.setModel(model)
+            self.update_view(results[1])
 
 
 
