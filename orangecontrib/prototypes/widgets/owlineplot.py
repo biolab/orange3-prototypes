@@ -480,7 +480,7 @@ class OWLinePlot(OWWidget):
         self.__groups = []
         X = np.arange(1, len(self.graph_variables) + 1)
         if self.group_var is None:
-            self.__plot_mean_with_error(X, self.data[:, self.graph_variables])
+            self.__plot_group(X, self.data[:, self.graph_variables])
         else:
             class_col_data, _ = self.data.get_column_view(self.group_var)
             group_indices = [np.flatnonzero(class_col_data == i)
@@ -490,23 +490,29 @@ class OWLinePlot(OWWidget):
                     self.__groups.append(None)
                 else:
                     group_data = self.data[indices, self.graph_variables]
-                    self.__plot_mean_with_error(X, group_data, index)
+                    self.__plot_group(X, group_data, index)
 
-    def __plot_mean_with_error(self, X, data, index=None):
-        pen = QPen(self.__get_line_color(None, index), 4)
-        pen.setCosmetic(True)
+    def __plot_group(self, X, data, index=None):
+        p = QPen(self.__get_line_color(None, index), LinePlotStyle.MEAN_WIDTH)
+        p.setCosmetic(True)
         mean = np.nanmean(data.X, axis=0)
-        mean_curve = pg.PlotDataItem(x=X, y=mean, pen=pen, symbol="o",
-                                     symbolSize=5, antialias=True)
+        mean_curve = self.get_mean_curve(X, mean, p)
+        error_bar = self.get_error_bar(X, data, mean)
         self.graph.addItem(mean_curve)
+        self.graph.addItem(error_bar)
+        self.__groups.append(namespace(mean=mean_curve,
+                                       error_bar=error_bar))
 
+    @staticmethod
+    def get_mean_curve(X, mean, pen):
+        return pg.PlotDataItem(x=X, y=mean, pen=pen, antialias=True)
+
+    @staticmethod
+    def get_error_bar(X, data, mean):
         q1, q2, q3 = np.nanpercentile(data.X, [25, 50, 75], axis=0)
         bottom = np.clip(mean - q1, 0, mean - q1)
         top = np.clip(q3 - mean, 0, q3 - mean)
-        error_bar = pg.ErrorBarItem(x=X, y=mean, bottom=bottom,
-                                    top=top, beam=0.01)
-        self.graph.addItem(error_bar)
-        self.__groups.append(namespace(mean=mean_curve, error_bar=error_bar))
+        return pg.ErrorBarItem(x=X, y=mean, bottom=bottom, top=top, beam=0.01)
 
     def __update_visibility(self):
         self.__update_visibility_profiles()
