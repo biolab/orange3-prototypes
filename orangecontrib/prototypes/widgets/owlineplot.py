@@ -55,10 +55,22 @@ def line_segments_line_intersect(p1, p2, item):
     return False
 
 
-class LinePlotColors:
-    LIGHT_ALPHA = 120
+class LinePlotStyle:
     DEFAULT_COLOR = QColor(Qt.darkGray)
-    SELECTION_LINE = QColor(Qt.black)
+    SELECTION_LINE_COLOR = QColor(Qt.black)
+    SELECTION_LINE_WIDTH = 2
+
+    MEAN_WIDTH = 5
+    MEAN_ALPHA = 255
+    LIGHT_MEAN_ALPHA = 120
+
+    UNSELECTED_LINE_WIDTH = 1
+    UNSELECTED_LINE_ALPHA = 60
+
+    SELECTED_LINE_WIDTH = 2
+    SELECTED_LINE_ALPHA = 255
+
+    RANGE_ALPHA = 30
 
     def __call__(self, n):
         return ColorPaletteGenerator(n)
@@ -66,8 +78,8 @@ class LinePlotColors:
 
 class LinePlotItem(pg.PlotCurveItem):
     def __init__(self, index, instance_id, x, y, color):
-        color.setAlpha(LinePlotColors.LIGHT_ALPHA)
-        pen = QPen(color, 1)
+        color.setAlpha(LinePlotStyle.UNSELECTED_LINE_ALPHA)
+        pen = QPen(color, LinePlotStyle.UNSELECTED_LINE_WIDTH)
         pen.setCosmetic(True)
         super().__init__(x=x, y=y, pen=pen, pxMode=True, antialias=True)
         self._selected = False
@@ -101,22 +113,21 @@ class LinePlotItem(pg.PlotCurveItem):
         pen = QPen(self._pen)
         if self._in_subset and self._selected:
             color = QColor(self._pen.color())
-            color.setAlpha(255)
-            pen.setWidth(4)
-            pen.setColor(color)
+            color.setAlpha(LinePlotStyle.SELECTED_LINE_ALPHA)
+            pen.setWidth(LinePlotStyle.SELECTED_LINE_WIDTH)
         elif not self._in_subset and self._selected:
             color = QColor(self._pen.color())
-            color.setAlpha(255)
-            pen.setColor(color)
+            color.setAlpha(LinePlotStyle.SELECTED_LINE_ALPHA)
+            pen.setWidth(LinePlotStyle.SELECTED_LINE_WIDTH)
         elif self._in_subset and not self._selected:
             color = QColor(self._pen.color())
-            color.setAlpha(LinePlotColors.LIGHT_ALPHA)
-            pen.setWidth(4)
-            pen.setColor(color)
+            color.setAlpha(LinePlotStyle.SELECTED_LINE_ALPHA)
+            pen.setWidth(LinePlotStyle.UNSELECTED_LINE_WIDTH)
         else:
             color = QColor(self._pen.color())
-            color.setAlpha(LinePlotColors.LIGHT_ALPHA)
-            pen.setColor(color)
+            color.setAlpha(LinePlotStyle.UNSELECTED_LINE_ALPHA)
+            pen.setWidth(LinePlotStyle.UNSELECTED_LINE_WIDTH)
+        pen.setColor(color)
         self.setPen(pen)
 
 
@@ -126,7 +137,8 @@ class LinePlotViewBox(ViewBox):
         self.graph = graph
         self.setMouseMode(self.PanMode)
 
-        pen = mkPen(LinePlotColors.SELECTION_LINE, width=2)
+        pen = mkPen(LinePlotStyle.SELECTION_LINE_COLOR,
+                    width=LinePlotStyle.SELECTION_LINE_WIDTH)
         self.selection_line = QGraphicsLineItem()
         self.selection_line.setPen(pen)
         self.selection_line.setZValue(1e9)
@@ -539,14 +551,14 @@ class OWLinePlot(OWWidget):
         self.graph.select(self.selection)
 
     def __get_line_color(self, data_index=None, mean_index=None):
-        color = QColor(LinePlotColors.DEFAULT_COLOR)
+        color = QColor(LinePlotStyle.DEFAULT_COLOR)
         if self.group_var is not None:
             if data_index is not None:
                 value = self.data[data_index][self.group_var]
                 if np.isnan(value):
                     return color
             index = int(value) if data_index is not None else mean_index
-            color = LinePlotColors()(len(self.group_var.values))[index]
+            color = LinePlotStyle()(len(self.group_var.values))[index]
         return color.darker(110) if data_index is None else color
 
     def commit(self):
