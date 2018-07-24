@@ -343,7 +343,7 @@ class OWLinePlot(OWWidget):
         self.commit()
 
     def sizeHint(self):
-        return QSize(800, 600)
+        return QSize(1000, 562)
 
     def clear(self):
         """
