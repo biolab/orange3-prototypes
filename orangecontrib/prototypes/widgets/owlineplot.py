@@ -2,6 +2,7 @@ import sys
 from enum import IntEnum
 from types import SimpleNamespace as namespace
 from collections import namedtuple
+from xml.sax.saxutils import escape
 
 import numpy as np
 
@@ -20,6 +21,9 @@ from Orange.widgets.utils.annotated_data import (create_annotated_table,
 from Orange.widgets.utils.colorpalette import ColorPaletteGenerator
 from Orange.widgets.utils.itemmodels import DomainModel
 from Orange.widgets.utils.plot import OWPlotGUI, SELECT, PANNING, ZOOMING
+from Orange.widgets.visualize.owdistributions import (
+    LegendItem, ScatterPlotItem
+)
 from Orange.widgets.widget import OWWidget, Input, Output, Msg
 
 
@@ -308,6 +312,11 @@ class OWLinePlot(OWWidget):
         self.graph.setRenderHint(QPainter.Antialiasing, True)
         self.mainArea.layout().addWidget(self.graph)
 
+        self._legend = LegendItem()
+        self._legend.setParentItem(self.graph.getPlotItem().vb)
+        self._legend.hide()
+        self._legend.anchor((1, 0), (1, 0))
+
     def box_zoom_select(self, parent):
         g = self.gui
         box_zoom_select = gui.vBox(parent, "Zoom/Select")
@@ -356,6 +365,7 @@ class OWLinePlot(OWWidget):
         self.infoLabel.setText("No data on input.")
         self.group_vars.set_domain(None)
         self.group_view.setEnabled(False)
+        self._legend.hide()
 
     @Inputs.data
     def set_data(self, data):
@@ -406,12 +416,14 @@ class OWLinePlot(OWWidget):
             self.subset_selection = intersection
             if self.__profiles is not None:
                 self.graph.select_subset(self.subset_selection)
+        if self.data is not None:
+            self.__update_visibility()
 
     def _setup_plot(self):
         """Setup the plot with new curve data."""
         if self.data is None:
             return
-        self.graph.reset()
+
         ticks = [[(i + 1, str(a)) for i, a in enumerate(self.graph_variables)]]
         self.graph.getAxis('bottom').setTicks(ticks)
         if self.display_index in (LinePlotDisplay.INSTANCES,
@@ -419,6 +431,18 @@ class OWLinePlot(OWWidget):
             self._plot_profiles()
         self._plot_groups()
         self.__update_visibility()
+        self._setup_legend()
+
+    def _setup_legend(self):
+        self._legend.clear()
+        if self.group_var:
+            for index, name in enumerate(self.group_var.values):
+                color = self.__get_line_color(None, index)
+                self._legend.addItem(
+                    ScatterPlotItem(pen=color, brush=color, size=10, shape="s"),
+                    escape(name)
+                )
+            self._legend.show()
 
     def _plot_profiles(self):
         X = np.arange(1, len(self.graph_variables) + 1)
@@ -500,6 +524,7 @@ class OWLinePlot(OWWidget):
         self.__color_profiles()
         self._plot_groups()
         self.__update_visibility()
+        self._setup_legend()
 
     def __color_profiles(self):
         if self.__profiles is not None:
