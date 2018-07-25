@@ -98,17 +98,25 @@ class Options:
         type inference.
     rowspec : List[Tuple[range, RowSpec]]
          A list of row spec ranges.
+    decimal_separator : str
+        Decimal separator - a single character string; default: `"."`
+    group_separator : str
+        Thousands group separator - empty or a single character string;
+        default: empty string
     """
     RowSpec = RowSpec
     ColumnType = ColumnType
 
     def __init__(self, encoding='utf-8', dialect=csv.excel(), columntypes=[],
-                 rowspec=[(range(0, 1), RowSpec.Header)]):
+                 rowspec=[(range(0, 1), RowSpec.Header)],
+                 decimal_separator=".", group_separator=""):
         # type: (str, csv.Dialect, List[Tuple[range, ColumnType]], ...) -> None
         self.encoding = encoding
         self.dialect = dialect
         self.columntypes = columntypes
         self.rowspec = rowspec  # type: List[Tuple[range, Options.RowSpec]]
+        self.decimal_separator = decimal_separator
+        self.group_separator = group_separator
 
     def __eq__(self, other):
         # type: (Options) -> bool
@@ -119,7 +127,9 @@ class Options:
             return (dialect_eq(self.dialect, other.dialect) and
                     self.encoding == other.encoding and
                     self.columntypes == other.columntypes and
-                    self.rowspec == other.rowspec)
+                    self.rowspec == other.rowspec and
+                    self.group_separator == other.group_separator and
+                    self.decimal_separator == other.decimal_separator)
         else:
             return NotImplemented
 
@@ -147,6 +157,8 @@ class Options:
             "quoting": self.dialect.quoting,
             "columntypes": Options.spec_as_encodable(self.columntypes),
             "rowspec": Options.spec_as_encodable(self.rowspec),
+            "decimal_separator": self.decimal_separator,
+            "group_separator": self.group_separator,
         }
 
     @staticmethod
@@ -170,7 +182,12 @@ class Options:
         rowspec = mapping["rowspec"]
         colspec = Options.spec_from_encodable(colspec, ColumnType)
         rowspec = Options.spec_from_encodable(rowspec, RowSpec)
-        return Options(encoding, dialect, colspec, rowspec)
+        decimal = mapping.get("decimal_separator", ".")
+        group = mapping.get("group_separator", "")
+
+        return Options(encoding, dialect, colspec, rowspec,
+                       decimal_separator=decimal,
+                       group_separator=group)
 
     @staticmethod
     def spec_as_encodable(spec):
@@ -235,6 +252,8 @@ class CSVImportDialog(QDialog):
         self._options = options
         self._optionswidget.setEncoding(options.encoding)
         self._optionswidget.setDialect(options.dialect)
+        self._optionswidget.setNumbersFormat(
+            options.group_separator, options.decimal_separator)
         self._optionswidget.setColumnTypeRanges(options.columntypes)
         self._optionswidget.setRowStates(
             {i: v for r, v in options.rowspec for i in r}
@@ -244,11 +263,14 @@ class CSVImportDialog(QDialog):
         # type: () -> Options
         rowspec_ = self._optionswidget.rowStates()
         rowspec = [(range(i, i + 1), v) for i, v in rowspec_.items()]
+        numformat = self._optionswidget.numbersFormat()
         return Options(
             encoding=self._optionswidget.encoding(),
             dialect=self._optionswidget.dialect(),
             columntypes=self._optionswidget.columnTypeRanges(),
-            rowspec=rowspec
+            rowspec=rowspec,
+            decimal_separator=numformat["decimal"],
+            group_separator=numformat["group"],
         )
 
     def setPath(self, path):
@@ -1068,6 +1090,14 @@ def load_csv(path, opts, progres_callback=None):
     if not skiprows:
         skiprows = None
 
+    numbers_format_kwds = {}
+
+    if opts.decimal_separator != ".":
+        numbers_format_kwds["decimal"] = opts.decimal_separator
+
+    if opts.group_separator != "":
+        numbers_format_kwds["thousands"] = opts.group_separator
+
     with _open(path, 'rb') as f:
         file = TextReadWrapper(
             f, encoding=opts.encoding,
@@ -1078,7 +1108,7 @@ def load_csv(path, opts, progres_callback=None):
                 skipinitialspace=opts.dialect.skipinitialspace,
                 header=header, skiprows=skiprows,
                 dtype=dtypes, parse_dates=parse_dates, prefix=prefix,
-                na_values=["?", "."],
+                na_values=["?", "."], **numbers_format_kwds
             )
             if columns_ignored:
                 # TODO: use 'usecols' parameter in `read_csv` call to
