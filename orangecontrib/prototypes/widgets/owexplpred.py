@@ -95,7 +95,7 @@ class ExplainPredictions:
         tiled_y = np.tile(instance._y, (self.batch_size, 1))
         return Table.from_numpy(instance.domain, tiled_x, tiled_y, tiled_metas)
 
-    def initArrays(self, no_atr):
+    def init_arrays(self, no_atr):
         if not self.saved:
             self.saved = True
             self.steps = np.zeros((1, no_atr), dtype=float)
@@ -107,12 +107,24 @@ class ExplainPredictions:
         else:
             self.iterations_reached = np.copy(self.steps)
 
+    def get_atr_column(self, instance):
+        "somewhat ugly fix for printing values in column"
+        attr_values = []
+        var = instance.domain.attributes
+        for idx in range(len(var)):
+            if var[idx].is_discrete:
+                attr_values.append(str(var[idx].str_val(instance._x[idx])))
+            else:
+                attr_values.append(str(instance._x[idx]))
+        return np.asarray(attr_values).reshape(-1,1)
+
     def anytime_explain(self, instance, callback=None, update_func=None, update_prediction=None):
         data_rows, no_atr = self.data.X.shape
         class_value = self.model(instance)[0]
         prng = RandomState(self.seed)
 
-        self.initArrays(no_atr)
+        self.init_arrays(no_atr)
+        attr_values = self.get_atr_column(instance)
 
         batch_mx_size = self.batch_size * no_atr
         z_sq = abs(st.norm.ppf(self.p_val/2))**2
@@ -127,7 +139,7 @@ class ExplainPredictions:
 
         domain = Domain([ContinuousVariable("Score"),
                          ContinuousVariable("Error")],
-                        metas=[StringVariable(name="Feature")])
+                        metas=[StringVariable(name="Feature"), StringVariable(name = "Value")])
 
         if update_prediction is not None:
             update_prediction(class_value)
@@ -139,7 +151,8 @@ class ExplainPredictions:
             ips = np.hstack((expl_scaled.T, np.sqrt(
                 z_sq * self.var[nonzero] / self.steps[nonzero]).reshape(-1, 1)))
             table = Table.from_numpy(domain, ips,
-                                     metas=np.asarray(self.atr_names)[nonzero[0]].reshape(-1, 1))
+                                     metas=np.hstack((np.asarray(self.atr_names)[nonzero[0]].reshape(-1, 1),
+                                                        attr_values)))
             return table
 
         while not(all(self.iterations_reached[0, :] > self.max_iter)):
@@ -205,7 +218,7 @@ class OWExplainPred(OWWidget):
 
     name = "Explain Predictions"
     description = "Computes attribute contributions to the final prediction with an approximation algorithm for shapely value"
-    icon = "ExplainPredictions.svg"
+    icon = "icons/ExplainPredictions.svg"
     priority = 200
     gui_error = settings.Setting(0.05)
     gui_p_val = settings.Setting(0.05)
@@ -242,12 +255,12 @@ class OWExplainPred(OWWidget):
                                    selectionMode=QTableView.NoSelection,
                                    focusPolicy=Qt.StrongFocus)
 
-        self.dataview.sortByColumn(1, Qt.DescendingOrder)
+        self.dataview.sortByColumn(2, Qt.DescendingOrder)
         self.dataview.horizontalHeader().setResizeMode(QHeaderView.Stretch)
 
         domain = Domain([ContinuousVariable("Score"),
                          ContinuousVariable("Error")],
-                        metas=[StringVariable(name="Feature")])
+                        metas=[StringVariable(name="Feature"), StringVariable(name="Value")])
         self.placeholder_table_model = TableModel(
             Table.from_domain(domain), parent=None)
 
@@ -367,6 +380,7 @@ class OWExplainPred(OWWidget):
             self.commit_calc()
         else:
             self.commit_output()
+
 
     def commit_calc(self):
         num_nan = np.count_nonzero(np.isnan(self.to_explain.X[0]))
