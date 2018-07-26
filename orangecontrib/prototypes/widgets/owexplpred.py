@@ -136,13 +136,10 @@ class ExplainPredictions:
             nonzero = self.steps != 0
             expl_scaled = (self.expl[nonzero]/self.steps[nonzero]).reshape(1, -1)
             # creating return array
-            ordered = np.argsort(expl_scaled[0])[::-1]
             ips = np.hstack((expl_scaled.T, np.sqrt(
                 z_sq * self.var[nonzero] / self.steps[nonzero]).reshape(-1, 1)))
             table = Table.from_numpy(domain, ips,
                                      metas=np.asarray(self.atr_names)[nonzero[0]].reshape(-1, 1))
-            table.X = table.X[ordered]
-            table.metas = table.metas[ordered]
             return table
 
         while not(all(self.iterations_reached[0, :] > self.max_iter)):
@@ -208,7 +205,7 @@ class OWExplainPred(OWWidget):
 
     name = "Explain Predictions"
     description = "Computes attribute contributions to the final prediction with an approximation algorithm for shapely value"
-    #icon = "iconImage.png"
+    icon = "ExplainPredictions.svg"
     priority = 200
     gui_error = settings.Setting(0.05)
     gui_p_val = settings.Setting(0.05)
@@ -300,6 +297,8 @@ class OWExplainPred(OWWidget):
 
         self.mainArea.layout().addWidget(self.dataview)
 
+        self.resize(500, 281)
+
     @Inputs.data
     @check_sql_input
     def set_data(self, data):
@@ -389,11 +388,11 @@ class OWExplainPred(OWWidget):
 
             def callback(progress):
                 nonlocal task
-                if task.canceled:
-                    return True
                 # update progress bar
                 QMetaObject.invokeMethod(
                     self, "set_progress_value", Qt.QueuedConnection, Q_ARG(int, progress))
+                if task.canceled:
+                    return True
                 return False
 
             def callback_update(table):
@@ -447,7 +446,6 @@ class OWExplainPred(OWWidget):
         assert f.done()
 
         self._task = None
-        self.progressBarFinished(processEvents=False)
 
         if not self.was_canceled:
             self.cancel_button.setDisabled(True)
@@ -464,6 +462,7 @@ class OWExplainPred(OWWidget):
         else:
             self.update_view(results[1])
 
+        self.progressBarFinished(processEvents=False)
 
 
     def commit_output(self):
