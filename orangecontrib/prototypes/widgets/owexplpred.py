@@ -116,7 +116,7 @@ class ExplainPredictions:
                 attr_values.append(str(var[idx].str_val(instance._x[idx])))
             else:
                 attr_values.append(str(instance._x[idx]))
-        return np.asarray(attr_values).reshape(-1,1)
+        return np.asarray(attr_values)
 
     def anytime_explain(self, instance, callback=None, update_func=None, update_prediction=None):
         data_rows, no_atr = self.data.X.shape
@@ -152,7 +152,7 @@ class ExplainPredictions:
                 z_sq * self.var[nonzero] / self.steps[nonzero]).reshape(-1, 1)))
             table = Table.from_numpy(domain, ips,
                                      metas=np.hstack((np.asarray(self.atr_names)[nonzero[0]].reshape(-1, 1),
-                                                        attr_values)))
+                                                        attr_values[nonzero[0]].reshape(-1,1))))
             return table
 
         while not(all(self.iterations_reached[0, :] > self.max_iter)):
