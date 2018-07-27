@@ -9,10 +9,10 @@ from Orange.widgets.utils.sql import check_sql_input
 from Orange.widgets.widget import Input, Output
 
 
-class OWSelectSubset(widget.OWWidget):
-    name = "Select Subset"
-    description = "Select same instances"
-    icon = "icons/Unknown.svg"
+class OWSelectByDataIndex(widget.OWWidget):
+    name = "Select by Data Index"
+    description = "Match instances by index from data subset."
+    icon = "icons/SelectByDataIndex.svg"
     priority = 9999
 
     class Inputs:
@@ -87,7 +87,7 @@ class OWSelectSubset(widget.OWWidget):
 
 def main():
     app = QApplication([])
-    w = OWSelectSubset()
+    w = OWSelectByDataIndex()
     data = Orange.data.Table("iris.tab")
     data_subset = data[:20]
     w.set_data(data)
