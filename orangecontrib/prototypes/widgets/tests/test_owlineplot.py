@@ -5,7 +5,9 @@ import random
 from Orange.data import Table
 from Orange.widgets.tests.base import WidgetTest, WidgetOutputsTestMixin
 
-from orangecontrib.prototypes.widgets.owlineplot import OWLinePlot
+from orangecontrib.prototypes.widgets.owlineplot import (
+    OWLinePlot, LinePlotDisplay
+)
 
 
 class TestOWLinePLot(WidgetTest, WidgetOutputsTestMixin):
@@ -18,7 +20,8 @@ class TestOWLinePLot(WidgetTest, WidgetOutputsTestMixin):
         cls.signal_data = cls.data
 
     def setUp(self):
-        self.widget = self.create_widget(OWLinePlot)
+        settings = {"display_index": LinePlotDisplay.INSTANCES}
+        self.widget = self.create_widget(OWLinePlot, stored_settings=settings)
         self.titanic = Table("titanic")
         self.housing = Table("housing")
 
