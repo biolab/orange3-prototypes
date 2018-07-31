@@ -452,6 +452,7 @@ class OWLinePlot(OWWidget):
 
         ticks = [[(i + 1, str(a)) for i, a in enumerate(self.graph_variables)]]
         self.graph.getAxis('bottom').setTicks(ticks)
+        self.graph.getViewBox().enableAutoRange()
         if self.display_index in (LinePlotDisplay.INSTANCES,
                                   LinePlotDisplay.INSTANCES_WITH_MEAN):
             self._plot_profiles()
@@ -461,6 +462,7 @@ class OWLinePlot(OWWidget):
 
     def _setup_legend(self):
         self._legend.clear()
+        self._legend.hide()
         if self.group_var:
             for index, name in enumerate(self.group_var.values):
                 color = self.__get_line_color(None, index)
