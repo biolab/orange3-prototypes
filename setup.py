@@ -37,6 +37,7 @@ if __name__ == '__main__':
             "orangecontrib.prototypes.widgets": ["icons/*.svg"],
             "orangecontrib.prototypes.widgets.utils": ["_plotly/*"],
             "orangecontrib.prototypes.widgets": ["_owparallelcoordiantes/*"],
+            "orangecontrib.prototypes.widgets": ["data/*"]
         },
         install_requires=[
             'Orange3',
