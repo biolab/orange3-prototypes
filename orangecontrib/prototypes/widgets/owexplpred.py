@@ -310,7 +310,7 @@ class OWExplainPred(OWWidget):
 
         self.mainArea.layout().addWidget(self.dataview)
 
-        self.resize(500, 281)
+        self.resize(640, 480)
 
     @Inputs.data
     @check_sql_input
