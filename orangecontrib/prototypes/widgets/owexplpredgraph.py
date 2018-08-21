@@ -624,7 +624,7 @@ class GraphAttributes:
         '''header'''
         self.place_left(QGraphicsSimpleTextItem("attribute", None), -self.atr_area_h  - header_h/2)
         self.place_right(QGraphicsSimpleTextItem("value", None), -self.atr_area_h - header_h/2)
-        t = QGraphicsSimpleTextItem("attribute contributions", None)
+        t = QGraphicsSimpleTextItem("score", None)
         t.setPos(0, -self.atr_area_h  - header_h/2)
         self.scene.addItem(t)
         '''vertical line where x = 0'''
