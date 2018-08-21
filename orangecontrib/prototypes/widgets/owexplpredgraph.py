@@ -589,6 +589,7 @@ class GraphAttributes:
         '''placeholders'''
         self.atr_area_h = None
         self.atr_area_w = None
+        self.scale = None
 
 
 
@@ -605,35 +606,67 @@ class GraphAttributes:
         header_h : int
             space to be left on the top and the bottom of graph for header and scale
         '''
-        print (wp.height())
         self.atr_area_h = wp.height() - header_h
-        print (self.atr_area_h)
         self.atr_area_w = wp.width()
 
         coords = self.split_boxes_area(self.atr_area_h, 10, header_h)
-        print (coords)
         #filter vn abs max -> self.max_contrib
+        self.unit = self.get_scale()
+        unit_pixels = np.floor((self.atr_area_w - self.offset_x)/(self.max_contrib/self.unit))
+        self.scale = unit_pixels / self.unit
 
-        self.draw_header(header_h, wp)
+        self.draw_header_footer(header_h, wp, unit_pixels)
 
         for y in coords:
             atr_c = np.random.uniform(low=-0.40, high=0.40)
             self.draw_attribute(y, atr_name = "p_h", atr_val = "phh", atr_contrib = atr_c, error = 0.1)
 
-    def draw_header(self, header_h, wp):
+    def draw_header_footer(self, header_h, wp, unit_pixels, marking_len = 15):
         '''header'''
-        self.place_left(QGraphicsSimpleTextItem("attribute", None), -self.atr_area_h  - header_h/2)
-        self.place_right(QGraphicsSimpleTextItem("value", None), -self.atr_area_h - header_h/2)
-        t = QGraphicsSimpleTextItem("score", None)
-        t.setPos(0, -self.atr_area_h  - header_h/2)
-        self.scene.addItem(t)
+        atr_label = QGraphicsSimpleTextItem("Attribute", None)
+        val_label = QGraphicsSimpleTextItem("Value", None)
+        score_label = QGraphicsSimpleTextItem("Score", None)
+
+        font = score_label.font()
+        font.setBold(True)
+        font.setPointSize(15)
+        atr_label.setFont(font)
+        val_label.setFont(font)
+        score_label.setFont(font)
+
+        self.place_left(atr_label, -self.atr_area_h  - header_h/2)
+        self.place_right(val_label, -self.atr_area_h - header_h/2)
+
+        sc_x = score_label.boundingRect().width()
+        score_label.setPos(0 - sc_x/2, -self.atr_area_h  - header_h/2)
+        self.scene.addItem(score_label)
+
         '''vertical line where x = 0'''
         self.scene.addLine(0, -self.atr_area_h, 0, self.atr_area_h + header_h/2, self.black_pen)
-        '''scale'''
-        self.scene.addLine(-self.atr_area_w, self.atr_area_h + header_h/2, self.atr_area_w, self.atr_area_h + header_h/2, self.black_pen)
-
-
         
+        '''footer'''
+        line_y = self.atr_area_h + header_h/2
+        self.scene.addLine(-self.atr_area_w, line_y, self.atr_area_w, line_y, self.black_pen)
+        '''max, min'''
+        max_x = self.max_contrib * self.scale
+        self.scene.addLine(max_x, line_y, max_x, line_y + marking_len, self.black_pen)
+        self.scene.addLine(-max_x, line_y, -max_x, line_y + marking_len, self.black_pen)
+        for i in range(0, int(self.max_contrib / self.unit)):
+            x = unit_pixels * i 
+            self.scene.addLine(x, line_y, x, line_y + marking_len, self.black_pen)
+            self.scene.addLine(-x, line_y, -x, line_y + marking_len, self.black_pen)
+        
+    def get_scale(self):
+        '''figures out on what scale is max score (1, .1, .01)
+        TESTING NEEDED, maybe something more elegant.
+
+        '''
+        if self.max_contrib  > 1 : 
+            return 1
+        elif self.max_contrib > 0.1:
+            return 0.1
+        else :
+            return 0.01
 
     def draw_attribute(self, y, atr_name, atr_val, atr_contrib, error):
         self.scene.addLine(-self.atr_area_w + self.offset_x, y, self.atr_area_w - self.offset_x, y, self.gray_pen)
@@ -642,9 +675,8 @@ class GraphAttributes:
 
         if atr_name is not None and atr_val is not None and atr_contrib is not None:
             #calculations for scaling
-            unit_pixels = np.floor((self.atr_area_w - self.offset_x)/self.max_contrib)
-            atr_contrib_x = unit_pixels * atr_contrib
-            error_x = error * unit_pixels
+            atr_contrib_x = atr_contrib * self.scale
+            error_x = error * self.scale
 
             padded_rect = self.rect_height - 2 * self.offset_y
             len_rec = 2 * error_x
@@ -663,11 +695,13 @@ class GraphAttributes:
 
     def place_left(self, text, y):
         '''centriraj na sredino'''
-        text.setPos(-self.atr_area_w + self.offset_x/2, y)
+        to_center = text.boundingRect().width()
+        text.setPos(-self.atr_area_w + self.offset_x/2 - to_center, y)
         self.scene.addItem(text)
 
     def place_right(self, text, y):
-        text.setPos(self.atr_area_w - self.offset_x/2, y)
+        to_center = text.boundingRect().width()
+        text.setPos(self.atr_area_w - self.offset_x/2 - to_center, y)
         self.scene.addItem(text)
 
     def split_boxes_area(self, h, num_boxes, header_h):
