@@ -230,6 +230,7 @@ class OWExplainPred(OWWidget):
     priority = 200
     gui_error = settings.Setting(0.05)
     gui_p_val = settings.Setting(0.05)
+    gui_num_atr = settings.Setting(5)
 
     class Inputs:
         data = Input("Data", Table, default=True)
@@ -303,6 +304,17 @@ class OWExplainPred(OWWidget):
                                    callback=self._update_p_val_spin,
                                    controlWidth=80, keyboardTracking=False)
 
+        plot_properties_box = gui.vBox(self.controlArea, "Plot properties")
+        self.num_atr_spin = gui.spin(plot_properties_box,
+                                   self,
+                                   "gui_num_atr",
+                                   1,
+                                   10,
+                                   step=1,
+                                   label="Show attributes",
+                                   callback=self._update_num_atr_spin,
+                                   controlWidth=80,
+                                   keyboardTracking=False)
         gui.rubber(self.controlArea)
 
         self.cancel_button = gui.button(self.controlArea,
@@ -324,15 +336,16 @@ class OWExplainPred(OWWidget):
                                      QPainter.TextAntialiasing |
                                      QPainter.SmoothPixmapTransform)
         self.mainArea.layout().addWidget(self.box_view)
-        self.draw()
+        
 
 
-    def draw(self):
+    def draw(self, indices):
         '''Uses GraphAttributes class to draw the explanaitons '''
+        self.box_scene.clear()
         wp = self.box_view.viewport().rect()#.adjusted(15, 15, -15, -30)
         #self, wp, scene, num_of_atr = 13, offset_x = 100, offset_y = 10):
-        painter = GraphAttributes(self.box_scene, 12)
-        painter.paint(wp)
+        painter = GraphAttributes(self.box_scene, self.gui_num_atr)
+        painter.paint(wp, self.explanations[indices])
 
 
     @Inputs.data
@@ -456,7 +469,8 @@ class OWExplainPred(OWWidget):
         model.sort(
             header.sortIndicatorSection(),
             header.sortIndicatorOrder())
-        self.dataview.setModel(model)
+        #self.dataview.setModel(model)
+        self.draw(model.mapToSourceRows(list(range(self.gui_num_atr))))
         self.commit_output()
 
     @pyqtSlot(float)
@@ -553,6 +567,10 @@ class OWExplainPred(OWWidget):
             self.e.p_val = self.gui_p_val
         self.handleNewSignals()
 
+    def _update_num_atr_spin(self):
+        self.cancel()
+        self.handleNewSignals()
+
     def onDeleteWidget(self):
         self.cancel()
         super().onDeleteWidget()
@@ -565,8 +583,8 @@ class GraphAttributes:
 
     Parameters
     ----------
-    scene:
-    ???
+    scene: QGraphicsScene
+        scene to add elements to
     num_of_atr : int
         number of attributes to plot
     offset_x : int
@@ -580,48 +598,44 @@ class GraphAttributes:
         self.num_of_atr = num_of_atr
         self.offset_x = offset_x
         self.offset_y = offset_y
-        self.max_contrib = 0.5
-        self.rect_height = None
         self.black_pen = QPen(Qt.black, 3)
         self.gray_pen = QPen(Qt.darkGray, 3)
         self.gray_pen.setStyle(Qt.DashLine)
         self.brush = QBrush(QColor(167,110, 111))
         '''placeholders'''
+        self.rect_height = None
+        self.max_contrib = None
         self.atr_area_h = None
         self.atr_area_w = None
         self.scale = None
-
-
-
 
     def paint(self, wp, explanations = None, header_h = 100):
         '''
         Coordinates drawing
         Parameters
         ----------
-        wp : ??
-            viewport
+        wp : QWidget
+            current viewport
         explanations : Orange.data.table
             data table with name, value, score and error of attributes to plot
         header_h : int
             space to be left on the top and the bottom of graph for header and scale
         '''
-        self.atr_area_h = wp.height() - header_h
-        self.atr_area_w = wp.width()
+        self.atr_area_h = wp.height()/2 - header_h
+        self.atr_area_w = wp.width()/2
 
-        coords = self.split_boxes_area(self.atr_area_h, 10, header_h)
+        coords = self.split_boxes_area(self.atr_area_h, self.num_of_atr, header_h)
         #filter vn abs max -> self.max_contrib
+        self.max_contrib = np.max(abs(explanations.X[:,0])) + np.max(explanations.X[:,1])
         self.unit = self.get_scale()
         unit_pixels = np.floor((self.atr_area_w - self.offset_x)/(self.max_contrib/self.unit))
         self.scale = unit_pixels / self.unit
 
-        self.draw_header_footer(header_h, wp, unit_pixels)
+        self.draw_header_footer(header_h, unit_pixels)
+        for y, e in zip(coords, explanations[:self.num_of_atr]):
+            self.draw_attribute(y, atr_name = str(e._metas[0]), atr_val = str(e._metas[1]), atr_contrib = e._x[0], error = e._x[1])
 
-        for y in coords:
-            atr_c = np.random.uniform(low=-0.40, high=0.40)
-            self.draw_attribute(y, atr_name = "p_h", atr_val = "phh", atr_contrib = atr_c, error = 0.1)
-
-    def draw_header_footer(self, header_h, wp, unit_pixels, marking_len = 15):
+    def draw_header_footer(self, header_h, unit_pixels, marking_len = 15):
         '''header'''
         atr_label = QGraphicsSimpleTextItem("Attribute", None)
         val_label = QGraphicsSimpleTextItem("Value", None)
@@ -636,30 +650,30 @@ class GraphAttributes:
 
         self.place_left(atr_label, -self.atr_area_h  - header_h/2)
         self.place_right(val_label, -self.atr_area_h - header_h/2)
+        self.place_centered(score_label, 0, -self.atr_area_h  - header_h/2)
 
-        sc_x = score_label.boundingRect().width()
-        score_label.setPos(0 - sc_x/2, -self.atr_area_h  - header_h/2)
-        self.scene.addItem(score_label)
-
+        max_x = self.max_contrib * self.scale
         '''vertical line where x = 0'''
-        self.scene.addLine(0, -self.atr_area_h, 0, self.atr_area_h + header_h/2, self.black_pen)
-        
+        self.scene.addLine(0, -self.atr_area_h, 0, self.atr_area_h + header_h/2, self.black_pen)   
         '''footer'''
         line_y = self.atr_area_h + header_h/2
-        self.scene.addLine(-self.atr_area_w, line_y, self.atr_area_w, line_y, self.black_pen)
+        self.scene.addLine(-max_x, line_y, max_x, line_y, self.black_pen)
         '''max, min'''
-        max_x = self.max_contrib * self.scale
         self.scene.addLine(max_x, line_y, max_x, line_y + marking_len, self.black_pen)
         self.scene.addLine(-max_x, line_y, -max_x, line_y + marking_len, self.black_pen)
+        self.place_centered(QGraphicsSimpleTextItem(str(round(self.max_contrib,2)), None), max_x, line_y + marking_len + 5)
+        self.place_centered(QGraphicsSimpleTextItem(str(round(-self.max_contrib,2)), None), -max_x, line_y + marking_len + 5)
+
         for i in range(0, int(self.max_contrib / self.unit)):
             x = unit_pixels * i 
             self.scene.addLine(x, line_y, x, line_y + marking_len, self.black_pen)
             self.scene.addLine(-x, line_y, -x, line_y + marking_len, self.black_pen)
+            self.place_centered(QGraphicsSimpleTextItem(str(i*self.unit), None), x, line_y + marking_len + 5)
+            self.place_centered(QGraphicsSimpleTextItem(str(-i*self.unit), None), -x, line_y + marking_len + 5)
         
     def get_scale(self):
         '''figures out on what scale is max score (1, .1, .01)
         TESTING NEEDED, maybe something more elegant.
-
         '''
         if self.max_contrib  > 1 : 
             return 1
@@ -674,13 +688,11 @@ class GraphAttributes:
                      self.atr_area_w - self.offset_x, y + self.rect_height, self.gray_pen)
 
         if atr_name is not None and atr_val is not None and atr_contrib is not None:
-            #calculations for scaling
             atr_contrib_x = atr_contrib * self.scale
             error_x = error * self.scale
 
             padded_rect = self.rect_height - 2 * self.offset_y
             len_rec = 2 * error_x
-            #x, y, w, h
             graphed_rect = QGraphicsRectItem(
                 atr_contrib_x - error_x, y + self.offset_y, len_rec, padded_rect)
             graphed_rect.setBrush(self.brush)
@@ -694,15 +706,19 @@ class GraphAttributes:
             self.place_right(QGraphicsSimpleTextItem(str(atr_val), None), y + self.rect_height/2)
 
     def place_left(self, text, y):
-        '''centriraj na sredino'''
-        to_center = text.boundingRect().width()
-        text.setPos(-self.atr_area_w + self.offset_x/2 - to_center, y)
-        self.scene.addItem(text)
+        '''places text to the left'''       
+        self.place_centered(text, -self.atr_area_w + self.offset_x/2, y)
 
     def place_right(self, text, y):
-        to_center = text.boundingRect().width()
-        text.setPos(self.atr_area_w - self.offset_x/2 - to_center, y)
+        '''places text to the right'''
+        self.place_centered(text, self.atr_area_w - self.offset_x/2, y)
+
+    def place_centered(self, text, x, y):
+        '''centers the text around given coordinates'''
+        to_center = text.boundingRect().width()/2
+        text.setPos(x - to_center, y)
         self.scene.addItem(text)
+
 
     def split_boxes_area(self, h, num_boxes, header_h):
         '''calculates y coordinates of boxes to be plotted, calculates rect_height
