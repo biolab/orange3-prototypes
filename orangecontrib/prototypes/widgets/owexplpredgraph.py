@@ -8,10 +8,11 @@ from enum import IntEnum
 
 from AnyQt.QtWidgets import (
     QApplication, QFormLayout, QTableView,  QSplitter, QHeaderView,
-    QGraphicsView, QGraphicsScene, QGraphicsRectItem, QGraphicsSimpleTextItem)
+    QGraphicsView, QGraphicsScene, QGraphicsRectItem, QGraphicsSimpleTextItem,
+     QSizePolicy)
 from AnyQt.QtCore import (
     Qt, QThread, pyqtSlot, QMetaObject, Q_ARG, QAbstractProxyModel,
-    QRectF)
+    QRectF, QSize)
 from AnyQt.QtGui import QPen, QColor, QBrush, QPainter, QFont
 import numpy as np
 from numpy.random import RandomState
@@ -231,7 +232,7 @@ class OWExplainPred(OWWidget):
     priority = 200
     gui_error = settings.Setting(0.05)
     gui_p_val = settings.Setting(0.05)
-    gui_num_atr = settings.Setting(5)
+    gui_num_atr = settings.Setting(20)
 
     class Inputs:
         data = Input("Data", Table, default=True)
@@ -310,15 +311,12 @@ class OWExplainPred(OWWidget):
                                    self,
                                    "gui_num_atr",
                                    1,
-                                   10,
+                                   100,
                                    step=1,
                                    label="Show attributes",
                                    callback=self._update_num_atr_spin,
                                    controlWidth=80,
                                    keyboardTracking=False)
-
-
-
 
         gui.rubber(self.controlArea)
 
@@ -335,23 +333,76 @@ class OWExplainPred(OWWidget):
 
         self.resize(640, 480)
 
-        self.box_scene = QGraphicsScene()
-        self.box_view = QGraphicsView(self.box_scene)
-        self.box_view.setRenderHints(QPainter.Antialiasing |
-                                     QPainter.TextAntialiasing |
-                                     QPainter.SmoothPixmapTransform)
+        class _GraphicsView(QGraphicsView):
+            def __init__(self, scene, parent, **kwargs):
+                for k, v in dict(verticalScrollBarPolicy=Qt.ScrollBarAlwaysOff,
+                               horizontalScrollBarPolicy=Qt.ScrollBarAlwaysOff,
+                               viewportUpdateMode=QGraphicsView.BoundingRectViewportUpdate,
+                               renderHints=(QPainter.Antialiasing |
+                                            QPainter.TextAntialiasing |
+                                            QPainter.SmoothPixmapTransform),
+                               alignment=(Qt.AlignTop |
+                                          Qt.AlignLeft),
+                               sizePolicy=QSizePolicy(QSizePolicy.MinimumExpanding,
+                                                      QSizePolicy.MinimumExpanding)).items():
+                    kwargs.setdefault(k, v)
+                super().__init__(scene, parent, **kwargs)
+
+        class GraphicsView(_GraphicsView):
+            def __init__(self, scene, parent):
+                super().__init__(scene, parent,
+                                verticalScrollBarPolicy=Qt.ScrollBarAlwaysOn,
+                                 styleSheet='QGraphicsView {background: white}')
+                self.viewport().setMinimumWidth(400)  # XXX: This prevents some tests failing
+                self._is_resizing = False
+
+            w = self
+
+            def resizeEvent(self, resizeEvent):
+                # Recompute main scene on window width change
+                if resizeEvent.size().width() != resizeEvent.oldSize().width():
+                    self._is_resizing = True
+                    print ("resizal so nas")
+                    self.w.draw()
+                    self._is_resizing = False
+                return super().resizeEvent(resizeEvent)
+
+            def is_resizing(self):
+                return self._is_resizing
+
+            def sizeHint(self):
+                return QSize(400, 200)
+
+        class FixedSizeGraphicsView(_GraphicsView):
+            def __init__(self, scene, parent):
+                super().__init__(scene, parent,
+                                 sizePolicy=QSizePolicy(QSizePolicy.MinimumExpanding,
+                                                            QSizePolicy.Minimum))
+
+            def sizeHint(self):
+                return QSize(400, 40)
+
+        self.box_scene = QGraphicsScene(self)
+
+        self.box_view = GraphicsView(self.box_scene, self)
+        self.header_view = FixedSizeGraphicsView(self.box_scene, self)
+        self.footer_view = FixedSizeGraphicsView(self.box_scene, self)
+
+        self.mainArea.layout().addWidget(self.header_view)
         self.mainArea.layout().addWidget(self.box_view)
+        self.mainArea.layout().addWidget(self.footer_view)
+
+        self.painter = None
         
 
 
-    def draw(self, indices):
+    def draw(self):
         '''Uses GraphAttributes class to draw the explanaitons '''
         self.box_scene.clear()
-        wp = self.box_view.viewport().rect()#.adjusted(15, 15, -15, -30)
-        #self, wp, scene, num_of_atr = 13, offset_x = 100, offset_y = 10):
-        painter = GraphAttributes(self.box_scene, self.gui_num_atr)
-        painter.paint(wp, self.explanations[indices])
-
+        wp = self.box_view.viewport().rect()
+        if self.explanations is not None:
+            self.painter = GraphAttributes(self.box_scene,self.gui_num_atr)
+            self.painter.paint(wp, self.explanations)
 
     @Inputs.data
     @check_sql_input
@@ -468,14 +519,15 @@ class OWExplainPred(OWWidget):
 
     @pyqtSlot(Orange.data.Table)
     def update_view(self, table):
-        self.explanations = table
         model = TableModel(table, parent=None)
         header = self.dataview.horizontalHeader()
         model.sort(
             header.sortIndicatorSection(),
             header.sortIndicatorOrder())
         #self.dataview.setModel(model)
-        self.draw(model.mapToSourceRows(list(range(self.gui_num_atr))))
+        indices = model.mapToSourceRows(list(range(self.gui_num_atr)))
+        self.explanations = table[indices]
+        self.draw()
         self.commit_output()
 
     @pyqtSlot(float)
@@ -606,7 +658,7 @@ class GraphAttributes:
         distance between the line border of attribute box plot and the box itself
     '''
 
-    def __init__(self, scene, num_of_atr = 3, offset_x = 100, offset_y = 10):
+    def __init__(self, scene, num_of_atr = 3, offset_x = 100, offset_y = 10, rect_height = 50):
         self.scene = scene
         self.num_of_atr = num_of_atr
         self.offset_x = offset_x
@@ -616,7 +668,7 @@ class GraphAttributes:
         self.gray_pen.setStyle(Qt.DashLine)
         self.brush = QBrush(QColor(167,110, 111))
         '''placeholders'''
-        self.rect_height = None
+        self.rect_height = rect_height
         self.max_contrib = None
         self.atr_area_h = None
         self.atr_area_w = None
@@ -644,12 +696,14 @@ class GraphAttributes:
         unit_pixels = np.floor((self.atr_area_w - self.offset_x)/(self.max_contrib/self.unit))
         self.scale = unit_pixels / self.unit
 
-        self.draw_header_footer(header_h, unit_pixels)
+        self.draw_header_footer(header_h, unit_pixels, coords[-1])
         for y, e in zip(coords, explanations[:self.num_of_atr]):
             self.draw_attribute(y, atr_name = str(e._metas[0]), atr_val = str(e._metas[1]), atr_contrib = e._x[0], error = e._x[1])
 
-    def draw_header_footer(self, header_h, unit_pixels, marking_len = 15):
+    def draw_header_footer(self, header_h, unit_pixels, last_y, marking_len = 15):
         '''header'''
+        max_x = self.max_contrib * self.scale
+
         atr_label = QGraphicsSimpleTextItem("Attribute", None)
         val_label = QGraphicsSimpleTextItem("Value", None)
         score_label = QGraphicsSimpleTextItem("Score", None)
@@ -661,31 +715,32 @@ class GraphAttributes:
         val_label.setFont(font)
         score_label.setFont(font)
 
+        white_pen = QPen(Qt.white, 3)
+
+
         self.place_left(atr_label, -self.atr_area_h  - header_h/2)
         self.place_right(val_label, -self.atr_area_h - header_h/2)
         self.place_centered(score_label, 0, -self.atr_area_h  - header_h/2)
+        self.scene.addLine(-max_x,-self.atr_area_h - header_h, max_x, -self.atr_area_h -  header_h, white_pen)
 
-        max_x = self.max_contrib * self.scale
-        '''vertical line where x = 0'''
-        self.scene.addLine(0, -self.atr_area_h, 0, self.atr_area_h + header_h/2, self.black_pen)   
         '''footer'''
-        line_y = self.atr_area_h + header_h/2
+        line_y = last_y + header_h/2 + self.rect_height
         self.scene.addLine(-max_x, line_y, max_x, line_y, self.black_pen)
         '''max, min'''
         self.scene.addLine(max_x, line_y, max_x, line_y + marking_len, self.black_pen)
         self.scene.addLine(-max_x, line_y, -max_x, line_y + marking_len, self.black_pen)
-        self.place_centered(self.format_num(self.max_contrib,2), max_x, line_y + marking_len + 5)
-        self.place_centered(self.format_num(-self.max_contrib,2), -max_x, line_y + marking_len + 5)
+        self.place_centered(self.format_marking(self.max_contrib,2), max_x, line_y + marking_len + 5)
+        self.place_centered(self.format_marking(-self.max_contrib,2), -max_x, line_y + marking_len + 5)
 
-        for i in range(0, int(self.max_contrib / self.unit) + 1):
+        for i in range(0, int(self.max_contrib / self.unit)):
             x = unit_pixels * i 
             self.scene.addLine(x, line_y, x, line_y + marking_len, self.black_pen)
             self.scene.addLine(-x, line_y, -x, line_y + marking_len, self.black_pen)
-            self.place_centered(self.format_num(i*self.unit), x, line_y + marking_len + 5)
-            self.place_centered(self.format_num(-i*self.unit), -x, line_y + marking_len + 5)
+            self.place_centered(self.format_marking(i*self.unit), x, line_y + marking_len + 5)
+            self.place_centered(self.format_marking(-i*self.unit), -x, line_y + marking_len + 5)
 
-    def format_num(self, num, dec = 2):
-        return QGraphicsSimpleTextItem(str(round(num, dec)), None)
+    def format_marking(self, x, places = 2):
+        return QGraphicsSimpleTextItem(str(round(x, places)), None)
         
     def get_scale(self):
         '''figures out on what scale is max score (1, .1, .01)
@@ -699,6 +754,9 @@ class GraphAttributes:
             return 0.01
 
     def draw_attribute(self, y, atr_name, atr_val, atr_contrib, error):
+        '''vertical line where x = 0'''
+        self.scene.addLine(0, y, 0, y + self.rect_height, self.black_pen) 
+
         self.scene.addLine(-self.atr_area_w + self.offset_x, y, self.atr_area_w - self.offset_x, y, self.gray_pen)
         self.scene.addLine(-self.atr_area_w + self.offset_x, y + self.rect_height,
                      self.atr_area_w - self.offset_x, y + self.rect_height, self.gray_pen)
@@ -749,7 +807,7 @@ class GraphAttributes:
         Returns:
             list y_coordinates
         '''
-        self.rect_height = np.floor(h*2 / num_boxes)
+        #self.rect_height = np.floor(h*2 / num_boxes)
         return [(-h + i*self.rect_height) for i in range(num_boxes)]
 
 
