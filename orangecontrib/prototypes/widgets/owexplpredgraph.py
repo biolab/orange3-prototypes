@@ -4,6 +4,7 @@ import logging
 import concurrent.futures
 from functools import partial
 import time
+from enum import IntEnum
 
 from AnyQt.QtWidgets import (
     QApplication, QFormLayout, QTableView,  QSplitter, QHeaderView,
@@ -304,7 +305,7 @@ class OWExplainPred(OWWidget):
                                    callback=self._update_p_val_spin,
                                    controlWidth=80, keyboardTracking=False)
 
-        plot_properties_box = gui.vBox(self.controlArea, "Plot properties")
+        plot_properties_box = gui.vBox(self.controlArea, "Display features")
         self.num_atr_spin = gui.spin(plot_properties_box,
                                    self,
                                    "gui_num_atr",
@@ -315,6 +316,10 @@ class OWExplainPred(OWWidget):
                                    callback=self._update_num_atr_spin,
                                    controlWidth=80,
                                    keyboardTracking=False)
+
+
+
+
         gui.rubber(self.controlArea)
 
         self.cancel_button = gui.button(self.controlArea,
@@ -576,6 +581,14 @@ class OWExplainPred(OWWidget):
         super().onDeleteWidget()
 
 
+class SortBy(IntEnum):
+    NO_SORTING, BY_NAME, ABSOLUTE, POSITIVE, NEGATIVE = 0, 1, 2, 3, 4
+
+    @staticmethod
+    def items():
+        return["No sorting", "By name", "Absolute contribution",
+               "Positive contribution", "Negative contribution"]
+
 class GraphAttributes:
     '''
     Creates entire graph of explanations, paint function is the main one, it delegates painting of attributes to draw_attribute, 
@@ -661,15 +674,18 @@ class GraphAttributes:
         '''max, min'''
         self.scene.addLine(max_x, line_y, max_x, line_y + marking_len, self.black_pen)
         self.scene.addLine(-max_x, line_y, -max_x, line_y + marking_len, self.black_pen)
-        self.place_centered(QGraphicsSimpleTextItem(str(round(self.max_contrib,2)), None), max_x, line_y + marking_len + 5)
-        self.place_centered(QGraphicsSimpleTextItem(str(round(-self.max_contrib,2)), None), -max_x, line_y + marking_len + 5)
+        self.place_centered(self.format_num(self.max_contrib,2), max_x, line_y + marking_len + 5)
+        self.place_centered(self.format_num(-self.max_contrib,2), -max_x, line_y + marking_len + 5)
 
-        for i in range(0, int(self.max_contrib / self.unit)):
+        for i in range(0, int(self.max_contrib / self.unit) + 1):
             x = unit_pixels * i 
             self.scene.addLine(x, line_y, x, line_y + marking_len, self.black_pen)
             self.scene.addLine(-x, line_y, -x, line_y + marking_len, self.black_pen)
-            self.place_centered(QGraphicsSimpleTextItem(str(i*self.unit), None), x, line_y + marking_len + 5)
-            self.place_centered(QGraphicsSimpleTextItem(str(-i*self.unit), None), -x, line_y + marking_len + 5)
+            self.place_centered(self.format_num(i*self.unit), x, line_y + marking_len + 5)
+            self.place_centered(self.format_num(-i*self.unit), -x, line_y + marking_len + 5)
+
+    def format_num(self, num, dec = 2):
+        return QGraphicsSimpleTextItem(str(round(num, dec)), None)
         
     def get_scale(self):
         '''figures out on what scale is max score (1, .1, .01)
