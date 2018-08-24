@@ -353,7 +353,7 @@ class OWExplainPred(OWWidget):
                 super().__init__(scene, parent,
                                 verticalScrollBarPolicy=Qt.ScrollBarAlwaysOn,
                                  styleSheet='QGraphicsView {background: white}')
-                self.viewport().setMinimumWidth(400)  # XXX: This prevents some tests failing
+                self.viewport().setMinimumWidth(400) 
                 self._is_resizing = False
 
             w = self
@@ -382,10 +382,13 @@ class OWExplainPred(OWWidget):
             def sizeHint(self):
                 return QSize(400, 40)
 
+
+        '''all will share the same scene, but will show different parts of it'''
         self.box_scene = QGraphicsScene(self)
 
         self.box_view = GraphicsView(self.box_scene, self)
         self.header_view = FixedSizeGraphicsView(self.box_scene, self)
+
         self.footer_view = FixedSizeGraphicsView(self.box_scene, self)
 
         self.mainArea.layout().addWidget(self.header_view)
@@ -393,6 +396,7 @@ class OWExplainPred(OWWidget):
         self.mainArea.layout().addWidget(self.footer_view)
 
         self.painter = None
+        self.old_y = None
         
 
 
@@ -403,6 +407,20 @@ class OWExplainPred(OWWidget):
         if self.explanations is not None:
             self.painter = GraphAttributes(self.box_scene,self.gui_num_atr)
             self.painter.paint(wp, self.explanations)
+
+        '''set appropriate boxes for different views'''
+        rect = QRectF(self.box_scene.itemsBoundingRect().x(),
+              self.box_scene.itemsBoundingRect().y(),
+              self.box_scene.itemsBoundingRect().width(),
+              self.box_scene.itemsBoundingRect().height())
+        if self.old_y != rect.height():
+            print ("rect has changed " + str(rect.height()))
+            self.old_y = rect.height() 
+
+        self.box_scene.setSceneRect(rect)
+        self.box_view.setSceneRect(rect.x(), rect.y()+100, rect.width(), rect.height() - 300)
+        self.header_view.setSceneRect(rect.x(), rect.y() + 40 , rect.width(), 35)
+        self.footer_view.setSceneRect(rect.x(), rect.height() - 200, rect.width(), 50)
 
     @Inputs.data
     @check_sql_input
@@ -658,13 +676,13 @@ class GraphAttributes:
         distance between the line border of attribute box plot and the box itself
     '''
 
-    def __init__(self, scene, num_of_atr = 3, offset_x = 100, offset_y = 10, rect_height = 50):
+    def __init__(self, scene, num_of_atr = 3, offset_x = 100, offset_y = 10, rect_height = 40):
         self.scene = scene
         self.num_of_atr = num_of_atr
         self.offset_x = offset_x
         self.offset_y = offset_y
         self.black_pen = QPen(Qt.black, 3)
-        self.gray_pen = QPen(Qt.darkGray, 3)
+        self.gray_pen = QPen(Qt.gray, 1)
         self.gray_pen.setStyle(Qt.DashLine)
         self.brush = QBrush(QColor(167,110, 111))
         '''placeholders'''
@@ -701,7 +719,7 @@ class GraphAttributes:
             self.draw_attribute(y, atr_name = str(e._metas[0]), atr_val = str(e._metas[1]), atr_contrib = e._x[0], error = e._x[1])
 
     def draw_header_footer(self, header_h, unit_pixels, last_y, marking_len = 15):
-        '''header'''
+        '''header''' 
         max_x = self.max_contrib * self.scale
 
         atr_label = QGraphicsSimpleTextItem("Attribute", None)
