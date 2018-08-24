@@ -774,7 +774,7 @@ class GraphAttributes:
     def draw_attribute(self, y, atr_name, atr_val, atr_contrib, error):
         '''vertical line where x = 0'''
         self.scene.addLine(0, y, 0, y + self.rect_height, self.black_pen) 
-
+        '''dashed borders'''
         self.scene.addLine(-self.atr_area_w + self.offset_x, y, self.atr_area_w - self.offset_x, y, self.gray_pen)
         self.scene.addLine(-self.atr_area_w + self.offset_x, y + self.rect_height,
                      self.atr_area_w - self.offset_x, y + self.rect_height, self.gray_pen)
@@ -790,8 +790,8 @@ class GraphAttributes:
             graphed_rect.setBrush(self.brush)
             self.scene.addItem(graphed_rect)
             '''vertical line marks calculated contribution of attribute'''
-            self.atr_line = self.scene.addLine(atr_contrib_x, y + self.offset_y, atr_contrib_x,
-                                      y + self.rect_height - self.offset_y, self.black_pen)
+            self.atr_line = self.scene.addLine(atr_contrib_x, y + self.offset_y + 1, atr_contrib_x,
+                                      y + self.rect_height - self.offset_y - 1, self.black_pen)
             '''atr name on the left'''
             self.place_left(QGraphicsSimpleTextItem(atr_name, None), y + self.rect_height/2)          
             '''atr value on the right'''
