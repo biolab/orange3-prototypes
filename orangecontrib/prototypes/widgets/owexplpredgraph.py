@@ -543,7 +543,7 @@ class OWExplainPred(OWWidget):
             header.sortIndicatorSection(),
             header.sortIndicatorOrder())
         #self.dataview.setModel(model)
-        indices = model.mapToSourceRows(list(range(self.gui_num_atr)))
+        indices = model.mapToSourceRows(list(range(min(len(table),self.gui_num_atr))))    
         self.explanations = table[indices]
         self.draw()
         self.commit_output()
