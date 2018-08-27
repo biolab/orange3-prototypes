@@ -9,7 +9,7 @@ from enum import IntEnum
 from AnyQt.QtWidgets import (
     QApplication, QFormLayout, QTableView,  QSplitter, QHeaderView,
     QGraphicsView, QGraphicsScene, QGraphicsRectItem, QGraphicsSimpleTextItem,
-     QSizePolicy)
+    QSizePolicy)
 from AnyQt.QtCore import (
     Qt, QThread, pyqtSlot, QMetaObject, Q_ARG, QAbstractProxyModel,
     QRectF, QSize)
@@ -40,6 +40,7 @@ class SortBy(IntEnum):
     def items():
         return["No sorting", "By name", "Absolute contribution",
                "Positive contribution", "Negative contribution"]
+
 
 class Task:
 
@@ -317,23 +318,23 @@ class OWExplainPred(OWWidget):
 
         plot_properties_box = gui.vBox(self.controlArea, "Display features")
         self.num_atr_spin = gui.spin(plot_properties_box,
-                                   self,
-                                   "gui_num_atr",
-                                   1,
-                                   100,
-                                   step=1,
-                                   label="Show attributes",
-                                   callback=self._update_num_atr_spin,
-                                   controlWidth=80,
-                                   keyboardTracking=False)
+                                     self,
+                                     "gui_num_atr",
+                                     1,
+                                     100,
+                                     step=1,
+                                     label="Show attributes",
+                                     callback=self._update_num_atr_spin,
+                                     controlWidth=80,
+                                     keyboardTracking=False)
 
         self.sort_combo = gui.comboBox(plot_properties_box,
-                                        self,
-                                        "sort_index",
-                                        label="Rank by",
-                                        items=SortBy.items(),
-                                        orientation = Qt.Horizontal,
-                                        callback = self._update_combo)
+                                       self,
+                                       "sort_index",
+                                       label="Rank by",
+                                       items=SortBy.items(),
+                                       orientation=Qt.Horizontal,
+                                       callback=self._update_combo)
 
         gui.rubber(self.controlArea)
 
@@ -353,24 +354,24 @@ class OWExplainPred(OWWidget):
         class _GraphicsView(QGraphicsView):
             def __init__(self, scene, parent, **kwargs):
                 for k, v in dict(verticalScrollBarPolicy=Qt.ScrollBarAlwaysOff,
-                               horizontalScrollBarPolicy=Qt.ScrollBarAlwaysOff,
-                               viewportUpdateMode=QGraphicsView.BoundingRectViewportUpdate,
-                               renderHints=(QPainter.Antialiasing |
-                                            QPainter.TextAntialiasing |
-                                            QPainter.SmoothPixmapTransform),
-                               alignment=(Qt.AlignTop |
-                                          Qt.AlignLeft),
-                               sizePolicy=QSizePolicy(QSizePolicy.MinimumExpanding,
-                                                      QSizePolicy.MinimumExpanding)).items():
+                                 horizontalScrollBarPolicy=Qt.ScrollBarAlwaysOff,
+                                 viewportUpdateMode=QGraphicsView.BoundingRectViewportUpdate,
+                                 renderHints=(QPainter.Antialiasing |
+                                              QPainter.TextAntialiasing |
+                                              QPainter.SmoothPixmapTransform),
+                                 alignment=(Qt.AlignTop |
+                                            Qt.AlignLeft),
+                                 sizePolicy=QSizePolicy(QSizePolicy.MinimumExpanding,
+                                                        QSizePolicy.MinimumExpanding)).items():
                     kwargs.setdefault(k, v)
                 super().__init__(scene, parent, **kwargs)
 
         class GraphicsView(_GraphicsView):
             def __init__(self, scene, parent):
                 super().__init__(scene, parent,
-                                verticalScrollBarPolicy=Qt.ScrollBarAlwaysOn,
+                                 verticalScrollBarPolicy=Qt.ScrollBarAlwaysOn,
                                  styleSheet='QGraphicsView {background: white}')
-                self.viewport().setMinimumWidth(400) 
+                self.viewport().setMinimumWidth(400)
                 self._is_resizing = False
 
             w = self
@@ -393,11 +394,10 @@ class OWExplainPred(OWWidget):
             def __init__(self, scene, parent):
                 super().__init__(scene, parent,
                                  sizePolicy=QSizePolicy(QSizePolicy.MinimumExpanding,
-                                                            QSizePolicy.Minimum))
+                                                        QSizePolicy.Minimum))
 
             def sizeHint(self):
                 return QSize(400, 40)
-
 
         '''all will share the same scene, but will show different parts of it'''
         self.box_scene = QGraphicsScene(self)
@@ -412,41 +412,51 @@ class OWExplainPred(OWWidget):
         self.mainArea.layout().addWidget(self.footer_view)
 
         self.painter = None
-        
+
     def draw(self):
         '''Uses GraphAttributes class to draw the explanaitons '''
         self.box_scene.clear()
         wp = self.box_view.viewport().rect()
-        
+
         if self.explanations is not None:
             self.sort_explanations()
-            self.painter = GraphAttributes(self.box_scene,self.gui_num_atr)
-            self.painter.paint(wp, self.explanations)  
+            self.painter = GraphAttributes(self.box_scene, self.gui_num_atr)
+            self.painter.paint(wp, self.explanations)
 
         '''set appropriate boxes for different views'''
         rect = QRectF(self.box_scene.itemsBoundingRect().x(),
-              self.box_scene.itemsBoundingRect().y(),
-              self.box_scene.itemsBoundingRect().width(),
-              self.box_scene.itemsBoundingRect().height())
+                      self.box_scene.itemsBoundingRect().y(),
+                      self.box_scene.itemsBoundingRect().width(),
+                      self.box_scene.itemsBoundingRect().height())
 
         self.box_scene.setSceneRect(rect)
-        self.box_view.setSceneRect(rect.x(), rect.y()+100, rect.width(), rect.height() - 300)
-        self.header_view.setSceneRect(rect.x(), rect.y() + 40 , rect.width(), 35)
-        self.footer_view.setSceneRect(rect.x(), rect.height() - 200, rect.width(), 50)
+        self.box_view.setSceneRect(
+            rect.x(), rect.y()+100, rect.width(), rect.height() - 180)
+        self.header_view.setSceneRect(
+            rect.x(), rect.y() + 30, rect.width(), 35)
+        self.header_view.centerOn(0, 0)
+        self.footer_view.setSceneRect(
+            rect.x(), rect.y() + rect.height() - 50, rect.width(), 35)
+        self.box_view.centerOn(0, 0)
+        self.footer_view.centerOn(0, 0)
 
     def sort_explanations(self):
         '''sorts explanations according to users choice from combo box'''
         if self.sort_index == SortBy.POSITIVE:
-            self.explanations = self.explanations[np.argsort(self.explanations.X[:,0])][::-1]
+            self.explanations = self.explanations[np.argsort(
+                self.explanations.X[:, 0])][::-1]
         elif self.sort_index == SortBy.NEGATIVE:
-            self.explanations = self.explanations[np.argsort(self.explanations.X[:,0])]
+            self.explanations = self.explanations[np.argsort(
+                self.explanations.X[:, 0])]
         elif self.sort_index == SortBy.ABSOLUTE:
-            self.explanations = self.explanations[np.argsort(np.abs(self.explanations.X[:,0]))][::-1]
+            self.explanations = self.explanations[np.argsort(
+                np.abs(self.explanations.X[:, 0]))][::-1]
         elif self.sort_index == SortBy.BY_NAME:
-            l = np.array(list(map(np.chararray.lower, self.explanations.metas[:,0])))
+            l = np.array(
+                list(map(np.chararray.lower, self.explanations.metas[:, 0])))
             self.explanations = self.explanations[np.argsort(l)]
         else:
-            pass
+            return
 
     @Inputs.data
     @check_sql_input
@@ -669,7 +679,6 @@ class OWExplainPred(OWWidget):
         if self.explanations != None:
             self.draw()
             self.commit_output()
-        
 
     def onDeleteWidget(self):
         self.cancel()
@@ -693,7 +702,7 @@ class GraphAttributes:
         distance between the line border of attribute box plot and the box itself
     '''
 
-    def __init__(self, scene, num_of_atr = 3, offset_x = 100, offset_y = 10, rect_height = 40):
+    def __init__(self, scene, num_of_atr=3, offset_x=100, offset_y=10, rect_height=40):
         self.scene = scene
         self.num_of_atr = num_of_atr
         self.offset_x = offset_x
@@ -703,7 +712,6 @@ class GraphAttributes:
         self.light_gray_pen = QPen(QColor("#DFDFDF"), 1)
         self.light_gray_pen.setStyle(Qt.DashLine)
         self.brush = QBrush(QColor("#46a7e2"))
-            # oranzna"#ed9c28")) 
         '''placeholders'''
         self.rect_height = rect_height
         self.max_contrib = None
@@ -711,7 +719,20 @@ class GraphAttributes:
         self.atr_area_w = None
         self.scale = None
 
-    def paint(self, wp, explanations = None, header_h = 100):
+    def get_needed_offset(self, explanations):
+        max_l = 0
+        word = ""
+        for e in explanations:
+            if max_l < len(str(e._metas[0])):
+                word = str(e._metas[0])
+                max_l = len(str(e._metas[0]))
+            if max_l < len(str(e._metas[1])):
+                word = str(e._metas[1])
+                max_l = len(str(e._metas[1]))
+        w = QGraphicsSimpleTextItem(word, None)
+        self.offset_x += w.boundingRect().width()*2
+
+    def paint(self, wp, explanations=None, header_h=100):
         '''
         Coordinates drawing
         Parameters
@@ -726,20 +747,25 @@ class GraphAttributes:
         self.atr_area_h = wp.height()/2 - header_h
         self.atr_area_w = wp.width()/2
 
-        coords = self.split_boxes_area(self.atr_area_h, self.num_of_atr, header_h)
-        #filter vn abs max -> self.max_contrib
-        self.max_contrib = np.max(abs(explanations.X[:,0])) + np.max(explanations.X[:,1])
+        self.get_needed_offset(explanations)
+
+        coords = self.split_boxes_area(
+            self.atr_area_h, self.num_of_atr, header_h)
+        self.max_contrib = np.max(
+            abs(explanations.X[:, 0])) + np.max(explanations.X[:, 1])
         self.unit = self.get_scale()
-        unit_pixels = np.floor((self.atr_area_w - self.offset_x)/(self.max_contrib/self.unit))
+        unit_pixels = np.floor(
+            (self.atr_area_w - self.offset_x)/(self.max_contrib/self.unit))
         self.scale = unit_pixels / self.unit
 
-        self.draw_header_footer(header_h, unit_pixels, coords[-1], coords[0])
+        self.draw_header_footer(
+            wp, header_h, unit_pixels, coords[-1], coords[0])
         for y, e in zip(coords, explanations[:self.num_of_atr]):
-            self.draw_attribute(y, atr_name = str(e._metas[0]), atr_val = str(e._metas[1]), atr_contrib = e._x[0], error = e._x[1])
+            self.draw_attribute(y, atr_name=str(e._metas[0]), atr_val=str(
+                e._metas[1]), atr_contrib=e._x[0], error=e._x[1])
 
-
-    def draw_header_footer(self, header_h, unit_pixels, last_y, first_y, marking_len = 15):
-        '''header''' 
+    def draw_header_footer(self, wp, header_h, unit_pixels, last_y, first_y, marking_len=15):
+        '''header'''
         max_x = self.max_contrib * self.scale
 
         atr_label = QGraphicsSimpleTextItem("Attribute", None)
@@ -755,14 +781,15 @@ class GraphAttributes:
 
         white_pen = QPen(Qt.white, 3)
 
-
-        self.place_left(atr_label, -self.atr_area_h  - header_h/2)
+        self.place_left(atr_label, -self.atr_area_h - header_h/2)
         self.place_right(val_label, -self.atr_area_h - header_h/2)
-        self.place_centered(score_label, 0, -self.atr_area_h  - header_h/2)
-        self.scene.addLine(-max_x,-self.atr_area_h - header_h, max_x, -self.atr_area_h -  header_h, white_pen)
+        self.place_centered(score_label, 0, -self.atr_area_h - header_h/2)
+        self.scene.addLine(-max_x, -self.atr_area_h - header_h,
+                           max_x, -self.atr_area_h - header_h, white_pen)
 
         '''footer'''
-        line_y = last_y + header_h/2 + self.rect_height
+        line_y = max(first_y + wp.height() + header_h/2,
+                     last_y + header_h/2 + self.rect_height)
         self.scene.addLine(-max_x, line_y, max_x, line_y, self.black_pen)
         '''max, min'''
         #self.scene.addLine(max_x, line_y, max_x, line_y + marking_len, self.black_pen)
@@ -771,40 +798,46 @@ class GraphAttributes:
         #self.place_centered(self.format_marking(-self.max_contrib,2), -max_x, line_y + marking_len + 5)
 
         for i in range(0, int(self.max_contrib / self.unit) + 1):
-            x = unit_pixels * i 
+            x = unit_pixels * i
             '''grid lines'''
-            self.scene.addLine(x, first_y, x, last_y, self.light_gray_pen)
-            self.scene.addLine(-x, first_y, -x, last_y, self.light_gray_pen)
-            self.scene.addLine(x, line_y, x, line_y + marking_len, self.black_pen)
-            self.scene.addLine(-x, line_y, -x, line_y + marking_len, self.black_pen)
-            self.place_centered(self.format_marking(i*self.unit), x, line_y + marking_len + 5)
-            self.place_centered(self.format_marking(-i*self.unit), -x, line_y + marking_len + 5)
+            self.scene.addLine(x, first_y, x, line_y, self.light_gray_pen)
+            self.scene.addLine(-x, first_y, -x, line_y, self.light_gray_pen)
 
-    def format_marking(self, x, places = 2):
+            self.scene.addLine(x, line_y, x, line_y +
+                               marking_len, self.black_pen)
+            self.scene.addLine(-x, line_y, -x, line_y +
+                               marking_len, self.black_pen)
+            self.place_centered(self.format_marking(
+                i*self.unit), x, line_y + marking_len + 5)
+            self.place_centered(
+                self.format_marking(-i*self.unit), -x, line_y + marking_len + 5)
+
+    def format_marking(self, x, places=2):
         return QGraphicsSimpleTextItem(str(round(x, places)), None)
-        
+
     def get_scale(self):
         '''figures out on what scale is max score (1, .1, .01)
         TESTING NEEDED, maybe something more elegant.
         '''
-        if self.max_contrib  > 1 : 
+        if self.max_contrib > 1:
             return 1
         elif self.max_contrib > 0.1:
             return 0.1
-        else :
+        else:
             return 0.01
 
     def draw_attribute(self, y, atr_name, atr_val, atr_contrib, error):
         '''vertical line where x = 0'''
-        self.scene.addLine(0, y, 0, y + self.rect_height, self.black_pen) 
-        '''dashed borders'''
-        self.scene.addLine(-self.atr_area_w + self.offset_x, y, self.atr_area_w - self.offset_x, y, self.gray_pen)
+        self.scene.addLine(0, y, 0, y + self.rect_height, self.black_pen)
+        '''borders'''
+        self.scene.addLine(-self.atr_area_w + self.offset_x,
+                           y, self.atr_area_w - self.offset_x, y, self.gray_pen)
         self.scene.addLine(-self.atr_area_w + self.offset_x, y + self.rect_height,
-                     self.atr_area_w - self.offset_x, y + self.rect_height, self.gray_pen)
+                           self.atr_area_w - self.offset_x, y + self.rect_height, self.gray_pen)
 
         if atr_name is not None and atr_val is not None and atr_contrib is not None:
             atr_contrib_x = atr_contrib * self.scale
-            error_x = error * self.scale 
+            error_x = error * self.scale
 
             padded_rect = self.rect_height - 2 * self.offset_y
             len_rec = 2 * error_x
@@ -814,14 +847,16 @@ class GraphAttributes:
             self.scene.addItem(graphed_rect)
             '''vertical line marks calculated contribution of attribute'''
             self.atr_line = self.scene.addLine(atr_contrib_x, y + self.offset_y + 1, atr_contrib_x,
-                                      y + self.rect_height - self.offset_y - 1, self.black_pen)
+                                               y + self.rect_height - self.offset_y - 1, self.black_pen)
             '''atr name on the left'''
-            self.place_left(QGraphicsSimpleTextItem(atr_name, None), y + self.rect_height/2)          
+            self.place_left(QGraphicsSimpleTextItem(
+                atr_name, None), y + self.rect_height/2)
             '''atr value on the right'''
-            self.place_right(QGraphicsSimpleTextItem(str(atr_val), None), y + self.rect_height/2)
+            self.place_right(QGraphicsSimpleTextItem(
+                str(atr_val), None), y + self.rect_height/2)
 
     def place_left(self, text, y):
-        '''places text to the left'''       
+        '''places text to the left'''
         self.place_centered(text, -self.atr_area_w + self.offset_x/2, y)
 
     def place_right(self, text, y):
@@ -831,9 +866,13 @@ class GraphAttributes:
     def place_centered(self, text, x, y):
         '''centers the text around given coordinates'''
         to_center = text.boundingRect().width()/2
+        '''invisible lines holding space'''
+        self.scene.addLine(x - to_center - 20, y, x -
+                           to_center - 20, y + 2, QPen(Qt.white, 3))
+        self.scene.addLine(x + to_center + 20, y, x +
+                           to_center + 20, y + 2, QPen(Qt.white, 3))
         text.setPos(x - to_center, y)
         self.scene.addItem(text)
-
 
     def split_boxes_area(self, h, num_boxes, header_h):
         '''calculates y coordinates of boxes to be plotted, calculates rect_height
@@ -848,7 +887,6 @@ class GraphAttributes:
         Returns:
             list y_coordinates
         '''
-        #self.rect_height = np.floor(h*2 / num_boxes)
         return [(-h + i*self.rect_height) for i in range(num_boxes)]
 
 
