@@ -14,6 +14,7 @@ Widgets
    widgets/parallel-coordinates
    widgets/stacking
    widgets/feature-statistics
+   widgets/select-by-data-index
 
 
 Indices and tables

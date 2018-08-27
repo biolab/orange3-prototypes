@@ -1,12 +1,12 @@
 from Orange.data import Table, Domain
 from Orange.widgets.tests.base import WidgetTest
-from orangecontrib.prototypes.widgets.owselectsubset import OWSelectSubset
+from orangecontrib.prototypes.widgets.owselectbydataindex import OWSelectByDataIndex
 
 
 class TestOWSelectiSubset(WidgetTest):
 
     def setUp(self):
-        self.widget = self.create_widget(OWSelectSubset)
+        self.widget = self.create_widget(OWSelectByDataIndex)
 
     def test_subset(self):
         data = Table("iris")
