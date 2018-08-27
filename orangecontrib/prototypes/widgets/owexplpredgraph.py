@@ -33,6 +33,14 @@ from Orange.widgets.utils.concurrent import (
 )
 
 
+class SortBy(IntEnum):
+    NO_SORTING, BY_NAME, ABSOLUTE, POSITIVE, NEGATIVE = 0, 1, 2, 3, 4
+
+    @staticmethod
+    def items():
+        return["No sorting", "By name", "Absolute contribution",
+               "Positive contribution", "Negative contribution"]
+
 class Task:
 
     future = ...
@@ -78,7 +86,7 @@ class ExplainPredictions:
 
     '''
 
-    def __init__(self, data, model, p_val=0.05, error=0.05, batch_size=500, max_iter=100000, min_iter=1000, seed=42):
+    def __init__(self, data, model, p_val=0.05, error=0.05, batch_size=500, max_iter=10000000, min_iter=1000, seed=42):
         self.model = model
         self.data = data
         self.p_val = p_val
@@ -233,6 +241,7 @@ class OWExplainPred(OWWidget):
     gui_error = settings.Setting(0.05)
     gui_p_val = settings.Setting(0.05)
     gui_num_atr = settings.Setting(20)
+    sort_index = settings.Setting(SortBy.ABSOLUTE)
 
     class Inputs:
         data = Input("Data", Table, default=True)
@@ -318,6 +327,14 @@ class OWExplainPred(OWWidget):
                                    controlWidth=80,
                                    keyboardTracking=False)
 
+        self.sort_combo = gui.comboBox(plot_properties_box,
+                                        self,
+                                        "sort_index",
+                                        label="Rank by",
+                                        items=SortBy.items(),
+                                        orientation = Qt.Horizontal,
+                                        callback = self._update_combo)
+
         gui.rubber(self.controlArea)
 
         self.cancel_button = gui.button(self.controlArea,
@@ -362,7 +379,6 @@ class OWExplainPred(OWWidget):
                 # Recompute main scene on window width change
                 if resizeEvent.size().width() != resizeEvent.oldSize().width():
                     self._is_resizing = True
-                    print ("resizal so nas")
                     self.w.draw()
                     self._is_resizing = False
                 return super().resizeEvent(resizeEvent)
@@ -396,31 +412,41 @@ class OWExplainPred(OWWidget):
         self.mainArea.layout().addWidget(self.footer_view)
 
         self.painter = None
-        self.old_y = None
         
-
-
     def draw(self):
         '''Uses GraphAttributes class to draw the explanaitons '''
         self.box_scene.clear()
         wp = self.box_view.viewport().rect()
+        
         if self.explanations is not None:
+            self.sort_explanations()
             self.painter = GraphAttributes(self.box_scene,self.gui_num_atr)
-            self.painter.paint(wp, self.explanations)
+            self.painter.paint(wp, self.explanations)  
 
         '''set appropriate boxes for different views'''
         rect = QRectF(self.box_scene.itemsBoundingRect().x(),
               self.box_scene.itemsBoundingRect().y(),
               self.box_scene.itemsBoundingRect().width(),
               self.box_scene.itemsBoundingRect().height())
-        if self.old_y != rect.height():
-            print ("rect has changed " + str(rect.height()))
-            self.old_y = rect.height() 
 
         self.box_scene.setSceneRect(rect)
         self.box_view.setSceneRect(rect.x(), rect.y()+100, rect.width(), rect.height() - 300)
         self.header_view.setSceneRect(rect.x(), rect.y() + 40 , rect.width(), 35)
         self.footer_view.setSceneRect(rect.x(), rect.height() - 200, rect.width(), 50)
+
+    def sort_explanations(self):
+        '''sorts explanations according to users choice from combo box'''
+        if self.sort_index == SortBy.POSITIVE:
+            self.explanations = self.explanations[np.argsort(self.explanations.X[:,0])][::-1]
+        elif self.sort_index == SortBy.NEGATIVE:
+            self.explanations = self.explanations[np.argsort(self.explanations.X[:,0])]
+        elif self.sort_index == SortBy.ABSOLUTE:
+            self.explanations = self.explanations[np.argsort(np.abs(self.explanations.X[:,0]))][::-1]
+        elif self.sort_index == SortBy.BY_NAME:
+            l = np.array(list(map(np.chararray.lower, self.explanations.metas[:,0])))
+            self.explanations = self.explanations[np.argsort(l)]
+        else:
+            pass
 
     @Inputs.data
     @check_sql_input
@@ -537,14 +563,7 @@ class OWExplainPred(OWWidget):
 
     @pyqtSlot(Orange.data.Table)
     def update_view(self, table):
-        model = TableModel(table, parent=None)
-        header = self.dataview.horizontalHeader()
-        model.sort(
-            header.sortIndicatorSection(),
-            header.sortIndicatorOrder())
-        #self.dataview.setModel(model)
-        indices = model.mapToSourceRows(list(range(min(len(table),self.gui_num_atr))))    
-        self.explanations = table[indices]
+        self.explanations = table
         self.draw()
         self.commit_output()
 
@@ -646,18 +665,16 @@ class OWExplainPred(OWWidget):
         self.cancel()
         self.handleNewSignals()
 
+    def _update_combo(self):
+        if self.explanations != None:
+            self.draw()
+            self.commit_output()
+        
+
     def onDeleteWidget(self):
         self.cancel()
         super().onDeleteWidget()
 
-
-class SortBy(IntEnum):
-    NO_SORTING, BY_NAME, ABSOLUTE, POSITIVE, NEGATIVE = 0, 1, 2, 3, 4
-
-    @staticmethod
-    def items():
-        return["No sorting", "By name", "Absolute contribution",
-               "Positive contribution", "Negative contribution"]
 
 class GraphAttributes:
     '''
@@ -681,10 +698,12 @@ class GraphAttributes:
         self.num_of_atr = num_of_atr
         self.offset_x = offset_x
         self.offset_y = offset_y
-        self.black_pen = QPen(Qt.black, 3)
+        self.black_pen = QPen(Qt.black, 2)
         self.gray_pen = QPen(Qt.gray, 1)
-        self.gray_pen.setStyle(Qt.DashLine)
-        self.brush = QBrush(QColor(167,110, 111))
+        self.light_gray_pen = QPen(QColor("#DFDFDF"), 1)
+        self.light_gray_pen.setStyle(Qt.DashLine)
+        self.brush = QBrush(QColor("#46a7e2"))
+            # oranzna"#ed9c28")) 
         '''placeholders'''
         self.rect_height = rect_height
         self.max_contrib = None
@@ -714,11 +733,12 @@ class GraphAttributes:
         unit_pixels = np.floor((self.atr_area_w - self.offset_x)/(self.max_contrib/self.unit))
         self.scale = unit_pixels / self.unit
 
-        self.draw_header_footer(header_h, unit_pixels, coords[-1])
+        self.draw_header_footer(header_h, unit_pixels, coords[-1], coords[0])
         for y, e in zip(coords, explanations[:self.num_of_atr]):
             self.draw_attribute(y, atr_name = str(e._metas[0]), atr_val = str(e._metas[1]), atr_contrib = e._x[0], error = e._x[1])
 
-    def draw_header_footer(self, header_h, unit_pixels, last_y, marking_len = 15):
+
+    def draw_header_footer(self, header_h, unit_pixels, last_y, first_y, marking_len = 15):
         '''header''' 
         max_x = self.max_contrib * self.scale
 
@@ -745,13 +765,16 @@ class GraphAttributes:
         line_y = last_y + header_h/2 + self.rect_height
         self.scene.addLine(-max_x, line_y, max_x, line_y, self.black_pen)
         '''max, min'''
-        self.scene.addLine(max_x, line_y, max_x, line_y + marking_len, self.black_pen)
-        self.scene.addLine(-max_x, line_y, -max_x, line_y + marking_len, self.black_pen)
-        self.place_centered(self.format_marking(self.max_contrib,2), max_x, line_y + marking_len + 5)
-        self.place_centered(self.format_marking(-self.max_contrib,2), -max_x, line_y + marking_len + 5)
+        #self.scene.addLine(max_x, line_y, max_x, line_y + marking_len, self.black_pen)
+        #self.scene.addLine(-max_x, line_y, -max_x, line_y + marking_len, self.black_pen)
+        #self.place_centered(self.format_marking(self.max_contrib,2), max_x, line_y + marking_len + 5)
+        #self.place_centered(self.format_marking(-self.max_contrib,2), -max_x, line_y + marking_len + 5)
 
-        for i in range(0, int(self.max_contrib / self.unit)):
+        for i in range(0, int(self.max_contrib / self.unit) + 1):
             x = unit_pixels * i 
+            '''grid lines'''
+            self.scene.addLine(x, first_y, x, last_y, self.light_gray_pen)
+            self.scene.addLine(-x, first_y, -x, last_y, self.light_gray_pen)
             self.scene.addLine(x, line_y, x, line_y + marking_len, self.black_pen)
             self.scene.addLine(-x, line_y, -x, line_y + marking_len, self.black_pen)
             self.place_centered(self.format_marking(i*self.unit), x, line_y + marking_len + 5)
@@ -781,7 +804,7 @@ class GraphAttributes:
 
         if atr_name is not None and atr_val is not None and atr_contrib is not None:
             atr_contrib_x = atr_contrib * self.scale
-            error_x = error * self.scale
+            error_x = error * self.scale 
 
             padded_rect = self.rect_height - 2 * self.offset_y
             len_rec = 2 * error_x
