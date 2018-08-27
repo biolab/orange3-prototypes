@@ -235,7 +235,7 @@ class ExplainPredictions:
 
 class OWExplainPred(OWWidget):
 
-    name = "Graph Explain Predictions"
+    name = "Explain Predictions"
     description = "Computes attribute contributions to the final prediction with an approximation algorithm for shapely value"
     icon = "icons/ExplainPredictions.svg"
     priority = 200
@@ -868,9 +868,9 @@ class GraphAttributes:
         to_center = text.boundingRect().width()/2
         '''invisible lines holding space'''
         self.scene.addLine(x - to_center - 20, y, x -
-                           to_center - 20, y + 2, QPen(Qt.white, 3))
+                           to_center - 20, y + 2, QPen(Qt.white, 0))
         self.scene.addLine(x + to_center + 20, y, x +
-                           to_center + 20, y + 2, QPen(Qt.white, 3))
+                           to_center + 20, y + 2, QPen(Qt.white, 0))
         text.setPos(x - to_center, y)
         self.scene.addItem(text)
 
