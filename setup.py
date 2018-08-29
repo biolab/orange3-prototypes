@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+import sys
+from os import walk, path
 
 from setuptools import setup, find_packages
 
@@ -21,7 +23,26 @@ ENTRY_POINTS = {
     ),
 }
 
+DATA_FILES = [
+    # Data files that will be installed outside site-packages folder
+]
+
+
+def include_documentation(local_dir, install_dir):
+    global DATA_FILES
+    if 'bdist_wheel' in sys.argv and not path.exists(local_dir):
+        print("Directory '{}' does not exist. "
+              "Please build documentation before running bdist_wheel."
+              .format(path.abspath(local_dir)))
+        sys.exit(0)
+    doc_files = []
+    for dirpath, dirs, files in walk(local_dir):
+        doc_files.append((dirpath.replace(local_dir, install_dir),
+                          [path.join(dirpath, f) for f in files]))
+    DATA_FILES.extend(doc_files)
+
 if __name__ == '__main__':
+    include_documentation('doc/_build/htmlhelp', 'help/orange3-prototypes')
     setup(
         name="Orange3-Prototypes",
         description="Prototype Orange widgets — only for the brave.",
@@ -64,4 +85,5 @@ if __name__ == '__main__':
         namespace_packages=['orangecontrib'],
         include_package_data=True,
         zip_safe=False,
+        data_files=DATA_FILES,
     )
