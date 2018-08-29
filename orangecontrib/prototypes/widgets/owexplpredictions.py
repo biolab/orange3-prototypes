@@ -233,7 +233,7 @@ class ExplainPredictions:
             return predictions
 
 
-class OWExplainPred(OWWidget):
+class OWExplainPredictions(OWWidget):
 
     name = "Explain Predictions"
     description = "Computes attribute contributions to the final prediction with an approximation algorithm for shapely value"
@@ -349,7 +349,7 @@ class OWExplainPred(OWWidget):
         predictions_box = gui.vBox(self.mainArea, "Model prediction")
         self.predict_info = gui.widgetLabel(predictions_box, "")
 
-        self.resize(640, 480)
+        self.resize(700, 1700)
 
         class _GraphicsView(QGraphicsView):
             def __init__(self, scene, parent, **kwargs):
@@ -371,7 +371,7 @@ class OWExplainPred(OWWidget):
                 super().__init__(scene, parent,
                                  verticalScrollBarPolicy=Qt.ScrollBarAlwaysOn,
                                  styleSheet='QGraphicsView {background: white}')
-                self.viewport().setMinimumWidth(400)
+                self.viewport().setMinimumWidth(1000)
                 self._is_resizing = False
 
             w = self
