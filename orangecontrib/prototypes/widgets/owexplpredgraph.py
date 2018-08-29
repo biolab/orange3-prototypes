@@ -55,7 +55,7 @@ class Task:
 
 
 class ExplainPredictions:
-    '''
+    """
     Class used to explain individual predictions by determining the importance of attribute values.
     All interactions between atributes are accounted for by calculating Shapely value.
 
@@ -85,7 +85,7 @@ class ExplainPredictions:
     table: Orange.data.Table
         table containing atributes and corresponding contributions
 
-    '''
+    """
 
     def __init__(self, data, model, p_val=0.05, error=0.05, batch_size=500, max_iter=10000000, min_iter=1000, seed=42):
         self.model = model
@@ -97,7 +97,7 @@ class ExplainPredictions:
         self.min_iter = min_iter
         self.atr_names = [var.name for var in data.domain.attributes]
         self.seed = seed
-        '''variables, saved for possible restart'''
+        """variables, saved for possible restart"""
         self.saved = False
         self.steps = None
         self.mu = None
@@ -125,7 +125,7 @@ class ExplainPredictions:
             self.iterations_reached = np.copy(self.steps)
 
     def get_atr_column(self, instance):
-        '''somewhat ugly fix for printing values in column"'''
+        """somewhat ugly fix for printing values in column"""
         attr_values = []
         var = instance.domain.attributes
         for idx in range(len(var)):
@@ -165,7 +165,7 @@ class ExplainPredictions:
             nonzero = self.steps != 0
             expl_scaled = (self.expl[nonzero] /
                            self.steps[nonzero]).reshape(1, -1)
-            ''' creating return array'''
+            """ creating return array"""
             ips = np.hstack((expl_scaled.T, np.sqrt(
                 z_sq * self.var[nonzero] / self.steps[nonzero]).reshape(-1, 1)))
             table = Table.from_numpy(domain, ips,
@@ -200,7 +200,7 @@ class ExplainPredictions:
             diff = np.sum(f1 - f2)
             self.expl[0, a] += diff
 
-            '''update variance'''
+            """update variance"""
             self.steps[0, a] += self.batch_size
             self.iterations_reached[0, a] += self.batch_size
             d = diff - self.mu[0, a]
@@ -399,7 +399,7 @@ class OWExplainPred(OWWidget):
             def sizeHint(self):
                 return QSize(400, 40)
 
-        '''all will share the same scene, but will show different parts of it'''
+        """all will share the same scene, but will show different parts of it"""
         self.box_scene = QGraphicsScene(self)
 
         self.box_view = GraphicsView(self.box_scene, self)
@@ -414,7 +414,7 @@ class OWExplainPred(OWWidget):
         self.painter = None
 
     def draw(self):
-        '''Uses GraphAttributes class to draw the explanaitons '''
+        """Uses GraphAttributes class to draw the explanaitons """
         self.box_scene.clear()
         wp = self.box_view.viewport().rect()
 
@@ -423,7 +423,7 @@ class OWExplainPred(OWWidget):
             self.painter = GraphAttributes(self.box_scene, self.gui_num_atr)
             self.painter.paint(wp, self.explanations)
 
-        '''set appropriate boxes for different views'''
+        """set appropriate boxes for different views"""
         rect = QRectF(self.box_scene.itemsBoundingRect().x(),
                       self.box_scene.itemsBoundingRect().y(),
                       self.box_scene.itemsBoundingRect().width(),
@@ -441,7 +441,7 @@ class OWExplainPred(OWWidget):
         self.footer_view.centerOn(0, 0)
 
     def sort_explanations(self):
-        '''sorts explanations according to users choice from combo box'''
+        """sorts explanations according to users choice from combo box"""
         if self.sort_index == SortBy.POSITIVE:
             self.explanations = self.explanations[np.argsort(
                 self.explanations.X[:, 0])][::-1]
@@ -461,7 +461,7 @@ class OWExplainPred(OWWidget):
     @Inputs.data
     @check_sql_input
     def set_data(self, data):
-        '''Set input 'Data'''
+        """Set input 'Data"""
         self.data = data
         self.explanations = None
         self.data_info.setText("Data: N/A")
@@ -480,7 +480,7 @@ class OWExplainPred(OWWidget):
 
     @Inputs.model
     def set_predictor(self, model):
-        '''Set input 'Model'''
+        """Set input 'Model"""
         self.model = model
         self.model_info.setText("Model: N/A")
         self.explanations = None
@@ -491,7 +491,7 @@ class OWExplainPred(OWWidget):
     @Inputs.sample
     @check_sql_input
     def set_sample(self, sample):
-        '''Set input 'Sample', checks if size is appropriate'''
+        """Set input 'Sample', checks if size is appropriate"""
         self.to_explain = sample
         self.explanations = None
         self.Error.sample_too_big.clear()
@@ -587,12 +587,12 @@ class OWExplainPred(OWWidget):
 
     @pyqtSlot(concurrent.futures.Future)
     def _task_finished(self, f):
-        '''
+        """
         Parameters:
         ----------
         f: conncurent.futures.Future
             future instance holding the result of learner evaluation
-        '''
+        """
         assert self.thread() is QThread.currentThread()
         assert self._task is not None
         assert self._task.future is f
@@ -618,9 +618,9 @@ class OWExplainPred(OWWidget):
         self.progressBarFinished(processEvents=False)
 
     def commit_output(self):
-        '''
+        """
         Sends best-so-far results forward
-        '''
+        """
         self.Outputs.explanations.send(self.explanations)
 
     def toggle_button(self):
@@ -634,9 +634,9 @@ class OWExplainPred(OWWidget):
             self.commit_calc_or_output()
 
     def cancel(self):
-        '''
+        """
         Cancel the current task (if any).
-        '''
+        """
         if self._task is not None:
             self._task.cancel()
             assert self._task.future.done()
@@ -646,12 +646,12 @@ class OWExplainPred(OWWidget):
             self._task_finished(self._task.future)
 
     def _print_prediction(self, class_value):
-        '''
+        """
         Parameters
         ----------
         class_value: float 
             Number representing either index of predicted class value, looked up in domain, or predicted value (regression)
-        '''
+        """
         name = self.data.domain.class_vars[0].name
         if isinstance(self.data.domain.class_vars[0], ContinuousVariable):
             self.predict_info.setText(name + ":      " + str(class_value))
@@ -686,7 +686,7 @@ class OWExplainPred(OWWidget):
 
 
 class GraphAttributes:
-    '''
+    """
     Creates entire graph of explanations, paint function is the main one, it delegates painting of attributes to draw_attribute, 
     header and scale are dealt with in draw_header. Header is fixed in size, rows for representing attributes are scaled according to their number.
 
@@ -700,7 +700,7 @@ class GraphAttributes:
         makes room on the left side for attribute name, on the right for attribute value
     offset_y : int
         distance between the line border of attribute box plot and the box itself
-    '''
+    """
 
     def __init__(self, scene, num_of_atr=3, offset_x=100, offset_y=10, rect_height=40):
         self.scene = scene
@@ -712,7 +712,7 @@ class GraphAttributes:
         self.light_gray_pen = QPen(QColor("#DFDFDF"), 1)
         self.light_gray_pen.setStyle(Qt.DashLine)
         self.brush = QBrush(QColor("#46a7e2"))
-        '''placeholders'''
+        """placeholders"""
         self.rect_height = rect_height
         self.max_contrib = None
         self.atr_area_h = None
@@ -733,7 +733,7 @@ class GraphAttributes:
         self.offset_x += w.boundingRect().width()*2
 
     def paint(self, wp, explanations=None, header_h=100):
-        '''
+        """
         Coordinates drawing
         Parameters
         ----------
@@ -743,7 +743,7 @@ class GraphAttributes:
             data table with name, value, score and error of attributes to plot
         header_h : int
             space to be left on the top and the bottom of graph for header and scale
-        '''
+        """
         self.atr_area_h = wp.height()/2 - header_h
         self.atr_area_w = wp.width()/2
 
@@ -765,12 +765,12 @@ class GraphAttributes:
                 e._metas[1]), atr_contrib=e._x[0], error=e._x[1])
 
     def draw_header_footer(self, wp, header_h, unit_pixels, last_y, first_y, marking_len=15):
-        '''header'''
+        """header"""
         max_x = self.max_contrib * self.scale
 
-        atr_label = QGraphicsSimpleTextItem("Attribute", None)
-        val_label = QGraphicsSimpleTextItem("Value", None)
-        score_label = QGraphicsSimpleTextItem("Score", None)
+        atr_label = QGraphicsSimpleTextItem("Attribute name", None)
+        val_label = QGraphicsSimpleTextItem("Attribute value", None)
+        score_label = QGraphicsSimpleTextItem("Attribute contribution", None)
 
         font = score_label.font()
         font.setBold(True)
@@ -787,11 +787,11 @@ class GraphAttributes:
         self.scene.addLine(-max_x, -self.atr_area_h - header_h,
                            max_x, -self.atr_area_h - header_h, white_pen)
 
-        '''footer'''
+        """footer"""
         line_y = max(first_y + wp.height() + header_h/2,
                      last_y + header_h/2 + self.rect_height)
         self.scene.addLine(-max_x, line_y, max_x, line_y, self.black_pen)
-        '''max, min'''
+        """max, min"""
         #self.scene.addLine(max_x, line_y, max_x, line_y + marking_len, self.black_pen)
         #self.scene.addLine(-max_x, line_y, -max_x, line_y + marking_len, self.black_pen)
         #self.place_centered(self.format_marking(self.max_contrib,2), max_x, line_y + marking_len + 5)
@@ -799,7 +799,7 @@ class GraphAttributes:
 
         for i in range(0, int(self.max_contrib / self.unit) + 1):
             x = unit_pixels * i
-            '''grid lines'''
+            """grid lines"""
             self.scene.addLine(x, first_y, x, line_y, self.light_gray_pen)
             self.scene.addLine(-x, first_y, -x, line_y, self.light_gray_pen)
 
@@ -816,9 +816,9 @@ class GraphAttributes:
         return QGraphicsSimpleTextItem(str(round(x, places)), None)
 
     def get_scale(self):
-        '''figures out on what scale is max score (1, .1, .01)
+        """figures out on what scale is max score (1, .1, .01)
         TESTING NEEDED, maybe something more elegant.
-        '''
+        """
         if self.max_contrib > 1:
             return 1
         elif self.max_contrib > 0.1:
@@ -827,9 +827,9 @@ class GraphAttributes:
             return 0.01
 
     def draw_attribute(self, y, atr_name, atr_val, atr_contrib, error):
-        '''vertical line where x = 0'''
+        """vertical line where x = 0"""
         self.scene.addLine(0, y, 0, y + self.rect_height, self.black_pen)
-        '''borders'''
+        """borders"""
         self.scene.addLine(-self.atr_area_w + self.offset_x,
                            y, self.atr_area_w - self.offset_x, y, self.gray_pen)
         self.scene.addLine(-self.atr_area_w + self.offset_x, y + self.rect_height,
@@ -845,28 +845,28 @@ class GraphAttributes:
                 atr_contrib_x - error_x, y + self.offset_y, len_rec, padded_rect)
             graphed_rect.setBrush(self.brush)
             self.scene.addItem(graphed_rect)
-            '''vertical line marks calculated contribution of attribute'''
+            """vertical line marks calculated contribution of attribute"""
             self.atr_line = self.scene.addLine(atr_contrib_x, y + self.offset_y + 1, atr_contrib_x,
                                                y + self.rect_height - self.offset_y - 1, self.black_pen)
-            '''atr name on the left'''
+            """atr name on the left"""
             self.place_left(QGraphicsSimpleTextItem(
                 atr_name, None), y + self.rect_height/2)
-            '''atr value on the right'''
+            """atr value on the right"""
             self.place_right(QGraphicsSimpleTextItem(
                 str(atr_val), None), y + self.rect_height/2)
 
     def place_left(self, text, y):
-        '''places text to the left'''
+        """places text to the left"""
         self.place_centered(text, -self.atr_area_w + self.offset_x/2, y)
 
     def place_right(self, text, y):
-        '''places text to the right'''
+        """places text to the right"""
         self.place_centered(text, self.atr_area_w - self.offset_x/2, y)
 
     def place_centered(self, text, x, y):
-        '''centers the text around given coordinates'''
+        """centers the text around given coordinates"""
         to_center = text.boundingRect().width()/2
-        '''invisible lines holding space'''
+        """invisible lines holding space"""
         self.scene.addLine(x - to_center - 20, y, x -
                            to_center - 20, y + 2, QPen(Qt.white, 0))
         self.scene.addLine(x + to_center + 20, y, x +
@@ -875,7 +875,7 @@ class GraphAttributes:
         self.scene.addItem(text)
 
     def split_boxes_area(self, h, num_boxes, header_h):
-        '''calculates y coordinates of boxes to be plotted, calculates rect_height
+        """calculates y coordinates of boxes to be plotted, calculates rect_height
         Parameters
         ---------
         h : int
@@ -886,7 +886,7 @@ class GraphAttributes:
             height of header
         Returns:
             list y_coordinates
-        '''
+        """
         return [(-h + i*self.rect_height) for i in range(num_boxes)]
 
 
