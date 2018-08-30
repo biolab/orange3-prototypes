@@ -771,7 +771,7 @@ class GraphAttributes:
 
         atr_label = QGraphicsSimpleTextItem("Name", None)
         val_label = QGraphicsSimpleTextItem("Value", None)
-        score_label = QGraphicsSimpleTextItem("Attribute contribution", None)
+        score_label = QGraphicsSimpleTextItem("Score", None)
 
         font = score_label.font()
         font.setBold(True)
@@ -785,8 +785,8 @@ class GraphAttributes:
         fix = self.fix
 
         self.place_left(atr_label, -self.atr_area_h - header_h/2)
-        self.place_right(val_label, -self.atr_area_h - header_h/2)
-        self.place_centered(score_label, 0, -self.atr_area_h - header_h/2)
+        self.place_more_left(val_label, -self.atr_area_h - header_h/2)
+        self.place_right(score_label, -self.atr_area_h - header_h/2)
         self.scene.addLine(-max_x + fix, -self.atr_area_h - header_h,
                            max_x + fix, -self.atr_area_h - header_h, white_pen)
 
@@ -853,16 +853,21 @@ class GraphAttributes:
             self.place_left(QGraphicsSimpleTextItem(
                 atr_name, None), y + self.rect_height/2)
             """atr value on the right"""
-            self.place_right(QGraphicsSimpleTextItem(
+            self.place_more_left(QGraphicsSimpleTextItem(
                 atr_val, None), y + self.rect_height/2)
+
+            self.place_right(self.format_marking(atr_contrib), y + self.rect_height/2)
 
     def place_left(self, text, y):
         """places text to the left"""
         self.place_centered(text, -self.atr_area_w + self.offset_x/2, y)
 
-    def place_right(self, text, y):
-        """places text to the right"""
+    def place_more_left(self, text, y):
+        """places text more left than place_left"""
         self.place_centered(text, -self.atr_area_w + self.offset_x, y)
+
+    def place_right(self, text, y):
+        self.place_centered(text, +self.atr_area_w - self.offset_x + self.fix * 2, y)
 
     def place_centered(self, text, x, y):
         """centers the text around given coordinates"""
