@@ -757,6 +757,7 @@ class GraphAttributes:
         unit_pixels = np.floor(
             (self.atr_area_w - self.offset_x)/(self.max_contrib/self.unit))
         self.scale = unit_pixels / self.unit
+        self.fix = self.offset_x/2
 
         self.draw_header_footer(
             wp, header_h, unit_pixels, coords[-1], coords[0])
@@ -768,8 +769,8 @@ class GraphAttributes:
         """header"""
         max_x = self.max_contrib * self.scale
 
-        atr_label = QGraphicsSimpleTextItem("Attribute name", None)
-        val_label = QGraphicsSimpleTextItem("Attribute value", None)
+        atr_label = QGraphicsSimpleTextItem("Name", None)
+        val_label = QGraphicsSimpleTextItem("Value", None)
         score_label = QGraphicsSimpleTextItem("Attribute contribution", None)
 
         font = score_label.font()
@@ -781,36 +782,33 @@ class GraphAttributes:
 
         white_pen = QPen(Qt.white, 3)
 
+        fix = self.fix
+
         self.place_left(atr_label, -self.atr_area_h - header_h/2)
         self.place_right(val_label, -self.atr_area_h - header_h/2)
         self.place_centered(score_label, 0, -self.atr_area_h - header_h/2)
-        self.scene.addLine(-max_x, -self.atr_area_h - header_h,
-                           max_x, -self.atr_area_h - header_h, white_pen)
+        self.scene.addLine(-max_x + fix, -self.atr_area_h - header_h,
+                           max_x + fix, -self.atr_area_h - header_h, white_pen)
 
         """footer"""
-        line_y = max(first_y + wp.height() + header_h/2,
+        line_y = max(first_y + wp.height() + + header_h/2,
                      last_y + header_h/2 + self.rect_height)
-        self.scene.addLine(-max_x, line_y, max_x, line_y, self.black_pen)
-        """max, min"""
-        #self.scene.addLine(max_x, line_y, max_x, line_y + marking_len, self.black_pen)
-        #self.scene.addLine(-max_x, line_y, -max_x, line_y + marking_len, self.black_pen)
-        #self.place_centered(self.format_marking(self.max_contrib,2), max_x, line_y + marking_len + 5)
-        #self.place_centered(self.format_marking(-self.max_contrib,2), -max_x, line_y + marking_len + 5)
+        self.scene.addLine(-max_x + fix, line_y, max_x + fix, line_y, self.black_pen)
 
         for i in range(0, int(self.max_contrib / self.unit) + 1):
             x = unit_pixels * i
             """grid lines"""
-            self.scene.addLine(x, first_y, x, line_y, self.light_gray_pen)
-            self.scene.addLine(-x, first_y, -x, line_y, self.light_gray_pen)
+            self.scene.addLine(x + fix, first_y, x + fix, line_y, self.light_gray_pen)
+            self.scene.addLine(-x + fix, first_y, -x + fix, line_y, self.light_gray_pen)
 
-            self.scene.addLine(x, line_y, x, line_y +
+            self.scene.addLine(x + fix, line_y, x + fix, line_y +
                                marking_len, self.black_pen)
-            self.scene.addLine(-x, line_y, -x, line_y +
+            self.scene.addLine(-x + fix, line_y, -x + fix, line_y +
                                marking_len, self.black_pen)
             self.place_centered(self.format_marking(
-                i*self.unit), x, line_y + marking_len + 5)
+                i*self.unit), x + fix, line_y + marking_len + 5)
             self.place_centered(
-                self.format_marking(-i*self.unit), -x, line_y + marking_len + 5)
+                self.format_marking(-i*self.unit), -x + fix, line_y + marking_len + 5)
 
     def format_marking(self, x, places=2):
         return QGraphicsSimpleTextItem(str(round(x, places)), None)
@@ -827,16 +825,18 @@ class GraphAttributes:
             return 0.01
 
     def draw_attribute(self, y, atr_name, atr_val, atr_contrib, error):
+        fix = self.fix
         """vertical line where x = 0"""
-        self.scene.addLine(0, y, 0, y + self.rect_height, self.black_pen)
+        self.scene.addLine(0 + fix, y, 0 + fix, y + self.rect_height, self.black_pen)
         """borders"""
-        self.scene.addLine(-self.atr_area_w + self.offset_x,
-                           y, self.atr_area_w - self.offset_x, y, self.gray_pen)
-        self.scene.addLine(-self.atr_area_w + self.offset_x, y + self.rect_height,
-                           self.atr_area_w - self.offset_x, y + self.rect_height, self.gray_pen)
+
+        self.scene.addLine(-self.atr_area_w + self.offset_x + fix,
+                           y, self.atr_area_w - self.offset_x + fix, y, self.gray_pen)
+        self.scene.addLine(-self.atr_area_w + self.offset_x + fix, y + self.rect_height,
+                           self.atr_area_w - self.offset_x + fix, y + self.rect_height, self.gray_pen)
 
         if atr_name is not None and atr_val is not None and atr_contrib is not None:
-            atr_contrib_x = atr_contrib * self.scale
+            atr_contrib_x = atr_contrib * self.scale + fix
             error_x = error * self.scale
 
             padded_rect = self.rect_height - 2 * self.offset_y
@@ -848,12 +848,13 @@ class GraphAttributes:
             """vertical line marks calculated contribution of attribute"""
             self.atr_line = self.scene.addLine(atr_contrib_x, y + self.offset_y + 1, atr_contrib_x,
                                                y + self.rect_height - self.offset_y - 1, self.black_pen)
+
             """atr name on the left"""
             self.place_left(QGraphicsSimpleTextItem(
                 atr_name, None), y + self.rect_height/2)
             """atr value on the right"""
             self.place_right(QGraphicsSimpleTextItem(
-                str(atr_val), None), y + self.rect_height/2)
+                atr_val, None), y + self.rect_height/2)
 
     def place_left(self, text, y):
         """places text to the left"""
@@ -861,7 +862,7 @@ class GraphAttributes:
 
     def place_right(self, text, y):
         """places text to the right"""
-        self.place_centered(text, self.atr_area_w - self.offset_x/2, y)
+        self.place_centered(text, -self.atr_area_w + self.offset_x, y)
 
     def place_centered(self, text, x, y):
         """centers the text around given coordinates"""
@@ -892,7 +893,7 @@ class GraphAttributes:
 
 def main():
     app = QApplication([])
-    w = OWExplainPred()
+    w = OWExplainPredictions()
     data = Orange.data.Table("iris.tab")
     data_subset = data[:20]
     w.set_data(data_subset)
