@@ -703,10 +703,11 @@ class GraphAttributes:
         distance between the line border of attribute box plot and the box itself
     """
 
-    def __init__(self, scene, num_of_atr=3, space=40, offset_y=10, rect_height=40):
+    def __init__(self, scene, num_of_atr=3, space=35, offset_y=10, rect_height=40):
         self.scene = scene
         self.num_of_atr = num_of_atr
         self.space = space
+        self.graph_space = 80
         self.offset_y = offset_y
         self.black_pen = QPen(Qt.black, 2)
         self.gray_pen = QPen(Qt.gray, 1)
@@ -749,8 +750,8 @@ class GraphAttributes:
             space to be left on the top and the bottom of graph for header and scale
         """
         self.name_w, self.val_w = self.get_needed_offset(explanations)
-        self.offset_left = self.space + self.name_w + self.space + self.val_w + self.space
-        self.offset_right = self.space + 50
+        self.offset_left = self.space + self.name_w + self.space + self.val_w + self.graph_space
+        self.offset_right = self.graph_space + 50
 
         self.atr_area_h = wp.height()/2 - header_h
         self.atr_area_w = (wp.width() - self.offset_left - self.offset_right) / 2
@@ -871,13 +872,13 @@ class GraphAttributes:
 
     def place_more_left(self, text, y):
         """places text more left than place_left"""
-        self.scene.addLine(0, y, 0 - 20, y + 2, QPen(Qt.white, 0))
+        self.scene.addLine(0, y, 0 - 10, y + 2, QPen(Qt.white, 0))
         self.place_centered(text, self.space + self.name_w/2, y)
 
     def place_right(self, text, y):
-        x = self.offset_left + 2 * self.atr_area_w + self.space
+        x = self.offset_left + 2 * self.atr_area_w + self.graph_space + 15
         self.scene.addLine(x, y, x, y + 2, QPen(Qt.white, 0))
-        self.place_centered(text, self.offset_left + 2 * self.atr_area_w + self.space, y)
+        self.place_centered(text, self.offset_left + 2 * self.atr_area_w + self.graph_space, y)
 
     def place_centered(self, text, x, y):
         """centers the text around given coordinates"""     
