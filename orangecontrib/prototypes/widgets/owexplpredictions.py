@@ -455,7 +455,7 @@ class OWExplainPredictions(OWWidget):
         elif self.sort_index == SortBy.BY_NAME:
             l = np.array(
                 list(map(np.chararray.lower, self.explanations.metas[:, 0])))
-            self.explanations = self.explanations[np.argsort(l, kind='mergesortt')]
+            self.explanations = self.explanations[np.argsort(l, kind='mergesort')]
         else:
             return
 
