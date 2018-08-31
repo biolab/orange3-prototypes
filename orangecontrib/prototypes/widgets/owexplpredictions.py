@@ -349,7 +349,9 @@ class OWExplainPredictions(OWWidget):
         predictions_box = gui.vBox(self.mainArea, "Model prediction")
         self.predict_info = gui.widgetLabel(predictions_box, "")
 
-        self.resize(700, 1700)
+        self.mainArea.setMinimumWidth(900)
+        self.resize(700, 1000)
+
 
         class _GraphicsView(QGraphicsView):
             def __init__(self, scene, parent, **kwargs):
@@ -371,7 +373,7 @@ class OWExplainPredictions(OWWidget):
                 super().__init__(scene, parent,
                                  verticalScrollBarPolicy=Qt.ScrollBarAlwaysOn,
                                  styleSheet='QGraphicsView {background: white}')
-                self.viewport().setMinimumWidth(1000)
+                self.viewport().setMinimumWidth(700)
                 self._is_resizing = False
 
             w = self
@@ -388,7 +390,7 @@ class OWExplainPredictions(OWWidget):
                 return self._is_resizing
 
             def sizeHint(self):
-                return QSize(400, 200)
+                return QSize(600, 500)
 
         class FixedSizeGraphicsView(_GraphicsView):
             def __init__(self, scene, parent):
@@ -397,13 +399,15 @@ class OWExplainPredictions(OWWidget):
                                                         QSizePolicy.Minimum))
 
             def sizeHint(self):
-                return QSize(400, 40)
+                return QSize(600, 30)
+
 
         """all will share the same scene, but will show different parts of it"""
         self.box_scene = QGraphicsScene(self)
 
         self.box_view = GraphicsView(self.box_scene, self)
         self.header_view = FixedSizeGraphicsView(self.box_scene, self)
+
 
         self.footer_view = FixedSizeGraphicsView(self.box_scene, self)
 
@@ -433,28 +437,25 @@ class OWExplainPredictions(OWWidget):
         self.box_view.setSceneRect(
             rect.x(), rect.y()+100, rect.width(), rect.height() - 180)
         self.header_view.setSceneRect(
-            rect.x(), rect.y() + 30, rect.width(), 35)
-        self.header_view.centerOn(0, 0)
+            rect.x(), rect.y(), rect.width(), 10)
         self.footer_view.setSceneRect(
             rect.x(), rect.y() + rect.height() - 50, rect.width(), 35)
-        self.box_view.centerOn(0, 0)
-        self.footer_view.centerOn(0, 0)
 
     def sort_explanations(self):
         """sorts explanations according to users choice from combo box"""
         if self.sort_index == SortBy.POSITIVE:
             self.explanations = self.explanations[np.argsort(
-                self.explanations.X[:, 0])][::-1]
+                self.explanations.X[:, 0], kind='mergesort')][::-1]
         elif self.sort_index == SortBy.NEGATIVE:
             self.explanations = self.explanations[np.argsort(
-                self.explanations.X[:, 0])]
+                self.explanations.X[:, 0], kind='mergesort')]
         elif self.sort_index == SortBy.ABSOLUTE:
             self.explanations = self.explanations[np.argsort(
-                np.abs(self.explanations.X[:, 0]))][::-1]
+                np.abs(self.explanations.X[:, 0]), kind='mergesort')][::-1]
         elif self.sort_index == SortBy.BY_NAME:
             l = np.array(
                 list(map(np.chararray.lower, self.explanations.metas[:, 0])))
-            self.explanations = self.explanations[np.argsort(l)]
+            self.explanations = self.explanations[np.argsort(l, kind='mergesortt')]
         else:
             return
 
@@ -702,10 +703,10 @@ class GraphAttributes:
         distance between the line border of attribute box plot and the box itself
     """
 
-    def __init__(self, scene, num_of_atr=3, offset_x=100, offset_y=10, rect_height=40):
+    def __init__(self, scene, num_of_atr=3, space=40, offset_y=10, rect_height=40):
         self.scene = scene
         self.num_of_atr = num_of_atr
-        self.offset_x = offset_x
+        self.space = space
         self.offset_y = offset_y
         self.black_pen = QPen(Qt.black, 2)
         self.gray_pen = QPen(Qt.gray, 1)
@@ -720,17 +721,20 @@ class GraphAttributes:
         self.scale = None
 
     def get_needed_offset(self, explanations):
-        max_l = 0
+        max_n = 0
         word = ""
+        max_v = 0
+        val = ""
         for e in explanations:
-            if max_l < len(str(e._metas[0])):
+            if max_n < len(str(e._metas[0])):
                 word = str(e._metas[0])
-                max_l = len(str(e._metas[0]))
-            if max_l < len(str(e._metas[1])):
-                word = str(e._metas[1])
-                max_l = len(str(e._metas[1]))
+                max_n = len(str(e._metas[0]))
+            if max_v < len(str(e._metas[1])):
+                val = str(e._metas[1])
+                max_v = len(str(e._metas[1]))
         w = QGraphicsSimpleTextItem(word, None)
-        self.offset_x += w.boundingRect().width()*2
+        v = QGraphicsSimpleTextItem(val, None)
+        return w.boundingRect().width(), v.boundingRect().width()
 
     def paint(self, wp, explanations=None, header_h=100):
         """
@@ -744,26 +748,29 @@ class GraphAttributes:
         header_h : int
             space to be left on the top and the bottom of graph for header and scale
         """
-        self.atr_area_h = wp.height()/2 - header_h
-        self.atr_area_w = wp.width()/2
+        self.name_w, self.val_w = self.get_needed_offset(explanations)
+        self.offset_left = self.space + self.name_w + self.space + self.val_w + self.space
+        self.offset_right = self.space + 50
 
-        self.get_needed_offset(explanations)
+        self.atr_area_h = wp.height()/2 - header_h
+        self.atr_area_w = (wp.width() - self.offset_left - self.offset_right) / 2
 
         coords = self.split_boxes_area(
             self.atr_area_h, self.num_of_atr, header_h)
         self.max_contrib = np.max(
-            abs(explanations.X[:, 0])) + np.max(explanations.X[:, 1])
+            abs(explanations.X[:, 0]) + explanations.X[:, 1])
         self.unit = self.get_scale()
-        unit_pixels = np.floor(
-            (self.atr_area_w - self.offset_x)/(self.max_contrib/self.unit))
+        unit_pixels = np.floor(self.atr_area_w/(self.max_contrib/self.unit))
         self.scale = unit_pixels / self.unit
-        self.fix = self.offset_x/2
+
 
         self.draw_header_footer(
             wp, header_h, unit_pixels, coords[-1], coords[0])
+        
         for y, e in zip(coords, explanations[:self.num_of_atr]):
             self.draw_attribute(y, atr_name=str(e._metas[0]), atr_val=str(
                 e._metas[1]), atr_contrib=e._x[0], error=e._x[1])
+        
 
     def draw_header_footer(self, wp, header_h, unit_pixels, last_y, first_y, marking_len=15):
         """header"""
@@ -775,23 +782,23 @@ class GraphAttributes:
 
         font = score_label.font()
         font.setBold(True)
-        font.setPointSize(15)
+        font.setPointSize(13)
         atr_label.setFont(font)
         val_label.setFont(font)
         score_label.setFont(font)
 
         white_pen = QPen(Qt.white, 3)
 
-        fix = self.fix
+        fix = (self.offset_left + self.atr_area_w)
 
-        self.place_left(atr_label, -self.atr_area_h - header_h/2)
-        self.place_more_left(val_label, -self.atr_area_h - header_h/2)
-        self.place_right(score_label, -self.atr_area_h - header_h/2)
+        self.place_left(atr_label, -self.atr_area_h - header_h*0.75)
+        self.place_more_left(val_label, -self.atr_area_h - header_h*0.75)
+        self.place_right(score_label, -self.atr_area_h - header_h*0.75)
         self.scene.addLine(-max_x + fix, -self.atr_area_h - header_h,
                            max_x + fix, -self.atr_area_h - header_h, white_pen)
 
         """footer"""
-        line_y = max(first_y + wp.height() + + header_h/2,
+        line_y = max(first_y + wp.height() +  header_h/2,
                      last_y + header_h/2 + self.rect_height)
         self.scene.addLine(-max_x + fix, line_y, max_x + fix, line_y, self.black_pen)
 
@@ -825,15 +832,15 @@ class GraphAttributes:
             return 0.01
 
     def draw_attribute(self, y, atr_name, atr_val, atr_contrib, error):
-        fix = self.fix
+        fix = (self.offset_left + self.atr_area_w)
         """vertical line where x = 0"""
         self.scene.addLine(0 + fix, y, 0 + fix, y + self.rect_height, self.black_pen)
         """borders"""
+        self.scene.addLine(self.offset_left,
+                           y, fix + self.atr_area_w , y, self.gray_pen)
+        self.scene.addLine(self.offset_left, y + self.rect_height,
+                           fix + self.atr_area_w, y + self.rect_height, self.gray_pen)
 
-        self.scene.addLine(-self.atr_area_w + self.offset_x + fix,
-                           y, self.atr_area_w - self.offset_x + fix, y, self.gray_pen)
-        self.scene.addLine(-self.atr_area_w + self.offset_x + fix, y + self.rect_height,
-                           self.atr_area_w - self.offset_x + fix, y + self.rect_height, self.gray_pen)
 
         if atr_name is not None and atr_val is not None and atr_contrib is not None:
             atr_contrib_x = atr_contrib * self.scale + fix
@@ -849,34 +856,32 @@ class GraphAttributes:
             self.atr_line = self.scene.addLine(atr_contrib_x, y + self.offset_y + 1, atr_contrib_x,
                                                y + self.rect_height - self.offset_y - 1, self.black_pen)
 
-            """atr name on the left"""
+            """atr name and value on the left"""
             self.place_left(QGraphicsSimpleTextItem(
-                atr_name, None), y + self.rect_height/2)
-            """atr value on the right"""
-            self.place_more_left(QGraphicsSimpleTextItem(
                 atr_val, None), y + self.rect_height/2)
+            self.place_more_left(QGraphicsSimpleTextItem(
+                atr_name, None), y + self.rect_height/2)
 
+            """atr score on the right"""
             self.place_right(self.format_marking(atr_contrib), y + self.rect_height/2)
 
     def place_left(self, text, y):
         """places text to the left"""
-        self.place_centered(text, -self.atr_area_w + self.offset_x/2, y)
+        self.place_centered(text, 2 * self.space + self.name_w + self.val_w/2, y)
 
     def place_more_left(self, text, y):
         """places text more left than place_left"""
-        self.place_centered(text, -self.atr_area_w + self.offset_x, y)
+        self.scene.addLine(0, y, 0 - 20, y + 2, QPen(Qt.white, 0))
+        self.place_centered(text, self.space + self.name_w/2, y)
 
     def place_right(self, text, y):
-        self.place_centered(text, +self.atr_area_w - self.offset_x + self.fix * 2, y)
+        x = self.offset_left + 2 * self.atr_area_w + self.space
+        self.scene.addLine(x, y, x, y + 2, QPen(Qt.white, 0))
+        self.place_centered(text, self.offset_left + 2 * self.atr_area_w + self.space, y)
 
     def place_centered(self, text, x, y):
-        """centers the text around given coordinates"""
+        """centers the text around given coordinates"""     
         to_center = text.boundingRect().width()/2
-        """invisible lines holding space"""
-        self.scene.addLine(x - to_center - 20, y, x -
-                           to_center - 20, y + 2, QPen(Qt.white, 0))
-        self.scene.addLine(x + to_center + 20, y, x +
-                           to_center + 20, y + 2, QPen(Qt.white, 0))
         text.setPos(x - to_center, y)
         self.scene.addItem(text)
 
