@@ -792,8 +792,8 @@ class GraphAttributes:
 
         fix = (self.offset_left + self.atr_area_w)
 
-        self.place_left(atr_label, -self.atr_area_h - header_h*0.75)
-        self.place_more_left(val_label, -self.atr_area_h - header_h*0.75)
+        self.place_left(val_label, -self.atr_area_h - header_h*0.75)
+        self.place_more_left(atr_label, -self.atr_area_h - header_h*0.75)
         self.place_right(score_label, -self.atr_area_h - header_h*0.75)
         self.scene.addLine(-max_x + fix, -self.atr_area_h - header_h,
                            max_x + fix, -self.atr_area_h - header_h, white_pen)
