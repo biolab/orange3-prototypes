@@ -1,6 +1,7 @@
 import numpy as np
 
 from Orange.base import Learner, Model
+from Orange.modelling import Fitter
 from Orange.classification import LogisticRegressionLearner
 from Orange.classification.base_classification import LearnerClassification
 from Orange.data import Domain, ContinuousVariable, Table
@@ -10,7 +11,7 @@ from Orange.regression.base_regression import LearnerRegression
 
 
 __all__ = ['StackedLearner', 'StackedClassificationLearner',
-           'StackedRegressionLearner']
+           'StackedRegressionLearner', 'StackedFitter']
 
 
 class StackedModel(Model):
@@ -93,8 +94,9 @@ class StackedClassificationLearner(StackedLearner, LearnerClassification):
     classification-specific aggregator (`LogisticRegressionLearner`).
     """
 
-    def __init__(self, learners, aggregate=LogisticRegressionLearner(), k=5):
-        super().__init__(learners=learners, aggregate=aggregate, k=k)
+    def __init__(self, learners, aggregate=LogisticRegressionLearner(), k=5,
+                 preprocessors=None):
+        super().__init__(learners, aggregate, k=k, preprocessors=preprocessors)
 
 
 class StackedRegressionLearner(StackedLearner, LearnerRegression):
@@ -104,8 +106,18 @@ class StackedRegressionLearner(StackedLearner, LearnerRegression):
     Same as the super class, but has a default
     regression-specific aggregator (`RidgeRegressionLearner`).
     """
-    def __init__(self, learners, aggregate=RidgeRegressionLearner(), k=5):
-        super().__init__(learners=learners, aggregate=aggregate, k=k)
+    def __init__(self, learners, aggregate=RidgeRegressionLearner(), k=5,
+                 preprocessors=None):
+        super().__init__(learners, aggregate, k=k, preprocessors=preprocessors)
+
+
+class StackedFitter(Fitter):
+    __fits__ = {'classification': StackedClassificationLearner,
+                'regression': StackedRegressionLearner}
+
+    def __init__(self, learners, **kwargs):
+        kwargs['learners'] = learners
+        super().__init__(**kwargs)
 
 
 if __name__ == '__main__':
@@ -113,12 +125,11 @@ if __name__ == '__main__':
     iris = Table('iris')
     knn = Orange.modelling.KNNLearner()
     tree = Orange.modelling.TreeLearner()
-    lr = Orange.classification.LogisticRegressionLearner()
-    sl = StackedClassificationLearner([tree, knn])
+    sl = StackedFitter([tree, knn])
     m = sl(iris[::2])
     print(m(iris[1::2], Model.Value))
 
     housing = Table('housing')
-    sl = StackedRegressionLearner([tree, knn])
+    sl = StackedFitter([tree, knn])
     m = sl(housing[::2])
     print(list(zip(housing[1:10:2].Y, m(housing[1:10:2], Model.Value))))
