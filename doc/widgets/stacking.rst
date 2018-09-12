@@ -20,7 +20,7 @@ Outputs
         trained model
 
 
-**Stacking** is an ensemble method that computes a meta model from several base models. The **Stacking** widget needs the **Aggregate** input, which provides a method for aggregating the input models.
+**Stacking** is an ensemble method that computes a meta model from several base models. The **Stacking** widget has the **Aggregate** input, which provides a method for aggregating the input models. If no aggregation input is given the default methods are used. Those are **Logistic Regression** for classification and **Ridge Regression** for regression problems.
 
 .. figure:: images/Stacking-stamped.png
    :scale: 50%
