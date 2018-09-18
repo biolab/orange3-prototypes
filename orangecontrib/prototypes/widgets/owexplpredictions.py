@@ -333,8 +333,8 @@ class OWExplainPredictions(OWWidget):
         predictions_box = gui.vBox(self.mainArea, "Model prediction")
         self.predict_info = gui.widgetLabel(predictions_box, "")
 
-        self.mainArea.setMinimumWidth(900)
-        self.resize(700, 500)
+        self.mainArea.setMinimumWidth(700)
+        self.resize(700, 400)
 
         class _GraphicsView(QGraphicsView):
             def __init__(self, scene, parent, **kwargs):
@@ -695,7 +695,8 @@ class GraphAttributes:
         self.gray_pen = QPen(Qt.gray, 1)
         self.light_gray_pen = QPen(QColor("#DFDFDF"), 1)
         self.light_gray_pen.setStyle(Qt.DashLine)
-        self.brush = QBrush(QColor("#46a7e2"))
+        self.brush = QBrush(QColor(0x33, 0x88, 0xff, 0xc0))
+        self.blue_pen = QPen(QBrush(QColor(0x33, 0x00, 0xff)), 2)
         """placeholders"""
         self.rect_height = rect_height
         self.max_contrib = None
@@ -846,10 +847,11 @@ class GraphAttributes:
             graphed_rect = QGraphicsRectItem(
                 atr_contrib_x - error_x, y + self.offset_y, len_rec, padded_rect)
             graphed_rect.setBrush(self.brush)
+            graphed_rect.setPen(QPen(Qt.NoPen))
             self.scene.addItem(graphed_rect)
             """vertical line marks calculated contribution of attribute"""
-            self.atr_line = self.scene.addLine(atr_contrib_x, y + self.offset_y + 1, atr_contrib_x,
-                                               y + self.rect_height - self.offset_y - 1, self.black_pen)
+            self.atr_line = self.scene.addLine(atr_contrib_x, y + self.offset_y + 2, atr_contrib_x,
+                                               y + self.rect_height - self.offset_y - 2, self.blue_pen)
 
             """atr name and value on the left"""
             self.place_left(QGraphicsSimpleTextItem(
