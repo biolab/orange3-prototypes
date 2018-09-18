@@ -670,7 +670,7 @@ class OWExplainPredictions(OWWidget):
 class GraphAttributes:
     """
     Creates entire graph of explanations, paint function is the main one, it delegates painting of attributes to draw_attribute, 
-    header and scale are dealt with in draw_header. Header is fixed in size, rows for representing attributes are scaled according to their number.
+    header and scale are dealt with in draw_header_footer. Header is fixed in size.
 
     Parameters
     ----------
@@ -678,10 +678,12 @@ class GraphAttributes:
         scene to add elements to
     num_of_atr : int
         number of attributes to plot
-    offset_x : int
-        makes room on the left side for attribute name, on the right for attribute value
+    space: int
+        space between columns with atr names, values
     offset_y : int
         distance between the line border of attribute box plot and the box itself
+    rect_height : int
+        height of a rectangle, representing score of the attribute
     """
 
     def __init__(self, scene, num_of_atr=3, space=35, offset_y=10, rect_height=40):
@@ -734,12 +736,11 @@ class GraphAttributes:
         self.offset_left = self.space + self.name_w + self.space + self.val_w + self.graph_space
         self.offset_right = self.graph_space + 50
 
-        self.atr_area_h = wp.height()/2 - header_h
+        self.atr_area_h = wp.height()/2 - self
         self.atr_area_w = (wp.width() - self.offset_left - self.offset_right) / 2
 
         coords = self.split_boxes_area(
             self.atr_area_h, self.num_of_atr, header_h)
-        print ("coords " + str(len(coords)))
         self.max_contrib = np.max(
             abs(explanations.X[:, 0]) + explanations.X[:, 1])
         self.unit = self.get_scale()
