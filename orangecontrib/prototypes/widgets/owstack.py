@@ -6,7 +6,7 @@ from Orange.widgets.settings import Setting
 from Orange.widgets.utils.owlearnerwidget import OWBaseLearner
 from Orange.widgets.widget import Msg, Input
 
-from orangecontrib.prototypes.stack import StackedLearner
+from orangecontrib.prototypes.stack import StackedFitter
 
 
 class OWStackedLearner(OWBaseLearner):
@@ -15,7 +15,7 @@ class OWStackedLearner(OWBaseLearner):
     icon = "icons/Stacking.svg"
     priority = 100
 
-    LEARNER = StackedLearner
+    LEARNER = StackedFitter
 
     learner_name = Setting("Stack")
 
@@ -45,15 +45,16 @@ class OWStackedLearner(OWBaseLearner):
         self.apply()
 
     def create_learner(self):
-        if not self.learners or not self.aggregate:
+        if not self.learners:
             return None
         return self.LEARNER(
-            tuple(self.learners.values()), self.aggregate,
+            tuple(self.learners.values()), aggregate=self.aggregate,
             preprocessors=self.preprocessors)
 
     def get_learner_parameters(self):
         return (("Base learners", [l.name for l in self.learners.values()]),
-                ("Aggregator", self.aggregate.name))
+                ("Aggregator",
+                 self.aggregate.name if self.aggregate else 'default'))
 
 
 if __name__ == "__main__":
