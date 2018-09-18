@@ -271,22 +271,6 @@ class OWExplainPredictions(OWWidget):
         self._task = None
         self._executor = ThreadExecutor()
 
-        self.dataview = QTableView(verticalScrollBarPolicy=Qt.ScrollBarAlwaysOn,
-                                   sortingEnabled=True,
-                                   selectionMode=QTableView.NoSelection,
-                                   focusPolicy=Qt.StrongFocus)
-
-        self.dataview.sortByColumn(2, Qt.DescendingOrder)
-        self.dataview.horizontalHeader().setResizeMode(QHeaderView.Stretch)
-
-        domain = Domain([ContinuousVariable("Score"),
-                         ContinuousVariable("Error")],
-                        metas=[StringVariable(name="Feature"), StringVariable(name="Value")])
-        self.placeholder_table_model = TableModel(
-            Table.from_domain(domain), parent=None)
-
-        self.dataview.setModel(self.placeholder_table_model)
-
         info_box = gui.vBox(self.controlArea, "Info")
         self.data_info = gui.widgetLabel(info_box, "Data: N/A")
         self.model_info = gui.widgetLabel(info_box, "Model: N/A")
@@ -350,7 +334,7 @@ class OWExplainPredictions(OWWidget):
         self.predict_info = gui.widgetLabel(predictions_box, "")
 
         self.mainArea.setMinimumWidth(900)
-        self.resize(700, 1000)
+        self.resize(700, 500)
 
 
         class _GraphicsView(QGraphicsView):
@@ -379,18 +363,16 @@ class OWExplainPredictions(OWWidget):
             w = self
 
             def resizeEvent(self, resizeEvent):
-                # Recompute main scene on window width change
-                if resizeEvent.size().width() != resizeEvent.oldSize().width():
-                    self._is_resizing = True
-                    self.w.draw()
-                    self._is_resizing = False
+                self._is_resizing = True
+                self.w.draw()
+                self._is_resizing = False
                 return super().resizeEvent(resizeEvent)
 
             def is_resizing(self):
                 return self._is_resizing
 
             def sizeHint(self):
-                return QSize(600, 500)
+                return QSize(600, 300)
 
         class FixedSizeGraphicsView(_GraphicsView):
             def __init__(self, scene, parent):
@@ -421,10 +403,10 @@ class OWExplainPredictions(OWWidget):
         """Uses GraphAttributes class to draw the explanaitons """
         self.box_scene.clear()
         wp = self.box_view.viewport().rect()
-
         if self.explanations is not None:
+            print (self.explanations.Y.shape)
             self.sort_explanations()
-            self.painter = GraphAttributes(self.box_scene, self.gui_num_atr)
+            self.painter = GraphAttributes(self.box_scene, min(self.gui_num_atr, self.explanations.Y.shape[0]))
             self.painter.paint(wp, self.explanations)
 
         """set appropriate boxes for different views"""
@@ -515,7 +497,6 @@ class OWExplainPredictions(OWWidget):
             self.cancel()
         assert self._task is None
 
-        self.dataview.setModel(self.placeholder_table_model)
         self.predict_info.setText("")
         self.Warning.unknowns_increased.clear()
         self.stop = True
@@ -758,6 +739,7 @@ class GraphAttributes:
 
         coords = self.split_boxes_area(
             self.atr_area_h, self.num_of_atr, header_h)
+        print ("coords " + str(len(coords)))
         self.max_contrib = np.max(
             abs(explanations.X[:, 0]) + explanations.X[:, 1])
         self.unit = self.get_scale()
@@ -766,7 +748,7 @@ class GraphAttributes:
 
 
         self.draw_header_footer(
-            wp, header_h, unit_pixels, coords[-1], coords[0])
+            wp, header_h, unit_pixels, coords[self.num_of_atr - 1], coords[0])
         
         for y, e in zip(coords, explanations[:self.num_of_atr]):
             self.draw_attribute(y, atr_name=str(e._metas[0]), atr_val=str(
@@ -790,7 +772,7 @@ class GraphAttributes:
 
         white_pen = QPen(Qt.white, 3)
 
-        fix = (self.offset_left + self.atr_area_w)
+        fix = self.offset_left + self.atr_area_w
 
         self.place_left(val_label, -self.atr_area_h - header_h*0.75)
         self.place_more_left(atr_label, -self.atr_area_h - header_h*0.75)
@@ -799,7 +781,7 @@ class GraphAttributes:
                            max_x + fix, -self.atr_area_h - header_h, white_pen)
 
         """footer"""
-        line_y = max(first_y + wp.height() +  header_h/2,
+        line_y = max(first_y + wp.height() + header_h/2 - 10,
                      last_y + header_h/2 + self.rect_height)
         self.scene.addLine(-max_x + fix, line_y, max_x + fix, line_y, self.black_pen)
 
