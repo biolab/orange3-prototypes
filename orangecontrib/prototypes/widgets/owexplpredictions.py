@@ -401,7 +401,6 @@ class OWExplainPredictions(OWWidget):
         self.box_scene.clear()
         wp = self.box_view.viewport().rect()
         if self.explanations is not None:
-            self.sort_explanations()
             self.painter = GraphAttributes(self.box_scene, min(
                 self.gui_num_atr, self.explanations.Y.shape[0]))
             self.painter.paint(wp, self.explanations)
@@ -424,18 +423,17 @@ class OWExplainPredictions(OWWidget):
         """sorts explanations according to users choice from combo box"""
         if self.sort_index == SortBy.POSITIVE:
             self.explanations = self.explanations[np.argsort(
-                self.explanations.X[:, 0], kind='mergesort')][::-1]
+                self.explanations.X[:, 0])][::-1]
         elif self.sort_index == SortBy.NEGATIVE:
             self.explanations = self.explanations[np.argsort(
-                self.explanations.X[:, 0], kind='mergesort')]
+                self.explanations.X[:, 0])]
         elif self.sort_index == SortBy.ABSOLUTE:
             self.explanations = self.explanations[np.argsort(
-                np.abs(self.explanations.X[:, 0]), kind='mergesort')][::-1]
+                np.abs(self.explanations.X[:, 0]))][::-1]
         elif self.sort_index == SortBy.BY_NAME:
             l = np.array(
                 list(map(np.chararray.lower, self.explanations.metas[:, 0])))
-            self.explanations = self.explanations[np.argsort(
-                l, kind='mergesort')]
+            self.explanations = self.explanations[np.argsort(l)]
         else:
             return
 
@@ -554,6 +552,7 @@ class OWExplainPredictions(OWWidget):
     @pyqtSlot(Orange.data.Table)
     def update_view(self, table):
         self.explanations = table
+        self.sort_explanations()
         self.draw()
         self.commit_output()
 
@@ -657,6 +656,7 @@ class OWExplainPredictions(OWWidget):
 
     def _update_combo(self):
         if self.explanations != None:
+            self.sort_explanations()
             self.draw()
             self.commit_output()
 
