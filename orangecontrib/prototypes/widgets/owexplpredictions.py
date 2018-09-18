@@ -356,7 +356,7 @@ class OWExplainPredictions(OWWidget):
                 super().__init__(scene, parent,
                                  verticalScrollBarPolicy=Qt.ScrollBarAlwaysOn,
                                  styleSheet='QGraphicsView {background: white}')
-                self.viewport().setMinimumWidth(700)
+                self.viewport().setMinimumWidth(500)
                 self._is_resizing = False
 
             w = self
@@ -387,7 +387,6 @@ class OWExplainPredictions(OWWidget):
 
         self.box_view = GraphicsView(self.box_scene, self)
         self.header_view = FixedSizeGraphicsView(self.box_scene, self)
-
         self.footer_view = FixedSizeGraphicsView(self.box_scene, self)
 
         self.mainArea.layout().addWidget(self.header_view)
@@ -400,10 +399,11 @@ class OWExplainPredictions(OWWidget):
         """Uses GraphAttributes class to draw the explanaitons """
         self.box_scene.clear()
         wp = self.box_view.viewport().rect()
+        header_height = 30
         if self.explanations is not None:
             self.painter = GraphAttributes(self.box_scene, min(
                 self.gui_num_atr, self.explanations.Y.shape[0]))
-            self.painter.paint(wp, self.explanations)
+            self.painter.paint(wp, self.explanations, header_h=header_height)
 
         """set appropriate boxes for different views"""
         rect = QRectF(self.box_scene.itemsBoundingRect().x(),
@@ -413,9 +413,10 @@ class OWExplainPredictions(OWWidget):
 
         self.box_scene.setSceneRect(rect)
         self.box_view.setSceneRect(
-            rect.x(), rect.y()+100, rect.width(), rect.height() - 180)
+            rect.x(), rect.y()+header_height+2, rect.width(), rect.height() - 80)
         self.header_view.setSceneRect(
             rect.x(), rect.y(), rect.width(), 10)
+        self.header_view.setFixedHeight(header_height)
         self.footer_view.setSceneRect(
             rect.x(), rect.y() + rect.height() - 50, rect.width(), 35)
 
@@ -773,9 +774,10 @@ class GraphAttributes:
 
         fix = self.offset_left + self.atr_area_w
 
-        self.place_left(val_label, -self.atr_area_h - header_h*0.75)
-        self.place_left_edge(atr_label, -self.atr_area_h - header_h*0.75)
-        self.place_right(score_label, -self.atr_area_h - header_h*0.75)
+        self.place_left(val_label, -self.atr_area_h - header_h*0.85)
+        self.place_left_edge(atr_label, -self.atr_area_h - header_h*0.85)
+        self.place_right(score_label, -self.atr_area_h - header_h*0.85)
+
         self.scene.addLine(-max_x + fix, -self.atr_area_h - header_h,
                            max_x + fix, -self.atr_area_h - header_h, white_pen)
 
