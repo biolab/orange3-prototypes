@@ -27,6 +27,7 @@ import csv
 import traceback
 import itertools
 
+from functools import singledispatch
 from collections import defaultdict
 
 import typing
@@ -50,6 +51,8 @@ from PyQt5.QtWidgets import (
     QStyleOptionFrame, QStyle, QStyledItemDelegate, QStyleOptionViewItem,
     QApplication, QAbstractItemView, QToolTip, QStyleOption
 )
+
+from Orange.widgets.utils.overlay import OverlayWidget
 
 __all__ = ["ColumnType", "RowSpec", "CSVOptionsWidget", "CSVImportWidget"]
 
@@ -544,6 +547,12 @@ class CSVImportWidget(QWidget):
     optionsEdited = Signal()
     #: Signal emitted when a user changes type affiliation for a column
     columnTypesChanged = Signal()
+    #: Signal emitted when the preview content parsing ends with an error.
+    #: Note: this does not include errors in cell content interpretation.
+    previewReadErrorOccurred = Signal(str)
+    #: Signal emitted when the preview model is reset. This is either because
+    #: of `setPreviewContents` or a options change.
+    previewModelReset = Signal()
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -672,6 +681,18 @@ class CSVImportWidget(QWidget):
         form.addRow(QFrame(frameShape=QFrame.HLine))
         form.addRow("Column type", self.column_type_edit_cb)
         layout.addWidget(self.dataview)
+        # Overlay error message widget in the bottom left corner of the data
+        # view
+        self.__overlay = overlay = OverlayWidget(
+            parent=self.dataview.viewport(),
+            alignment=Qt.AlignBottom | Qt.AlignLeft,
+            objectName="-error-overlay",
+            visible=False,
+        )
+        overlay.setLayout(QVBoxLayout(margin=0))
+        self.__error_label = label = QLabel(objectName="-error-text-label")
+        overlay.layout().addWidget(label)
+        overlay.setWidget(self.dataview.viewport())
 
         self.setLayout(layout)
 
@@ -895,6 +916,7 @@ class CSVImportWidget(QWidget):
             # store the column/row specs
             colstate = self.__columnTypes()
             rowstate = self.__rowStates()
+            self.__previewmodel.errorOccurred.disconnect(self.__set_error)
             self.__previewmodel.deleteLater()
             self.__previewmodel = None
 
@@ -902,10 +924,14 @@ class CSVImportWidget(QWidget):
             self.__textwrapper.detach()
             self.__textwrapper = None
 
+        self.__set_error("")
+        self.previewModelReset.emit()
+
         if self.__sample is None:
             return
 
         self.__previewmodel = TablePreviewModel(self)
+        self.__previewmodel.errorOccurred.connect(self.__set_error)
         try:
             seekable = self.__sample.seekable()
         except AttributeError:
@@ -1178,6 +1204,16 @@ class CSVImportWidget(QWidget):
             For every `(range, coltype)` tuple set the corresponding coltype.
         """
         self.setColumnTypes({i: coltype for r, coltype in ranges for i in r})
+
+    def __set_error(self, errorstr):
+        # type: (str) -> None
+        if not errorstr:
+            self.__overlay.hide()
+            self.__error_label.setText("")
+        else:
+            self.__overlay.show()
+            self.__error_label.setText(errorstr)
+            self.previewReadErrorOccurred.emit(errorstr)
 
 
 class CachedBytesIOWrapper(io.BufferedIOBase):
@@ -1515,11 +1551,10 @@ class TablePreviewModel(QAbstractTableModel):
             except StopIteration:
                 self.__canFetchMore = False
                 break
-            except Exception:  # pylint: disable=broad-except
-                err = traceback.format_exception_only(*sys.exc_info()[:2])[-1]
+            except Exception as err:  # pylint: disable=broad-except
                 print("".join(traceback.format_exception(*sys.exc_info())),
                       file=sys.stderr)
-                self.__error = err
+                self.__error = format_exception(err)
                 self.__canFetchMore = False
                 break
             else:
@@ -1619,6 +1654,17 @@ class TablePreviewModel(QAbstractTableModel):
         Return the error string or None if no error occurred.
         """
         return self.__error
+
+
+@singledispatch
+def format_exception(err):
+    return "".join(traceback.format_exception_only(type(err), err)).rstrip()
+
+
+@format_exception.register(csv.Error)
+def format_exception_csv(err):
+    return "CSV parsing error: " + str(err)
+
 
 
 _to_datetime = None
