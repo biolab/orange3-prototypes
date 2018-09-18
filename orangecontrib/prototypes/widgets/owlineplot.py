@@ -1,7 +1,9 @@
 import sys
 from enum import IntEnum
+from itertools import chain
 from types import SimpleNamespace as namespace
 from collections import namedtuple
+from xml.sax.saxutils import escape
 
 import numpy as np
 
@@ -20,6 +22,9 @@ from Orange.widgets.utils.annotated_data import (create_annotated_table,
 from Orange.widgets.utils.colorpalette import ColorPaletteGenerator
 from Orange.widgets.utils.itemmodels import DomainModel
 from Orange.widgets.utils.plot import OWPlotGUI, SELECT, PANNING, ZOOMING
+from Orange.widgets.visualize.owdistributions import (
+    LegendItem, ScatterPlotItem
+)
 from Orange.widgets.widget import OWWidget, Input, Output, Msg
 
 
@@ -51,19 +56,30 @@ def line_segments_line_intersect(p1, p2, item):
     return False
 
 
-class LinePlotColors:
-    LIGHT_ALPHA = 120
+class LinePlotStyle:
     DEFAULT_COLOR = QColor(Qt.darkGray)
-    SELECTION_LINE = QColor(Qt.black)
+    SELECTION_LINE_COLOR = QColor(Qt.black)
+    SELECTION_LINE_WIDTH = 2
+
+    MEAN_WIDTH = 8
+
+    UNSELECTED_LINE_WIDTH = 1
+    UNSELECTED_LINE_ALPHA = 100
+    UNSELECTED_LINE_ALPHA_WITH_SELECTION = 50
+
+    SELECTED_LINE_WIDTH = 4
+    SELECTED_LINE_ALPHA = 170
+
+    RANGE_ALPHA = 25
 
     def __call__(self, n):
         return ColorPaletteGenerator(n)
 
 
 class LinePlotItem(pg.PlotCurveItem):
-    def __init__(self, index, instance_id, x, y, color):
-        color.setAlpha(LinePlotColors.LIGHT_ALPHA)
-        pen = QPen(color, 1)
+    def __init__(self, master, index, instance_id, x, y, color):
+        color.setAlpha(LinePlotStyle.UNSELECTED_LINE_ALPHA)
+        pen = QPen(color, LinePlotStyle.UNSELECTED_LINE_WIDTH)
         pen.setCosmetic(True)
         super().__init__(x=x, y=y, pen=pen, pxMode=True, antialias=True)
         self._selected = False
@@ -72,6 +88,7 @@ class LinePlotItem(pg.PlotCurveItem):
         self.index = index
         self.id = instance_id
         self.setClickable(True, width=10)
+        self.master = master
 
     def into_subset(self):
         self._in_subset = True
@@ -93,26 +110,26 @@ class LinePlotItem(pg.PlotCurveItem):
         self._pen.setColor(color)
         self._change_pen()
 
+    def reset_pen(self):
+        self._change_pen()
+
     def _change_pen(self):
         pen = QPen(self._pen)
-        if self._in_subset and self._selected:
-            color = QColor(self._pen.color())
-            color.setAlpha(255)
-            pen.setWidth(4)
-            pen.setColor(color)
-        elif not self._in_subset and self._selected:
-            color = QColor(self._pen.color())
-            color.setAlpha(255)
-            pen.setColor(color)
-        elif self._in_subset and not self._selected:
-            color = QColor(self._pen.color())
-            color.setAlpha(LinePlotColors.LIGHT_ALPHA)
-            pen.setWidth(4)
-            pen.setColor(color)
+        color = QColor(Qt.black) if self._selected and self.master.has_subset \
+            else QColor(self._pen.color())
+
+        if self._in_subset or self._selected:
+            width = LinePlotStyle.SELECTED_LINE_WIDTH
+            alpha = LinePlotStyle.SELECTED_LINE_ALPHA
         else:
-            color = QColor(self._pen.color())
-            color.setAlpha(LinePlotColors.LIGHT_ALPHA)
-            pen.setColor(color)
+            width = LinePlotStyle.UNSELECTED_LINE_WIDTH
+            alpha = LinePlotStyle.UNSELECTED_LINE_ALPHA_WITH_SELECTION \
+                if self.master.has_subset or self.master.has_selection else \
+                LinePlotStyle.UNSELECTED_LINE_ALPHA
+
+        pen.setWidth(width)
+        color.setAlpha(alpha)
+        pen.setColor(color)
         self.setPen(pen)
 
 
@@ -122,7 +139,8 @@ class LinePlotViewBox(ViewBox):
         self.graph = graph
         self.setMouseMode(self.PanMode)
 
-        pen = mkPen(LinePlotColors.SELECTION_LINE, width=2)
+        pen = mkPen(LinePlotStyle.SELECTION_LINE_COLOR,
+                    width=LinePlotStyle.SELECTION_LINE_WIDTH)
         self.selection_line = QGraphicsLineItem()
         self.selection_line.setPen(pen)
         self.selection_line.setZValue(1e9)
@@ -147,7 +165,8 @@ class LinePlotViewBox(ViewBox):
                     p2 = self.childGroup.mapFromParent(event.pos())
                     self.graph.select_by_line(p1, p2)
                 else:
-                    self.update_selection_line(event.buttonDownPos(), event.pos())
+                    self.update_selection_line(
+                        event.buttonDownPos(), event.pos())
         elif self.graph.state == ZOOMING or self.graph.state == PANNING:
             event.ignore()
             super().mouseDragEvent(event, axis=axis)
@@ -175,7 +194,7 @@ class LinePlotGraph(pg.PlotWidget):
     def select_by_line(self, p1, p2):
         selection = []
         for item in self.getViewBox().childGroup.childItems():
-            if isinstance(item, LinePlotItem) and item.isVisible():
+            if isinstance(item, LinePlotItem):
                 if line_segments_line_intersect(p1, p2, item):
                     selection.append(item.index)
         self.select(selection)
@@ -233,7 +252,7 @@ class LinePlotGraph(pg.PlotWidget):
 
 
 class LinePlotDisplay(IntEnum):
-    INSTANCES, MEAN, INSTANCES_WITH_MEAN = 0, 1, 2
+    RANGE_WITH_MEAN, INSTANCES, MEAN, INSTANCES_WITH_MEAN = range(4)
 
 
 class OWLinePlot(OWWidget):
@@ -253,7 +272,7 @@ class OWLinePlot(OWWidget):
     settingsHandler = settings.PerfectDomainContextHandler()
 
     group_var = settings.ContextSetting(None)
-    display_index = settings.Setting(LinePlotDisplay.INSTANCES)
+    display_index = settings.Setting(LinePlotDisplay.RANGE_WITH_MEAN)
     display_quartiles = settings.Setting(False)
     auto_commit = settings.Setting(True)
     selection = settings.ContextSetting([])
@@ -276,6 +295,7 @@ class OWLinePlot(OWWidget):
         displaybox = gui.widgetBox(self.controlArea, "Display")
         radiobox = gui.radioButtons(displaybox, self, "display_index",
                                     callback=self.__update_visibility)
+        gui.appendRadioButton(radiobox, "Range (min-max) with mean")
         gui.appendRadioButton(radiobox, "Line plot")
         gui.appendRadioButton(radiobox, "Mean")
         gui.appendRadioButton(radiobox, "Line plot with mean")
@@ -307,6 +327,19 @@ class OWLinePlot(OWWidget):
         self.graph.getPlotItem().buttonsHidden = True
         self.graph.setRenderHint(QPainter.Antialiasing, True)
         self.mainArea.layout().addWidget(self.graph)
+
+        self._legend = LegendItem()
+        self._legend.setParentItem(self.graph.getPlotItem().vb)
+        self._legend.hide()
+        self._legend.anchor((1, 0), (1, 0))
+
+    @property
+    def has_selection(self):
+        return bool(self.selection)
+
+    @property
+    def has_subset(self):
+        return bool(self.data_subset)
 
     def box_zoom_select(self, parent):
         g = self.gui
@@ -340,10 +373,11 @@ class OWLinePlot(OWWidget):
 
     def selection_changed(self):
         self.selection = list(self.graph.selection)
+        self.__update_visibility()
         self.commit()
 
     def sizeHint(self):
-        return QSize(800, 600)
+        return QSize(1000, 562)
 
     def clear(self):
         """
@@ -356,6 +390,7 @@ class OWLinePlot(OWWidget):
         self.infoLabel.setText("No data on input.")
         self.group_vars.set_domain(None)
         self.group_view.setEnabled(False)
+        self._legend.hide()
 
     @Inputs.data
     def set_data(self, data):
@@ -380,6 +415,7 @@ class OWLinePlot(OWWidget):
             self.graph_variables = [var for var in data.domain.attributes
                                     if var.is_continuous]
             if len(self.graph_variables) < 1:
+                self.data = None
                 self.Information.not_enough_attrs()
                 self.commit()
                 return
@@ -399,26 +435,42 @@ class OWLinePlot(OWWidget):
 
     def handleNewSignals(self):
         self.subset_selection = []
-        if self.data is not None and self.data_subset is not None and \
+        if self.data is not None and self.has_subset and \
                 len(self.graph_variables):
             intersection = set(self.data.ids).intersection(
                 set(self.data_subset.ids))
             self.subset_selection = intersection
             if self.__profiles is not None:
                 self.graph.select_subset(self.subset_selection)
+        if self.data is not None:
+            self.__update_visibility()
 
     def _setup_plot(self):
         """Setup the plot with new curve data."""
         if self.data is None:
             return
-        self.graph.reset()
+
         ticks = [[(i + 1, str(a)) for i, a in enumerate(self.graph_variables)]]
         self.graph.getAxis('bottom').setTicks(ticks)
+        self.graph.getViewBox().enableAutoRange()
         if self.display_index in (LinePlotDisplay.INSTANCES,
                                   LinePlotDisplay.INSTANCES_WITH_MEAN):
             self._plot_profiles()
         self._plot_groups()
         self.__update_visibility()
+        self._setup_legend()
+
+    def _setup_legend(self):
+        self._legend.clear()
+        self._legend.hide()
+        if self.group_var:
+            for index, name in enumerate(self.group_var.values):
+                color = self.__get_line_color(None, index)
+                self._legend.addItem(
+                    ScatterPlotItem(pen=color, brush=color, size=10, shape="s"),
+                    escape(name)
+                )
+            self._legend.show()
 
     def _plot_profiles(self):
         X = np.arange(1, len(self.graph_variables) + 1)
@@ -426,7 +478,7 @@ class OWLinePlot(OWWidget):
         self.__profiles = []
         for index, inst in zip(range(len(self.data)), data):
             color = self.__get_line_color(index)
-            profile = LinePlotItem(index, inst.id, X, inst.x, color)
+            profile = LinePlotItem(self, index, inst.id, X, inst.x, color)
             profile.sigClicked.connect(self.graph.select_by_click)
             self.graph.add_line_plot_item(profile)
             self.__profiles.append(profile)
@@ -438,12 +490,13 @@ class OWLinePlot(OWWidget):
             for group in self.__groups:
                 if group is not None:
                     self.graph.getViewBox().removeItem(group.mean)
+                    self.graph.getViewBox().removeItem(group.range)
                     self.graph.getViewBox().removeItem(group.error_bar)
 
         self.__groups = []
         X = np.arange(1, len(self.graph_variables) + 1)
         if self.group_var is None:
-            self.__plot_mean_with_error(X, self.data[:, self.graph_variables])
+            self.__plot_group(X, self.data[:, self.graph_variables])
         else:
             class_col_data, _ = self.data.get_column_view(self.group_var)
             group_indices = [np.flatnonzero(class_col_data == i)
@@ -453,23 +506,40 @@ class OWLinePlot(OWWidget):
                     self.__groups.append(None)
                 else:
                     group_data = self.data[indices, self.graph_variables]
-                    self.__plot_mean_with_error(X, group_data, index)
+                    self.__plot_group(X, group_data, index)
 
-    def __plot_mean_with_error(self, X, data, index=None):
-        pen = QPen(self.__get_line_color(None, index), 4)
-        pen.setCosmetic(True)
+    def __plot_group(self, X, data, index=None):
+        p = QPen(self.__get_line_color(None, index), LinePlotStyle.MEAN_WIDTH)
+        p.setCosmetic(True)
         mean = np.nanmean(data.X, axis=0)
-        mean_curve = pg.PlotDataItem(x=X, y=mean, pen=pen, symbol="o",
-                                     symbolSize=5, antialias=True)
+        mean_curve = self.get_mean_curve(X, mean, p)
+        range_curve = self.get_range_curve(X, data, p)
+        error_bar = self.get_error_bar(X, data, mean)
         self.graph.addItem(mean_curve)
+        self.graph.addItem(range_curve)
+        self.graph.addItem(error_bar)
+        self.__groups.append(namespace(mean=mean_curve,
+                                       range=range_curve,
+                                       error_bar=error_bar))
 
+    @staticmethod
+    def get_mean_curve(X, mean, pen):
+        return pg.PlotDataItem(x=X, y=mean, pen=pen, antialias=True)
+
+    @staticmethod
+    def get_range_curve(X, data, pen):
+        color = QColor(pen.color())
+        color.setAlpha(LinePlotStyle.RANGE_ALPHA)
+        max_curve = pg.PlotDataItem(x=X, y=np.nanmax(data.X, axis=0))
+        min_curve = pg.PlotDataItem(x=X, y=np.nanmin(data.X, axis=0))
+        return pg.FillBetweenItem(max_curve, min_curve, brush=color)
+
+    @staticmethod
+    def get_error_bar(X, data, mean):
         q1, q2, q3 = np.nanpercentile(data.X, [25, 50, 75], axis=0)
         bottom = np.clip(mean - q1, 0, mean - q1)
         top = np.clip(q3 - mean, 0, q3 - mean)
-        error_bar = pg.ErrorBarItem(x=X, y=mean, bottom=bottom,
-                                    top=top, beam=0.01)
-        self.graph.addItem(error_bar)
-        self.__groups.append(namespace(mean=mean_curve, error_bar=error_bar))
+        return pg.ErrorBarItem(x=X, y=mean, bottom=bottom, top=top, beam=0.01)
 
     def __update_visibility(self):
         self.__update_visibility_profiles()
@@ -477,22 +547,33 @@ class OWLinePlot(OWWidget):
 
     def __update_visibility_groups(self):
         show_mean = self.display_index in (LinePlotDisplay.MEAN,
-                                           LinePlotDisplay.INSTANCES_WITH_MEAN)
+                                           LinePlotDisplay.INSTANCES_WITH_MEAN,
+                                           LinePlotDisplay.RANGE_WITH_MEAN)
+        show_range = self.display_index == LinePlotDisplay.RANGE_WITH_MEAN
         if self.__groups is not None:
             for group in self.__groups:
                 if group is not None:
                     group.mean.setVisible(show_mean)
+                    group.range.setVisible(show_range)
                     group.error_bar.setVisible(self.display_quartiles)
 
     def __update_visibility_profiles(self):
+        show_selection = self.display_index == LinePlotDisplay.RANGE_WITH_MEAN
         show_inst = self.display_index in (LinePlotDisplay.INSTANCES,
                                            LinePlotDisplay.INSTANCES_WITH_MEAN)
-        if self.__profiles is None and show_inst:
+        if self.__profiles is None and (show_inst or show_selection) \
+                and self.data is not None:
             self._plot_profiles()
             self.graph.select_subset(self.subset_selection)
         if self.__profiles is not None:
+            selection = set(chain(
+                self.selection,
+                self.data_subset.ids if self.has_subset else []
+            ))
             for profile in self.__profiles:
-                profile.setVisible(show_inst)
+                selected = profile.index in selection
+                profile.setVisible(show_inst or selected and show_selection)
+                profile.reset_pen()
 
     def __group_var_changed(self):
         if self.data is None or not len(self.graph_variables):
@@ -500,6 +581,7 @@ class OWLinePlot(OWWidget):
         self.__color_profiles()
         self._plot_groups()
         self.__update_visibility()
+        self._setup_legend()
 
     def __color_profiles(self):
         if self.__profiles is not None:
@@ -507,26 +589,26 @@ class OWLinePlot(OWWidget):
                 profile.setColor(self.__get_line_color(profile.index))
 
     def __select_data_instances(self):
-        if self.data is None or not len(self.data) or not len(self.selection):
+        if self.data is None or not len(self.data) or not self.has_selection:
             return
         if max(self.selection) >= len(self.data):
             self.selection = []
         self.graph.select(self.selection)
 
     def __get_line_color(self, data_index=None, mean_index=None):
-        color = QColor(LinePlotColors.DEFAULT_COLOR)
+        color = QColor(LinePlotStyle.DEFAULT_COLOR)
         if self.group_var is not None:
             if data_index is not None:
                 value = self.data[data_index][self.group_var]
                 if np.isnan(value):
                     return color
             index = int(value) if data_index is not None else mean_index
-            color = LinePlotColors()(len(self.group_var.values))[index]
+            color = LinePlotStyle()(len(self.group_var.values))[index]
         return color.darker(110) if data_index is None else color
 
     def commit(self):
         selected = self.data[self.selection] \
-            if self.data is not None and len(self.selection) > 0 else None
+            if self.data is not None and self.has_selection else None
         annotated = create_annotated_table(self.data, self.selection)
         self.Outputs.selected_data.send(selected)
         self.Outputs.annotated_data.send(annotated)
