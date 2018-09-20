@@ -10,10 +10,6 @@ Contents
 * CSVImportWidget
   Read and preview part of the file
 
-* CSVExtraOptions
-  Edit and preview structure of the import table (i.e. define headers,
-  column types)
-
 * TablePreviewModel
   An QAbstractTableModel feeding data from a csv.reader like rows iterator
   implementing lazy iterative loading (`QAbstractItemModel.fetchMore`)
@@ -248,7 +244,7 @@ class TextEditCombo(QComboBox):
         """
         Set `text` as the current text (adding it to the model if necessary).
         """
-        idx = self.findText(text)
+        idx = self.findData(text, Qt.EditRole, Qt.MatchExactly)
         if idx != -1:
             self.setCurrentIndex(idx)
         else:
@@ -486,6 +482,58 @@ class CSVOptionsWidget(QWidget):
             self.optionsEdited.emit()
 
 
+class Item(QStandardItem):
+    """
+    A QStandardItem subclass using a python dict as a backing store.
+
+    Note
+    ----
+    Unlike QStandardItem, this class does not map `Qt.DisplayRole` and
+    `Qt.EditRole` to the same value. Accessing or setting via model.setItemData
+    and model.itemData will not work.
+    """
+    def __init__(self, data={}):
+        # type: (Dict[Qt.ItemDataRole, Any]) -> None
+        super().__init__()
+        self.__data = dict(data)
+
+    def clone(self):
+        # type: () -> Item
+        """Reimplemented from QStandardItem"""
+        return Item(self.__data)
+
+    def setData(self, value, role=Qt.UserRole+1):
+        # type: (Any, Qt.ItemDataRole) -> None
+        """Reimplemented from QStandardItem"""
+        self.__data[role] = value
+        model = self.model()
+        if model is not None:
+            midx = model.indexFromItem(self)
+            model.dataChanged.emit(midx, midx, [role])
+
+    def data(self, role=Qt.UserRole+1):
+        # type: (Qt.ItemDataRole) -> Any
+        """Reimplemented from QStandardItem"""
+        if role == Qt.EditRole and role not in self.__data:
+            role = Qt.DisplayRole
+        elif role == Qt.DisplayRole and role not in self.__data:
+            role = Qt.EditRole
+        return self.__data.get(role, None)
+
+    def setItemData(self, data):
+        # type: (Dict[Qt.ItemDataRole, Any]) -> bool
+        roles = list(data.keys())
+        self.__data.update(data)
+        m = self.model()  #
+        if m is not None:
+            midx = m.indexFromItem(self)
+            m.dataChanged.emit(midx, midx, roles)
+        return True
+
+    def itemData(self):
+        return self.__data.copy()
+
+
 class CSVImportWidget(QWidget):
     """
     CSV import widget with a live table preview
@@ -551,10 +599,21 @@ class CSVImportWidget(QWidget):
             minimumContentsLength=1,
             sizeAdjustPolicy=QComboBox.AdjustToMinimumContentsLength
         )
-        # TODO: Render space and empty string as SPACE and NONE
+        items = [
+            {Qt.DisplayRole: "None", Qt.EditRole: "",
+             Qt.ToolTipRole: "No separator"},
+            {Qt.DisplayRole: ".", Qt.EditRole: "."},
+            {Qt.DisplayRole: ",", Qt.EditRole: ","},
+            {Qt.DisplayRole: "Space", Qt.EditRole: " "},
+            {Qt.DisplayRole: "'", Qt.EditRole: "'"},
+        ]
+        m = QStandardItemModel(self)
+        m.invisibleRootItem().appendRows([Item(data) for data in items])
+        self.grouping_sep_edit_cb.setModel(m)
         # TODO: Treat all space (THIN SPACE, NO-BREAK SPACE, ...) the same?
-        # for now only allow a limited set
-        self.grouping_sep_edit_cb.addItems(["", ".", ",", " ", "'"])
+        # For instance Apple's Numbers exports csv with \N{NO-BREAK SPACE}.
+        # Maybe just use unicodedata.normalize('NFKC', ...) as a converter?
+        # For now only allow a limited set
         self.grouping_sep_edit_cb.setValidator(
             QRegExpValidator(QRegExp(r"(\.|,| |')?"), self)
         )
@@ -579,7 +638,6 @@ class CSVImportWidget(QWidget):
         number_sep_layout.addWidget(self.decimal_sep_edit_cb)
         number_sep_layout.addStretch(10)
         form.addRow("Number separators:", number_sep_layout)
-
         self.column_type_edit_cb = QComboBox(
             enabled=False, objectName="column-type-edit-combo-box"
         )
@@ -603,9 +661,7 @@ class CSVImportWidget(QWidget):
         ]
         typemodel = QStandardItemModel(self)
         for i, itemdata in enumerate(types):
-            item = QStandardItem()
-            for role, data in itemdata.items():
-                item.setData(data, role)
+            item = Item(itemdata)
             if itemdata.get(Qt.AccessibleDescriptionRole) == "separator":
                 item.setFlags(Qt.NoItemFlags)
             typemodel.appendRow(item)
@@ -708,7 +764,6 @@ class CSVImportWidget(QWidget):
             coltype = model.headerData(
                 i, Qt.Horizontal, TablePreviewModel.ColumnTypeRole)
             if coltype == ColumnType.Numeric:
-                # delegate = dataview.itemDelegateForColumn(i)
                 delegate = ColumnValidateItemDelegate(view, converter=parser)
                 view.setItemDelegateForColumn(i, delegate)
 
