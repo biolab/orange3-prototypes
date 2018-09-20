@@ -21,12 +21,14 @@ from typing import (
     List, Tuple, Dict, Optional, Any, Callable, Iterable, Hashable
 )
 
-from PyQt5.QtCore import Qt, QFileInfo, QTimer, QSettings, QObject, QSize
+from PyQt5.QtCore import (
+    Qt, QFileInfo, QTimer, QSettings, QObject, QSize, QMimeDatabase, QMimeType
+)
 from PyQt5.QtGui import QStandardItem, QStandardItemModel
 from PyQt5.QtWidgets import (
     QLabel, QComboBox, QPushButton, QDialog, QDialogButtonBox, QGridLayout,
     QVBoxLayout, QSizePolicy, QStyle, QFileIconProvider, QFileDialog,
-    QApplication
+    QApplication, QMessageBox
 )
 from PyQt5.QtCore import pyqtSlot as Slot, pyqtSignal as Signal
 
@@ -571,6 +573,7 @@ class OWCSVFileImport(widget.OWWidget):
             dlg.setDirectory(lastdir)
         if lastfilter:
             dlg.selectNameFilter(lastfilter)
+
         status = dlg.exec_()
         dlg.deleteLater()
         if status == QFileDialog.Accepted:
@@ -579,6 +582,21 @@ class OWCSVFileImport(widget.OWWidget):
 
             selected_filter = dlg.selectedNameFilter()
             path = dlg.selectedFiles()[0]
+            # pre-flight check; try to determine the nature of the file
+            mtype = _mime_type_for_path(path)
+            if not mtype.inherits("text/plain"):
+                mb = QMessageBox(
+                    parent=self,
+                    windowTitle="",
+                    icon=QMessageBox.Question,
+                    text="The '{basename}' may be a binary file.\n"
+                         "Are you sure you want to continue?".format(
+                            basename=os.path.basename(path)),
+                    standardButtons=QMessageBox.Cancel | QMessageBox.Yes
+                )
+                mb.setWindowModality(Qt.WindowModal)
+                if mb.exec() == QMessageBox.Cancel:
+                    return
 
             # initialize dialect based on selected extension
             if selected_filter in formats[:-1]:
@@ -1022,6 +1040,42 @@ def _open(path, mode, encoding=None):
             raise ValueError("Expected a single file in the archive.")
     else:
         return open(path, mode, encoding=encoding)
+
+
+compression_types = [
+    "application/gzip", "application/zip",
+    "application/x-xz", "application/x-bzip",
+    # application/x-lz4
+]
+
+
+def _mime_type_for_path(path):
+    # type: (str) -> QMimeType
+    """
+    Return the mime type of the file on a local filesystem.
+
+    In case the path is a compressed file return the mime type of its contents
+
+    Parameters
+    ----------
+    path : str
+        Local filesystem path
+
+    Returns
+    -------
+    mimetype: QMimeType
+    """
+    db = QMimeDatabase()
+    mtype = db.mimeTypeForFile(path, QMimeDatabase.MatchDefault)
+    if any(mtype.inherits(t) for t in compression_types):
+        # peek contents
+        try:
+            with _open(path, "rb") as f:
+                sample = f.read(4096)
+        except Exception:
+            sample = b''
+        mtype = db.mimeTypeForData(sample)
+    return mtype
 
 
 def load_csv(path, opts, progres_callback=None):
