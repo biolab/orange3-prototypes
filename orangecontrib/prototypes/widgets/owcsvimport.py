@@ -224,6 +224,12 @@ class CSVImportDialog(QDialog):
         # Finalizer for opened file handle (in _update_preview)
         self.__finalizer = None  # type: Optional[Callable[[], None]]
         self._optionswidget = textimport.CSVImportWidget()
+        self._optionswidget.previewReadErrorOccurred.connect(
+            self.__on_preview_error
+        )
+        self._optionswidget.previewModelReset.connect(
+            self.__on_preview_reset
+        )
         self._buttons = buttons = QDialogButtonBox(
             orientation=Qt.Horizontal,
             standardButtons=(QDialogButtonBox.Ok | QDialogButtonBox.Cancel |
@@ -336,6 +342,15 @@ class CSVImportDialog(QDialog):
             self._overlay.hide()
             self._optionswidget.setEnabled(True)
 
+    # Enable/disable the accept buttons on the most egregious errors.
+    def __on_preview_error(self):
+        b = self._buttons.button(QDialogButtonBox.Ok)
+        b.setEnabled(False)
+
+    def __on_preview_reset(self):
+        b = self._buttons.button(QDialogButtonBox.Ok)
+        b.setEnabled(True)
+
 
 def dialog_button_box_set_enabled(buttonbox, enabled):
     # type: (QDialogButtonBox, bool) -> None
@@ -348,7 +363,8 @@ def dialog_button_box_set_enabled(buttonbox, enabled):
     for b in buttonbox.buttons():
         role = buttonbox.buttonRole(b)
         if not enabled:
-            b.setProperty(stashname, b.isEnabledTo(buttonbox))
+            if b.property(stashname) is None:
+                b.setProperty(stashname, b.isEnabledTo(buttonbox))
             b.setEnabled(
                 role == QDialogButtonBox.RejectRole or
                 role == QDialogButtonBox.HelpRole
@@ -357,6 +373,7 @@ def dialog_button_box_set_enabled(buttonbox, enabled):
             stashed_state = b.property(stashname)
             if isinstance(stashed_state, bool):
                 state = stashed_state
+                b.setProperty(stashname, None)
             else:
                 state = True
             b.setEnabled(state)
