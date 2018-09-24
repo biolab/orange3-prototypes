@@ -22,23 +22,3 @@ Alternatively, you can install the add-on from PyPI:
 
     pip install orange3-prototypes
 
-
-### OpenCV dependency
-
-To access Face Detector and Webcam widgets, you need OpenCV library.
-
-#### Windows
-
-Download the required [OpenCV] package. Make sure you download the package for your version of Python and OS.
-
-[OpenCV]: http://www.lfd.uci.edu/~gohlke/pythonlibs/#opencv
-
-Then go to the folder containing the downloaded file and open the terminal. Run (insert the right file name after install):
-
-    pip install <opencv_python‑3.2.0‑cp36‑cp36m‑win_amd64.whl>
-
-#### MacOS
-
-In the terminal, run:
-
-    /Applications/Orange3.app/Contents/MacOS/pip install opencv-python
