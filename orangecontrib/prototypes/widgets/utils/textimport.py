@@ -52,6 +52,9 @@ from PyQt5.QtWidgets import (
     QApplication, QAbstractItemView, QToolTip, QStyleOption
 )
 
+from orangecontrib.prototypes.widgets.utils import encodings
+
+
 from Orange.widgets.utils.overlay import OverlayWidget
 
 __all__ = ["ColumnType", "RowSpec", "CSVOptionsWidget", "CSVImportWidget"]
@@ -269,21 +272,6 @@ class CSVOptionsWidget(QWidget):
         ("Space", " "),
     ]
 
-    # TODO: Extend the default list, allow adding other in GUI
-    DefaultEncodings = [
-        ("Unicode (UTF-8)", "utf-8"),
-        ("Unicode (UTF-16)", "utf-16"),
-        ("Unicode (UTF-16LE)", "utf-16-le"),
-        ("Unicode (UTF-16BE)", "utf-16-be"),
-        ("Unicode (UTF-32)", "utf-32"),
-        ("Western (Latin 1)", "iso8859-1"),
-        ("Japanese (Shift JIS)", "shift_jis"),
-        ("Japanese (ISO-2022-JP)", "iso2022_jp"),
-        ("Chinese (GB 18030)", "gb18030"),
-        ("Chinese (BIG5)", "big5"),
-        ("Korean (EUC-KR)", "euc_kr"),
-    ]
-
     #: Signal emitted when the format (dialect) changes
     optionsChanged = Signal()
     #: Signal emitted when the format (dialect) is edited by the user
@@ -300,16 +288,11 @@ class CSVOptionsWidget(QWidget):
 
         # Dialect options form
         form = QFormLayout()
-        # TODO: add a 'Customize Encoding List...' pull down action.
         self.encoding_cb = QComboBox(
             objectName="encoding-combo-box",
             toolTip="Select file text encoding",
         )
-        for displayname, name in CSVOptionsWidget.DefaultEncodings:
-            self.encoding_cb.addItem(displayname, userData=name)
-        self.encoding_cb.setCurrentIndex(
-            self.encoding_cb.findData(self._encoding, Qt.UserRole)
-        )
+        self.__set_visible_codecs(encodings.list_selected_encodings())
         self.encoding_cb.activated.connect(self.__on_encoding_activated)
 
         self.delimiter_cb = QComboBox(
@@ -419,13 +402,18 @@ class CSVOptionsWidget(QWidget):
             Encoding name such that `codecs.lookup` finds it.
         """
         co = codecs.lookup(encoding)
-        index = self.encoding_cb.findData(co.name, Qt.UserRole)
+        cb = self.encoding_cb
+        index = cb.findData(co.name, Qt.UserRole)
+
         if index == -1:
-            self.encoding_cb.insertItem(
-                self.encoding_cb.count() - 2, co.name, co.name
-            )
-            index = self.encoding_cb.count() - 3
-            assert self.encoding_cb.itemData(index, Qt.UserRole) == co.name
+            # insert the encoding before the separator.
+            sepidx = cb.findData("separator", Qt.AccessibleDescriptionRole)
+            if sepidx == -1:
+                sepidx = cb.count()
+            cb.insertItem(sepidx, encodings.display_name(co.name),
+                          userData=co.name)
+            index = sepidx
+            assert cb.itemData(index, Qt.UserRole) == co.name
             changed = True
             self._encoding = encoding
         else:
@@ -450,11 +438,69 @@ class CSVOptionsWidget(QWidget):
         return "latin-1"
 
     def __on_encoding_activated(self, idx):
+        current = self._encoding
         data = self.encoding_cb.itemData(idx, Qt.UserRole)
-        if isinstance(data, str) and codecs.lookup(data):
+        if data is ...:
+            # restore the previous item
+            idx = self.encoding_cb.findData(current, Qt.UserRole)
+            self.encoding_cb.setCurrentIndex(idx)
+            self.__show_encodings_widget()
+        elif isinstance(data, str):
+            assert codecs.lookup(data)
             self._encoding = data
             self.optionsEdited.emit()
             self.optionsChanged.emit()
+
+    def __show_encodings_widget(self):
+        """
+        Show the encodings widget for selection
+        """
+        # If tool window is already shown just raise it
+        w = self.findChild(
+            encodings.SelectEncodingsWidget,
+            "-encoding-selection-tool-window"
+        )
+        if w is not None and w.isVisible():  # pragma: no coverage
+            w.raise_()
+            w.activateWindow()
+            return
+
+        w = encodings.SelectEncodingsWidget(
+            self, Qt.Tool,
+            windowTitle="Customize Encodings List",
+            objectName="-encoding-selection-tool-window"
+        )
+        w.setAttribute(Qt.WA_DeleteOnClose)
+        model = w.model()
+        model.dataChanged.connect(
+            lambda: self.__set_visible_codecs(w.selectedEncodings())
+        )
+        w.show()
+
+    def __set_visible_codecs(self, codecs):
+        # type: (List[str]) -> None
+        # Set the list of current visible/selectable codecs in the encoding_cb
+        if not codecs:
+            # never clear all items from the drop down
+            codecs = ["ascii"]
+        cb = self.encoding_cb
+        current = self._encoding
+        cb.clear()
+
+        for c in codecs:
+            cb.addItem(encodings.display_name(c), userData=c)
+        cb.insertSeparator(cb.count())
+        cb.addItem("Customize Encodings List...", userData=...)
+        idx = cb.findData(current, Qt.UserRole)
+        if idx != -1:
+            cb.setCurrentIndex(idx)
+        elif codecs:
+            cb.setCurrentIndex(0)
+            self._encoding = codecs[0]
+            self.__on_encoding_activated(0)
+        else:
+            cb.setCurrentIndex(-1)
+            self._encoding = ""
 
     def __on_delimiter_idx_activated(self, index):
         presets = CSVOptionsWidget.PresetDelimiters
@@ -492,8 +538,8 @@ class Item(QStandardItem):
     Note
     ----
     Unlike QStandardItem, this class does not map `Qt.DisplayRole` and
-    `Qt.EditRole` to the same value. Accessing or setting via model.setItemData
-    and model.itemData will not work.
+    `Qt.EditRole` to the same value. Also, accessing or setting via
+    `model.itemData` `model.setItemData` and will not work.
     """
     def __init__(self, data={}):
         # type: (Dict[Qt.ItemDataRole, Any]) -> None
