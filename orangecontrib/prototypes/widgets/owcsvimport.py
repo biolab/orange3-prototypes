@@ -743,7 +743,7 @@ class OWCSVFileImport(widget.OWWidget):
         # type: () -> QSettings
         """Return a QSettings instance with local persistent settings."""
         filename = "{}.ini".format(qname(cls))
-        fname = os.path.join(settings.widget_settings_dir(False), filename)
+        fname = os.path.join(settings.widget_settings_dir(), filename)
         return QSettings(fname, QSettings.IniFormat)
 
     def _add_recent(self, filename, options=None):
