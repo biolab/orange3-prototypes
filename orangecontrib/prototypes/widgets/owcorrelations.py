@@ -1,59 +1,155 @@
+"""
+Correlations widget
+"""
 from enum import IntEnum
 from operator import attrgetter
+from itertools import combinations, groupby, chain
 
 import numpy as np
-from Orange.widgets.utils.signals import Input, Output
-from scipy.stats import spearmanr
+from scipy.stats import spearmanr, pearsonr
+from sklearn.cluster import KMeans
 
 from AnyQt.QtCore import Qt, QItemSelectionModel, QItemSelection, QSize
-from AnyQt.QtGui import QStandardItem
-from AnyQt.QtWidgets import QHeaderView
+from AnyQt.QtGui import QStandardItem, QColor
 
 from Orange.data import Table, Domain, ContinuousVariable, StringVariable
-from Orange.preprocess import SklImpute
+from Orange.preprocess import SklImpute, Normalize
 from Orange.widgets import gui
 from Orange.widgets.settings import Setting, ContextSetting, \
     DomainContextHandler
+from Orange.widgets.utils.signals import Input, Output
 from Orange.widgets.visualize.utils import VizRankDialogAttrPair
 from Orange.widgets.widget import OWWidget, AttributeList, Msg
 
+NAN = 2
+SIZE_LIMIT = 1000000
+
 
 class CorrelationType(IntEnum):
+    """
+    Correlation type enumerator. Possible correlations: Pearson, Spearman.
+    """
     PEARSON, SPEARMAN = 0, 1
 
     @staticmethod
     def items():
-        return ["Pairwise Pearson correlation", "Pairwise Spearman correlation"]
+        """
+        Texts for correlation types. Can be used in gui controls (eg. combobox).
+        """
+        return ["Pearson correlation", "Spearman correlation"]
+
+
+class KMeansCorrelationHeuristic:
+    """
+    Heuristic to obtain the most promising attribute pairs, when there are to
+    many attributes to calculate correlations for all possible pairs.
+    """
+    n_clusters = 10
+
+    def __init__(self, data):
+        self.n_attributes = len(data.domain.attributes)
+        self.data = data
+        self.states = None
+
+    def get_clusters_of_attributes(self):
+        """
+        Generates groupes of attribute IDs, grouped by cluster. Clusters are
+        obtained by KMeans algorithm.
+
+        :return: generator of attributes grouped by cluster
+        """
+        data = Normalize()(self.data).X.T
+        kmeans = KMeans(n_clusters=self.n_clusters, random_state=0).fit(data)
+        labels_attrs = sorted([(l, i) for i, l in enumerate(kmeans.labels_)])
+        for _, group in groupby(labels_attrs, key=lambda x: x[0]):
+            group = list(group)
+            if len(group) > 1:
+                yield list(pair[1] for pair in group)
+
+    def get_states(self, initial_state):
+        """
+        Generates the most promising states (attribute pairs).
+
+        :param initial_state: initial state; None if this is the first call
+        :return: generator of tuples of states
+        """
+        if self.states is not None:
+            return chain([initial_state], self.states)
+        self.states = chain.from_iterable(combinations(inds, 2) for inds in
+                                          self.get_clusters_of_attributes())
+        return self.states
 
 
 class CorrelationRank(VizRankDialogAttrPair):
+    """
+    Correlations rank widget.
+    """
+    NEGATIVE_COLOR = QColor(70, 190, 250)
+    POSITIVE_COLOR = QColor(170, 242, 43)
+
+    def __init__(self, *args):
+        super().__init__(*args)
+        self.heuristic = None
+        self.use_heuristic = False
+
     def initialize(self):
         super().initialize()
         data = self.master.cont_data
         self.attrs = data and data.domain.attributes
         self.model_proxy.setFilterKeyColumn(-1)
         self.rank_table.horizontalHeader().setStretchLastSection(False)
+        self.heuristic = None
+        self.use_heuristic = False
+        if data:
+            # use heuristic if data is too big
+            n_attrs = len(self.attrs)
+            use_heuristic = n_attrs > KMeansCorrelationHeuristic.n_clusters
+            self.use_heuristic = use_heuristic and \
+                len(data) * n_attrs ** 2 > SIZE_LIMIT
+            if self.use_heuristic:
+                self.heuristic = KMeansCorrelationHeuristic(data)
 
     def compute_score(self, state):
-        (a1, a2), corr_type = state, self.master.correlation_type
-        if corr_type == CorrelationType.PEARSON:
-            return -np.corrcoef(self.master.cont_data.X[:, [a1, a2]].T)[0, 1]
-        else:
-            return -spearmanr(self.master.cont_data.X[:, [a1, a2]])[0]
+        (attr1, attr2), corr_type = state, self.master.correlation_type
+        data = self.master.cont_data.X
+        corr = pearsonr if corr_type == CorrelationType.PEARSON else spearmanr
+        result = corr(data[:, attr1], data[:, attr2])[0]
+        return -abs(result) if not np.isnan(result) else NAN, result
 
     def row_for_state(self, score, state):
         attrs = sorted((self.attrs[x] for x in state), key=attrgetter("name"))
-        attr_1_item = QStandardItem(attrs[0].name)
-        attr_2_item = QStandardItem(attrs[1].name)
-        correlation_item = QStandardItem(str(round(-score, 3)))
-        attr_1_item.setData(attrs, self._AttrRole)
-        attr_2_item.setData(attrs, self._AttrRole)
-        correlation_item.setData(attrs)
-        correlation_item.setData(Qt.AlignCenter, Qt.TextAlignmentRole)
-        return [attr_1_item, attr_2_item, correlation_item]
+        attrs_item = QStandardItem(
+            "{}, {}".format(attrs[0].name, attrs[1].name))
+        attrs_item.setData(attrs, self._AttrRole)
+        attrs_item.setData(Qt.AlignLeft + Qt.AlignTop, Qt.TextAlignmentRole)
+        correlation_item = QStandardItem("{:+.3f}".format(score[1]))
+        correlation_item.setData(attrs, self._AttrRole)
+        correlation_item.setData(
+            self.NEGATIVE_COLOR if score[1] < 0 else self.POSITIVE_COLOR,
+            gui.TableBarItem.BarColorRole)
+        return [correlation_item, attrs_item]
 
     def check_preconditions(self):
         return self.master.cont_data is not None
+
+    def iterate_states(self, initial_state):
+        if self.use_heuristic:
+            return self.heuristic.get_states(initial_state)
+        else:
+            return super().iterate_states(initial_state)
+
+    def state_count(self):
+        if self.use_heuristic:
+            n_clusters = KMeansCorrelationHeuristic.n_clusters
+            n_avg_attrs = len(self.attrs) / n_clusters
+            return n_clusters * n_avg_attrs * (n_avg_attrs - 1) / 2
+        else:
+            n_attrs = len(self.attrs)
+            return n_attrs * (n_attrs - 1) / 2
+
+    @staticmethod
+    def bar_length(score):
+        return abs(score[1])
 
 
 class OWCorrelations(OWWidget):
@@ -93,6 +189,7 @@ class OWCorrelations(OWWidget):
 
         self.vizrank, _ = CorrelationRank.add_vizrank(
             None, self, None, self._vizrank_selection_changed)
+        self.vizrank.progressBar = self.progressBar
 
         gui.separator(box)
         box.layout().addWidget(self.vizrank.filter)
@@ -114,10 +211,12 @@ class OWCorrelations(OWWidget):
     def _vizrank_select(self):
         model = self.vizrank.rank_table.model()
         selection = QItemSelection()
+        names = sorted(x.name for x in self.selection)
         for i in range(model.rowCount()):
-            if model.data(model.index(i, 0)) == self.selection[0].name and \
-                    model.data(model.index(i, 1)) == self.selection[1].name:
-                selection.select(model.index(i, 0), model.index(i, 2))
+            if sorted(x.name for x in model.data(model.index(i, 0),
+                                                 CorrelationRank._AttrRole)) \
+                    == names:
+                selection.select(model.index(i, 0), model.index(i, 1))
                 self.vizrank.rank_table.selectionModel().select(
                     selection, QItemSelectionModel.ClearAndSelect)
                 break
@@ -150,7 +249,6 @@ class OWCorrelations(OWWidget):
             self.vizrank.toggle()
             header = self.vizrank.rank_table.horizontalHeader()
             header.setStretchLastSection(True)
-            header.setSectionResizeMode(QHeaderView.ResizeToContents)
         else:
             self.commit()
 
@@ -164,11 +262,12 @@ class OWCorrelations(OWWidget):
         metas = [StringVariable("Feature 1"), StringVariable("Feature 2")]
         domain = Domain([ContinuousVariable("Correlation")], metas=metas)
         model = self.vizrank.rank_model
-        x = np.array([[float(model.data(model.index(row, 2)))] for row
+        x = np.array([[float(model.data(model.index(row, 0)))] for row
                       in range(model.rowCount())])
-        m = np.array([[model.data(model.index(row, 0)),
-                       model.data(model.index(row, 1))] for row
-                      in range(model.rowCount())], dtype=object)
+        m = np.array([[attr.name
+                       for attr in model.data(model.index(row, 0),
+                                              CorrelationRank._AttrRole)]
+                      for row in range(model.rowCount())], dtype=object)
         corr_table = Table(domain, x, metas=m)
         corr_table.name = "Correlations"
 
