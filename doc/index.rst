@@ -12,7 +12,6 @@ Widgets
    widgets/enklik-anketa
    widgets/neighbors
    widgets/parallel-coordinates
-   widgets/stacking
    widgets/feature-statistics
 
 
