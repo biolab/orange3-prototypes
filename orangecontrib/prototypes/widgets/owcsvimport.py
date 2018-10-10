@@ -16,9 +16,12 @@ import weakref
 from xml.sax.saxutils import escape
 from functools import singledispatch
 from concurrent import futures
+from contextlib import ExitStack
+
 import typing
 from typing import (
-    List, Tuple, Dict, Optional, Any, Callable, Iterable, Hashable
+    List, Tuple, Dict, Optional, Any, Callable, Iterable, Hashable,
+    Union, AnyStr, BinaryIO
 )
 
 from PyQt5.QtCore import (
@@ -1138,7 +1141,7 @@ def _mime_type_for_path(path):
 
 
 def load_csv(path, opts, progres_callback=None):
-    # type: (typing.AnyStr, Options, ...) -> pd.DataFrame
+    # type: (Union[AnyStr, BinaryIO], Options, ...) -> pd.DataFrame
     def dtype(coltype):
         # type: (ColumnType) -> Optional[str]
         if coltype == ColumnType.Numeric:
@@ -1211,27 +1214,34 @@ def load_csv(path, opts, progres_callback=None):
     if opts.group_separator != "":
         numbers_format_kwds["thousands"] = opts.group_separator
 
-    with _open(path, 'rb') as f:
+    with ExitStack() as stack:
+        if isinstance(path, (str, bytes)):
+            f = stack.enter_context(_open(path, 'rb'))
+        elif isinstance(path, (io.RawIOBase, io.BufferedIOBase)) or \
+                hasattr(path, "read"):
+            f = path
+        else:
+            raise TypeError()
         file = TextReadWrapper(
             f, encoding=opts.encoding,
             progress_callback=progres_callback)
-        try:
-            df = pd.read_csv(
-                file, sep=opts.dialect.delimiter, dialect=opts.dialect,
-                skipinitialspace=opts.dialect.skipinitialspace,
-                header=header, skiprows=skiprows,
-                dtype=dtypes, parse_dates=parse_dates, prefix=prefix,
-                na_values=["?", "."], **numbers_format_kwds
+        stack.callback(file.detach)
+        df = pd.read_csv(
+            file, sep=opts.dialect.delimiter, dialect=opts.dialect,
+            skipinitialspace=opts.dialect.skipinitialspace,
+            header=header, skiprows=skiprows,
+            dtype=dtypes, parse_dates=parse_dates, prefix=prefix,
+            na_values=["?", "."], **numbers_format_kwds
+        )
+        if columns_ignored:
+            # TODO: use 'usecols' parameter in `read_csv` call to
+            # avoid loading/parsing the columns
+            df.drop(
+                columns=[df.columns[i] for i in columns_ignored
+                         if i < len(df.columns)],
+                inplace=True
             )
-            if columns_ignored:
-                # TODO: use 'usecols' parameter in `read_csv` call to
-                # avoid loading/parsing the columns
-                df = df.drop(
-                    columns=[df.columns[i] for i in columns_ignored
-                             if i < len(df.columns)])
-            return df
-        finally:
-            file.detach()
+        return df
 
 
 def clear_stack_on_cancel(f):
@@ -1317,7 +1327,7 @@ class TextReadWrapper(io.TextIOWrapper):
         # dispatch on buffer type)
         try:
             fd = self.buffer.fileno()
-        except AttributeError:
+        except (AttributeError, io.UnsupportedOperation):
             pos = -1
         else:
             try:
