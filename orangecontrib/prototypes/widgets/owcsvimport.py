@@ -1167,7 +1167,7 @@ def load_csv(path, opts, progres_callback=None):
     columns_ignored = {i for i, c in expand(opts.columntypes)
                        if c == ColumnType.Skip}
     dtcols = {i for i, c in expand(opts.columntypes)
-              if c == ColumnType.Skip}
+              if c == ColumnType.Time}
     parse_dates = sorted(dtcols)
 
     if not parse_dates:
