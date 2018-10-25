@@ -29,9 +29,6 @@ from Orange.widgets.visualize.owdistributions import LegendItem
 from Orange.widgets.widget import OWWidget, Input, Output, Msg
 
 
-pg.setConfigOptions(useOpenGL=True)
-
-
 def ccw(a, b, c):
     """
     Checks whether three points are listed in a counterclockwise order.
@@ -297,7 +294,7 @@ class ProfileGroup:
         color = QColor(self.color)
         color.setAlpha(LinePlotStyle.SELECTED_LINE_ALPHA)
         pen = self.make_pen(color, LinePlotStyle.SELECTED_LINE_WIDTH)
-        return pg.PlotCurveItem(x=None, y=None, pen=pen, antialias=True)
+        return pg.PlotCurveItem(x=None, y=None, pen=pen, antialias=False)
 
     def _get_range_curve(self):
         color = QColor(self.color)
@@ -413,7 +410,7 @@ class ProfileGroup:
 
 
 MAX_FEATURES = 200
-SEL_MAX_INSTANCES = 100000
+SEL_MAX_INSTANCES = 10000
 
 
 class OWLinePlot(OWWidget):
@@ -561,7 +558,7 @@ class OWLinePlot(OWWidget):
 
         self.clear_messages()
         if self.data is not None:
-            self.infoLabel.setText("%i instances on input\n%i attributes" % (
+            self.infoLabel.setText("%i instances on input\n%i features" % (
                 len(self.data), len(self.data.domain.attributes)))
             self.graph_variables = [var for var in self.data.domain.attributes
                                     if var.is_continuous]
