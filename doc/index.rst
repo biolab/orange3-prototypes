@@ -9,9 +9,7 @@ Widgets
 
    widgets/contingency-table
    widgets/enklik-anketa
-   widgets/neighbors
    widgets/parallel-coordinates
-   widgets/feature-statistics
 
 
 Indices and tables
