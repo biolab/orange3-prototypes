@@ -6,6 +6,7 @@ dist
 *.pyd
 *.pyc
 MANIFEST
+doc/_build/
 
 # Cython generated files
 __pycache__
