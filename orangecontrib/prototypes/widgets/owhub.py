@@ -1,5 +1,5 @@
-from PyQt4.QtGui import QListWidgetItem
-from PyQt4.QtCore import Qt, QSize
+from AnyQt.QtWidgets import QListWidgetItem
+from AnyQt.QtCore import Qt, QSize
 from Orange.widgets import widget, gui
 
 
