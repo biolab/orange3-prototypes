@@ -1,9 +1,9 @@
 import numpy as np
 
-from PyQt4.QtCore import Qt, QPoint, QDateTime, QSize, QRegExp
-from PyQt4.QtGui import QApplication, QCalendarWidget, QBrush, \
-    QWidget, QColor, QPainter, QLCDNumber, QPolygon, QSizePolicy, \
-    QAbstractButton
+from AnyQt.QtWidgets import QAbstractButton, QCalendarWidget, QWidget, \
+    QLCDNumber, QSizePolicy, QApplication
+from AnyQt.QtCore import QRegExp, QSize, QPoint, Qt, QDateTime
+from AnyQt.QtGui import QColor, QBrush, QPolygon, QPainter
 
 from Orange.data import Table
 from Orange.widgets import widget, gui

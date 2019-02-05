@@ -3,8 +3,8 @@ from operator import itemgetter
 
 import numpy as np
 
-from PyQt4.QtCore import Qt, QTimer
-from PyQt4.QtGui import QApplication, QListView
+from AnyQt.QtCore import Qt, QTimer
+from AnyQt.QtWidgets import QApplication, QListView
 
 from Orange.data import Table
 from Orange.widgets import widget, gui, settings

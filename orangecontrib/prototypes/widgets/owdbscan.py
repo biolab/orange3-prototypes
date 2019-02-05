@@ -1,6 +1,6 @@
 import numpy as np
 
-from PyQt4 import QtGui
+from AnyQt.QtWidgets import QLayout
 
 from Orange.widgets import widget, gui
 from Orange.widgets.settings import Setting
@@ -74,7 +74,7 @@ class OWDBSCAN(widget.OWWidget):
         gui.rubber(self.controlArea)
 
         self.controlArea.setMinimumWidth(self.controlArea.sizeHint().width())
-        self.layout().setSizeConstraint(QtGui.QLayout.SetFixedSize)
+        self.layout().setSizeConstraint(QLayout.SetFixedSize)
 
     def adjustSize(self):
         self.ensurePolished()
@@ -158,7 +158,7 @@ class OWDBSCAN(widget.OWWidget):
 
 if __name__ == "__main__":
     import sys
-    from PyQt4.QtGui import QApplication
+    from AnyQt.QtWidgets import QApplication
 
     a = QApplication(sys.argv)
     ow = OWDBSCAN()
