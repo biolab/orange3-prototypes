@@ -1449,7 +1449,7 @@ def pandas_to_table(df):
             var = Orange.data.TimeVariable.make(str(header))
             var.have_date = var.have_time = 1
         elif pdtypes.is_object_dtype(series):
-            coldata = series.values
+            coldata = series.fillna('').values
             assert isinstance(coldata, np.ndarray)
             orangecol = coldata
             var = Orange.data.StringVariable.make(str(header))
