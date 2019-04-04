@@ -1,3 +1,4 @@
+from numpy.testing import assert_array_equal
 import unittest
 
 import os
@@ -8,8 +9,10 @@ import numpy as np
 
 from Orange.widgets.tests.base import WidgetTest, GuiTest
 
-from orangecontrib.prototypes.widgets.utils import textimport
 from orangecontrib.prototypes.widgets import owcsvimport
+from orangecontrib.prototypes.widgets.owcsvimport import (
+    pandas_to_table, ColumnType, RowSpec
+)
 
 
 class TestOWCSVFileImport(WidgetTest):
@@ -33,16 +36,14 @@ class TestImportDialog(GuiTest):
         path = os.path.join(dirname, "test_owgrep_file.txt")
         d = owcsvimport.CSVImportDialog()
         d.setPath(path)
-        ColumnTypes = owcsvimport.Options.ColumnType
-        RowSpec = owcsvimport.Options.RowSpec
         opts = owcsvimport.Options(
             encoding="utf-8",
             dialect=owcsvimport.textimport.Dialect(
                 " ", "\"", "\\", True, True
             ),
             columntypes=[
-                (range(0, 2), ColumnTypes.Numeric),
-                (range(2, 3), ColumnTypes.Categorical)
+                (range(0, 2), ColumnType.Numeric),
+                (range(2, 3), ColumnType.Categorical)
             ],
             rowspec=[
                 (range(0, 4), RowSpec.Skipped),
@@ -64,8 +65,6 @@ class TestUtils(unittest.TestCase):
             b'1/1/1990,2.0,],two,\n'
             b'1/1/1990,3.0,{,three,'
         )
-        ColumnType = owcsvimport.Options.ColumnType
-        RowSpec = owcsvimport.Options.RowSpec
         opts = owcsvimport.Options(
             encoding="ascii",
             dialect=csv.excel(),
@@ -74,6 +73,7 @@ class TestUtils(unittest.TestCase):
                 (range(1, 2), ColumnType.Numeric),
                 (range(2, 3), ColumnType.Text),
                 (range(3, 4), ColumnType.Categorical),
+                (range(4, 5), ColumnType.Auto),
             ],
             rowspec=[]
         )
@@ -109,3 +109,49 @@ class TestUtils(unittest.TestCase):
         self.assertSequenceEqual(
             list(df.iloc[:, 1]), ["one", "three"]
         )
+
+    def test_convert(self):
+        contents = (
+            b'I, J,  K\n'
+            b' , A,   \n'
+            b'B,  ,  1\n'
+            b'?, ., NA'
+        )
+
+        class dialect(csv.excel):
+            skipinitialspace = True
+
+        opts = owcsvimport.Options(
+            encoding="ascii",
+            dialect=dialect(),
+            columntypes=[
+                (range(0, 1), ColumnType.Text),
+                (range(1, 2), ColumnType.Categorical),
+                (range(2, 3), ColumnType.Text),
+
+            ],
+            rowspec=[(range(0, 1), RowSpec.Header)]
+        )
+        df = owcsvimport.load_csv(io.BytesIO(contents), opts)
+        tb = pandas_to_table(df)
+
+        assert_array_equal(tb.metas[:, 0], ["", "B", "?"])
+        assert_array_equal(tb.metas[:, 1], ["", "1", "NA"])
+        assert_array_equal(tb.X[:, 0], [0.0, np.nan, np.nan])
+
+        opts = owcsvimport.Options(
+            encoding="ascii",
+            dialect=dialect(),
+            columntypes=[
+                (range(0, 1), ColumnType.Categorical),
+                (range(1, 2), ColumnType.Categorical),
+                (range(2, 3), ColumnType.Numeric),
+            ],
+            rowspec=[(range(0, 1), RowSpec.Header)]
+        )
+        df = owcsvimport.load_csv(io.BytesIO(contents), opts)
+        tb = pandas_to_table(df)
+
+        assert_array_equal(tb.X[:, 0], [np.nan, 0, np.nan])
+        assert_array_equal(tb.X[:, 1], [0, np.nan, np.nan])
+        assert_array_equal(tb.X[:, 2], [np.nan, 1, np.nan])
