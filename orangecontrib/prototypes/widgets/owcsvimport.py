@@ -1140,6 +1140,17 @@ def _mime_type_for_path(path):
     return mtype
 
 
+NA_DEFAULT = ["", "?", ".", "~", "nan", "NAN", "NaN", "N/A", "n/a", "NA"]
+
+NA_VALUES = {
+    ColumnType.Numeric: NA_DEFAULT,
+    ColumnType.Categorical: NA_DEFAULT,
+    ColumnType.Time: NA_DEFAULT + ["NaT", "NAT"],
+    ColumnType.Text: [],
+    ColumnType.Auto: NA_DEFAULT,
+}
+
+
 def load_csv(path, opts, progres_callback=None):
     # type: (Union[AnyStr, BinaryIO], Options, ...) -> pd.DataFrame
     def dtype(coltype):
@@ -1172,7 +1183,8 @@ def load_csv(path, opts, progres_callback=None):
     dtcols = {i for i, c in expand(opts.columntypes)
               if c == ColumnType.Time}
     parse_dates = sorted(dtcols)
-
+    na_values = {i: NA_VALUES.get(c, NA_DEFAULT)
+                 for i, c in expand(opts.columntypes)}
     if not parse_dates:
         parse_dates = False
 
@@ -1231,7 +1243,8 @@ def load_csv(path, opts, progres_callback=None):
             skipinitialspace=opts.dialect.skipinitialspace,
             header=header, skiprows=skiprows,
             dtype=dtypes, parse_dates=parse_dates, prefix=prefix,
-            na_values=["?", "."], **numbers_format_kwds
+            na_values=na_values, keep_default_na=False,
+            **numbers_format_kwds
         )
         if columns_ignored:
             # TODO: use 'usecols' parameter in `read_csv` call to
