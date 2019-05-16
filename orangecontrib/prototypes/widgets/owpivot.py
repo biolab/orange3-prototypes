@@ -9,7 +9,7 @@ from scipy import sparse as sp
 from AnyQt.QtCore import Qt, QItemSelection, QItemSelectionModel, pyqtSignal
 from AnyQt.QtGui import QStandardItem, QColor, QStandardItemModel
 from AnyQt.QtWidgets import (QTableView, QSizePolicy, QHeaderView,
-                             QStyledItemDelegate, QCheckBox)
+                             QStyledItemDelegate, QCheckBox, QFrame)
 
 from Orange.data import (Table, DiscreteVariable, Variable, Domain,
                          ContinuousVariable)
@@ -180,12 +180,14 @@ class Pivot:
             self._depen_agg_done[fun].update({var: j})
 
     def _create_group_tables(self, var_indep_funs, var_dep_funs):
-        attrs = [ContinuousVariable(f"{fun}") for fun in var_indep_funs]
+        attrs = [ContinuousVariable(f"({str(fun).lower()})")
+                 for fun in var_indep_funs]
         for var, fun in var_dep_funs:
+            name = f"{var.name} ({str(fun).lower()})"
             if fun in self.DiscVarFunctions:
-                attrs.append(DiscreteVariable(f"{var.name}_{fun}", var.values))
+                attrs.append(DiscreteVariable(name, var.values))
             else:
-                attrs.append(ContinuousVariable(f"{var.name}_{fun}"))
+                attrs.append(ContinuousVariable(name))
         args = (var_indep_funs, var_dep_funs, attrs)
         for t, var in (("table", None), ("total_h", self._col_var),
                        ("total_v", self._row_var), ("total", self._total_var)):
@@ -274,15 +276,16 @@ class Pivot:
                 _X[:, index][_X[:, index] == value] = j
             return values
 
+        vals = np.array(self._col_var.values)[self._col_var_groups.astype(int)]
         if not val_var or val_var.is_continuous:
             cv = ContinuousVariable
-            attrs = [[cv(f"{v}", 1) for v in self._col_var.values]] * 2
+            attrs = [[cv(f"{v}", 1) for v in vals]] * 2
             attrs.extend([[cv("Total", 1)]] * 2)
         else:
             attrs = []
             for x in (X, X_h):
                 attrs.append([DiscreteVariable(f"{v}", map_values(i, x))
-                              for i, v in enumerate(self._col_var.values, 2)])
+                              for i, v in enumerate(vals, 2)])
             for x in (X_v, X_t):
                 attrs.append([DiscreteVariable("Total", map_values(0, x))])
         row_var_h = DiscreteVariable(self._row_var.name, values=["Total"])
@@ -416,6 +419,8 @@ class PivotTableView(QTableView):
         return self._n_agg_func > 1
 
     def __cell_entered(self, model_index):
+        if self.__clicked_cell is None:
+            return
         index = self.table_model.index
         selection = None
         i_end, j_end = model_index.row(), model_index.column()
@@ -505,7 +510,7 @@ class PivotTableView(QTableView):
         item = QStandardItem()
         item.setData(titlev, Qt.DisplayRole)
         item.setTextAlignment(Qt.AlignHCenter | Qt.AlignBottom)
-        self.setItemDelegateForColumn(0, gui.VerticalItemDelegate())
+        self.setItemDelegateForColumn(0, gui.VerticalItemDelegate(extend=True))
         self.table_model.setItem(self._n_leading_rows, 0, item)
         row_span = self._n_classesv * self._n_agg_func + 1
         self.setSpan(self._n_leading_rows, 0, row_span, 1)
@@ -630,7 +635,8 @@ class OWPivot(OWWidget):
     name = "Pivot Table"
     description = "Reshape data table based on column values."
     icon = "icons/Pivot.svg"
-    priority = 100
+    priority = 1000
+    keywords = ["pivot", "group", "aggregate"]
 
     class Inputs:
         data = Input("Data", Table, default=True)
@@ -640,9 +646,10 @@ class OWPivot(OWWidget):
         filtered_data = Output("Filtered Data", Table)
         grouped_data = Output("Grouped Data", Table)
 
-    # TODO - inconsistent for different variable types
     class Warning(OWWidget.Warning):
+        # TODO - inconsistent for different variable types
         no_col_feature = Msg("Column feature should be selected.")
+        cannot_aggregate = Msg("Some aggregations ({}) cannot be performed.")
 
     settingsHandler = DomainContextHandler()
     row_feature = ContextSetting(None)
@@ -682,6 +689,11 @@ class OWPivot(OWWidget):
                      model=DomainModel(placeholder="(Same as rows)",
                                        valid_types=DiscreteVariable),
                      callback=self.__feature_changed)
+        box = gui.vBox(self.controlArea, "Values")
+        gui.comboBox(box, self, "val_feature", contentsLength=12,
+                     model=DomainModel(placeholder="(None)"),
+                     orientation=Qt.Horizontal,
+                     callback=self.__val_feature_changed)
         self.__add_aggregation_controls()
         gui.rubber(self.controlArea)
         gui.auto_commit(self.controlArea, self, "auto_commit", "&Apply")
@@ -690,7 +702,12 @@ class OWPivot(OWWidget):
         box = gui.vBox(self.controlArea, "Aggregations")
         for agg in self.AGGREGATIONS:
             if agg is None:
-                gui.separator(box)
+                gui.separator(box, height=1)
+                line = QFrame()
+                line.setFrameShape(QFrame.HLine)
+                line.setLineWidth(1)
+                line.setFrameShadow(QFrame.Sunken)
+                box.layout().addWidget(line)
                 continue
             check_box = QCheckBox(str(agg), box)
             check_box.setChecked(agg in self.sel_agg_functions)
@@ -699,12 +716,6 @@ class OWPivot(OWWidget):
             box.layout().addWidget(check_box)
 
     def _add_main_area_controls(self):
-        box = gui.hBox(self.mainArea)
-        gui.rubber(box)
-        gui.comboBox(box, self, "val_feature", label="Show: ",
-                     orientation=Qt.Horizontal, contentsLength=12,
-                     model=DomainModel(placeholder="(None)"),
-                     callback=self.__val_feature_changed)
         self.table_view = PivotTableView()
         self.table_view.selection_changed.connect(self.__invalidate_filtered)
         self.mainArea.layout().addWidget(self.table_view)
@@ -713,6 +724,16 @@ class OWPivot(OWWidget):
     def no_col_feature(self):
         return self.col_feature is None and self.row_feature is not None \
             and self.row_feature.is_continuous
+
+    @property
+    def skipped_aggs(self):
+        def add(fun):
+            data, var = self.data, self.val_feature
+            return data and not var and fun not in Pivot.AutonomousFunctions \
+                or var and var.is_discrete and fun in Pivot.ContVarFunctions \
+                or var and var.is_continuous and fun in Pivot.DiscVarFunctions
+        skipped = [str(fun) for fun in self.sel_agg_functions if add(fun)]
+        return ", ".join(sorted(skipped))
 
     def __feature_changed(self):
         self.selection = set()
@@ -765,6 +786,8 @@ class OWPivot(OWWidget):
         model = self.controls.row_feature.model()
         if model:
             self.row_feature = model[0]
+        if domain is not None and len(domain.variables):
+            self.val_feature = self.data.domain.variables[0]
 
     def commit(self):
         if self.pivot is None:
@@ -775,6 +798,9 @@ class OWPivot(OWWidget):
             self.pivot = Pivot(self.data, self.sel_agg_functions,
                                self.row_feature,
                                self.col_feature, self.val_feature)
+        self.Warning.cannot_aggregate.clear()
+        if self.skipped_aggs:
+            self.Warning.cannot_aggregate(self.skipped_aggs)
         self._update_graph()
         self.Outputs.grouped_data.send(self.pivot.group_table)
         self.Outputs.pivot_table.send(self.pivot.pivot_table)

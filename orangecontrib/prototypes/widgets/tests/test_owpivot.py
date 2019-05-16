@@ -23,8 +23,9 @@ class TestOWPivot(WidgetTest):
     def setUp(self):
         self.widget = self.create_widget(OWPivot)
         self.agg_checkboxes = [checkbox for checkbox in
-                               self.widget.controlArea.children()[5].children()
+                               self.widget.controlArea.children()[7].children()
                                if isinstance(checkbox, QCheckBox)]
+        self.assertGreater(len(self.agg_checkboxes), 0)
         self.iris = Table("iris")
         self.heart_disease = Table("heart_disease")
         self.zoo = Table("zoo")
@@ -35,7 +36,7 @@ class TestOWPivot(WidgetTest):
         name = self.heart_disease.domain.class_var.name
         self.assertEqual(controls.row_feature.currentText(), name)
         self.assertEqual(controls.col_feature.currentText(), "(Same as rows)")
-        self.assertEqual(controls.val_feature.currentText(), "(None)")
+        self.assertEqual(controls.val_feature.currentText(), "age")
 
         self.assertEqual(len(controls.row_feature.model()), 15)
         self.assertEqual(len(controls.col_feature.model()), 11)
@@ -66,8 +67,8 @@ class TestOWPivot(WidgetTest):
         self.send_signal(self.widget.Inputs.data, self.iris)
         self.agg_checkboxes[Pivot.Sum.value].click()
         grouped = self.get_output(self.widget.Outputs.grouped_data)
-        names = ["iris", "Count", "sepal length_Sum", "sepal width_Sum",
-                 "petal length_Sum", "petal width_Sum"]
+        names = ["iris", "(count)", "sepal length (sum)", "sepal width (sum)",
+                 "petal length (sum)", "petal width (sum)"]
         self.assertListEqual(names, [a.name for a in grouped.domain.variables])
         self.send_signal(self.widget.Inputs.data, None)
         self.assertIsNone(self.get_output(self.widget.Outputs.grouped_data))
@@ -97,8 +98,8 @@ class TestOWPivot(WidgetTest):
         simulate.combobox_activate_item(self.widget.controls.val_feature,
                                         self.iris.domain.attributes[0].name)
         table = self.get_output(self.widget.Outputs.pivot_table)
-        names = ["iris", "Aggregate", 'Iris-setosa',
-                 'Iris-versicolor', 'Iris-virginica']
+        names = ["iris", "Aggregate", "Iris-setosa",
+                 "Iris-versicolor", "Iris-virginica"]
         self.assertListEqual(names, [a.name for a in table.domain.variables])
         self.send_signal(self.widget.Inputs.data, None)
         self.assertIsNone(self.get_output(self.widget.Outputs.pivot_table))
@@ -107,6 +108,7 @@ class TestOWPivot(WidgetTest):
         for cb in self.agg_checkboxes[1:]:
             cb.click()
         self.send_signal(self.widget.Inputs.data, self.iris)
+        self.assertTrue(self.widget.Warning.cannot_aggregate.is_shown())
         simulate.combobox_activate_item(self.widget.controls.row_feature,
                                         self.iris.domain.attributes[0].name)
         self.assertTrue(self.widget.Warning.no_col_feature.is_shown())
@@ -123,6 +125,7 @@ class TestOWPivot(WidgetTest):
         for cb in self.agg_checkboxes[1:]:
             cb.click()
         self.send_signal(self.widget.Inputs.data, self.iris)
+        self.assertTrue(self.widget.Warning.cannot_aggregate.is_shown())
         simulate.combobox_activate_item(self.widget.controls.col_feature,
                                         self.iris.domain.class_var.name)
         simulate.combobox_activate_item(self.widget.controls.val_feature,
@@ -136,6 +139,33 @@ class TestOWPivot(WidgetTest):
         simulate.combobox_activate_item(self.widget.controls.col_feature,
                                         self.zoo.domain.attributes[0].name)
 
+    def test_aggregations(self):
+        # agg: Count, feature: Continuous
+        self.send_signal(self.widget.Inputs.data, self.iris)
+        self.assertFalse(self.widget.Warning.cannot_aggregate.is_shown())
+        # agg: Count, Sum, feature: Continuous
+        self.agg_checkboxes[Pivot.Sum.value].click()
+        self.assertFalse(self.widget.Warning.cannot_aggregate.is_shown())
+        # agg: Count, Sum, Majority, feature: Continuous
+        self.agg_checkboxes[Pivot.Majority.value].click()
+        self.assertTrue(self.widget.Warning.cannot_aggregate.is_shown())
+        # agg: Count, Majority, feature: Continuous
+        self.agg_checkboxes[Pivot.Sum.value].click()
+        self.assertTrue(self.widget.Warning.cannot_aggregate.is_shown())
+        # agg: Count, Majority, feature: Discrete
+        simulate.combobox_activate_item(self.widget.controls.val_feature,
+                                        self.iris.domain.class_var.name)
+        self.assertFalse(self.widget.Warning.cannot_aggregate.is_shown())
+        # agg: Count, Majority, feature: None
+        simulate.combobox_activate_item(self.widget.controls.val_feature,
+                                        "(None)")
+        self.assertTrue(self.widget.Warning.cannot_aggregate.is_shown())
+        simulate.combobox_activate_item(self.widget.controls.row_feature,
+                                        self.iris.domain.attributes[1].name)
+        self.assertTrue(self.widget.Warning.cannot_aggregate.is_shown())
+        self.send_signal(self.widget.Inputs.data, None)
+        self.assertFalse(self.widget.Warning.cannot_aggregate.is_shown())
+
     @patch("orangecontrib.prototypes.widgets.owpivot.Pivot._initialize",
            return_value=(None, None))
     def test_group_table_created_once(self, initialize):
@@ -144,7 +174,8 @@ class TestOWPivot(WidgetTest):
                                         self.iris.domain.attributes[0].name)
         simulate.combobox_activate_item(self.widget.controls.col_feature,
                                         self.iris.domain.class_var.name)
-        initialize.assert_called_with(set([Pivot.Count]), None)
+        initialize.assert_called_with(set([Pivot.Count]),
+                                      self.iris.domain.attributes[0])
         initialize.reset_mock()
         simulate.combobox_activate_item(self.widget.controls.val_feature,
                                         self.iris.domain.attributes[1].name)
@@ -239,12 +270,12 @@ class TestPivot(unittest.TestCase):
         domain = self.table.domain
         pivot = Pivot(self.table, Pivot.Functions, domain[0], domain[1])
         group_tab = pivot.group_table
-        atts = (Cv("Count"), Cv("d1_Count defined"),
-                Dv("d1_Majority", ["a", "b"]),
-                Cv("d2_Count defined"), Dv("d2_Majority", ["c", "d", "e"]),
-                Cv("c1_Count defined"), Cv("c1_Sum"),
-                Cv("c1_Mean"), Cv("c1_Min"), Cv("c1_Max"), Cv("c1_Mode"),
-                Cv("c1_Median"), Cv("c1_Var"))
+        atts = (Cv("(count)"), Cv("d1 (count defined)"),
+                Dv("d1 (majority)", ["a", "b"]),
+                Cv("d2 (count defined)"), Dv("d2 (majority)", ["c", "d", "e"]),
+                Cv("c1 (count defined)"), Cv("c1 (sum)"),
+                Cv("c1 (mean)"), Cv("c1 (min)"), Cv("c1 (max)"),
+                Cv("c1 (mode)"), Cv("c1 (median)"), Cv("c1 (var)"))
         X = np.array(
             [[0, 0, 2, 2, 0, 2, 0, 2, 5, 2.5, 1, 4, 1, 2.5, 2.25],
              [0, 1, 1, 1, 0, 1, 1, 1, 2, 2, 2, 2, 2, 2, 0],
@@ -270,12 +301,12 @@ class TestPivot(unittest.TestCase):
         pivot.update_group_table(Pivot.Functions)
         count_func.assert_not_called()
         sum_func.assert_not_called()
-        atts = (Cv("Count"), Cv("d1_Count defined"),
-                Dv("d1_Majority", ["a", "b"]),
-                Cv("d2_Count defined"), Dv("d2_Majority", ["c", "d", "e"]),
-                Cv("c1_Count defined"), Cv("c1_Sum"),
-                Cv("c1_Mean"), Cv("c1_Min"), Cv("c1_Max"), Cv("c1_Mode"),
-                Cv("c1_Median"), Cv("c1_Var"))
+        atts = (Cv("(count)"), Cv("d1 (count defined)"),
+                Dv("d1 (majority)", ["a", "b"]),
+                Cv("d2 (count defined)"), Dv("d2 (majority)", ["c", "d", "e"]),
+                Cv("c1 (count defined)"), Cv("c1 (sum)"), Cv("c1 (mean)"),
+                Cv("c1 (min)"), Cv("c1 (max)"), Cv("c1 (mode)"),
+                Cv("c1 (median)"), Cv("c1 (var)"))
         X = np.array(
             [[0, 0, 2, 2, 0, 2, 0, 2, 5, 2.5, 1, 4, 1, 2.5, 2.25],
              [0, 1, 1, 1, 0, 1, 1, 1, 2, 2, 2, 2, 2, 2, 0],
@@ -297,12 +328,12 @@ class TestPivot(unittest.TestCase):
         domain = self.table.domain
         pivot = Pivot(self.table, Pivot.Functions, domain[0])
         group_tab = pivot.group_table
-        atts = (Cv("Count"), Cv("d1_Count defined"),
-                Dv("d1_Majority", ["a", "b"]),
-                Cv("d2_Count defined"), Dv("d2_Majority", ["c", "d", "e"]),
-                Cv("c1_Count defined"), Cv("c1_Sum"),
-                Cv("c1_Mean"), Cv("c1_Min"), Cv("c1_Max"), Cv("c1_Mode"),
-                Cv("c1_Median"), Cv("c1_Var"))
+        atts = (Cv("(count)"), Cv("d1 (count defined)"),
+                Dv("d1 (majority)", ["a", "b"]),
+                Cv("d2 (count defined)"), Dv("d2 (majority)", ["c", "d", "e"]),
+                Cv("c1 (count defined)"), Cv("c1 (sum)"),
+                Cv("c1 (mean)"), Cv("c1 (min)"), Cv("c1 (max)"),
+                Cv("c1 (mode)"), Cv("c1 (median)"), Cv("c1 (var)"))
         domain = Domain(domain[:1] + atts)
         X = np.array([[0, 4, 4, 0, 3, 0, 4, 10, 2.5, 1, 4, 1, 2.5, 1.25],
                       [1, 4, 4, 1, 4, 0, 3, 18, 6, 5, 7, 5, 6, 2 / 3]],
@@ -325,15 +356,14 @@ class TestPivot(unittest.TestCase):
 
         pivot = Pivot(table, Pivot.Functions, table.domain[-1])
         group_tab = pivot.group_table
-        atts = (table.domain[-1], Cv("Count"), Cv("d1_Count defined"),
-                Dv("d1_Majority", ["a", "b"]),
-                Cv("c1_Count defined"), Cv("c1_Sum"),
-                Cv("c1_Mean"), Cv("c1_Min"), Cv("c1_Max"), Cv("c1_Mode"),
-                Cv("c1_Median"), Cv("c1_Var"), Cv("d2_Count defined"),
-                Dv("d2_Majority", ["a", "b"]),
-                Cv("c2_Count defined"), Cv("c2_Sum"),
-                Cv("c2_Mean"), Cv("c2_Min"), Cv("c2_Max"), Cv("c2_Mode"),
-                Cv("c2_Median"), Cv("c2_Var"))
+        atts = (table.domain[-1], Cv("(count)"), Cv("d1 (count defined)"),
+                Dv("d1 (majority)", ["a", "b"]),
+                Cv("c1 (count defined)"), Cv("c1 (sum)"), Cv("c1 (mean)"),
+                Cv("c1 (min)"), Cv("c1 (max)"), Cv("c1 (mode)"),
+                Cv("c1 (median)"), Cv("c1 (var)"), Cv("d2 (count defined)"),
+                Dv("d2 (majority)", ["a", "b"]), Cv("c2 (count defined)"),
+                Cv("c2 (sum)"), Cv("c2 (mean)"), Cv("c2 (min)"), Cv("c2 (max)"),
+                Cv("c2 (mode)"), Cv("c2 (median)"), Cv("c2 (var)"))
         X = np.array([[0, 1, 1, 0, 1, 1, 1, 1, 1, 1,
                        1, 0, 1, 0, 1, 2, 2, 2, 2, 2, 2, 0],
                       [1, 1, 1, 0, 1, 3, 3, 3, 3, 3, 3, 0, 1, 1, 0, 0, np.nan,
@@ -342,12 +372,12 @@ class TestPivot(unittest.TestCase):
 
     def test_group_table_update(self):
         domain = self.table.domain
-        atts = (Cv("Count"), Cv("d1_Count defined"),
-                Dv("d1_Majority", ["a", "b"]),
-                Cv("d2_Count defined"), Dv("d2_Majority", ["c", "d", "e"]),
-                Cv("c1_Count defined"), Cv("c1_Sum"),
-                Cv("c1_Mean"), Cv("c1_Min"), Cv("c1_Max"), Cv("c1_Mode"),
-                Cv("c1_Median"), Cv("c1_Var"))
+        atts = (Cv("(count)"), Cv("d1 (count defined)"),
+                Dv("d1 (majority)", ["a", "b"]),
+                Cv("d2 (count defined)"), Dv("d2 (majority)", ["c", "d", "e"]),
+                Cv("c1 (count defined)"), Cv("c1 (sum)"), Cv("c1 (mean)"),
+                Cv("c1 (min)"), Cv("c1 (max)"), Cv("c1 (mode)"),
+                Cv("c1 (median)"), Cv("c1 (var)"))
         X = np.array(
             [[0, 0, 2, 2, 0, 2, 0, 2, 5, 2.5, 1, 4, 1, 2.5, 2.25],
              [0, 1, 1, 1, 0, 1, 1, 1, 2, 2, 2, 2, 2, 2, 0],
@@ -370,17 +400,18 @@ class TestPivot(unittest.TestCase):
     def test_group_table_1(self):
         var = self.table1.domain.variables[1]
         domain = Domain(
-            [var, Cv("Count"), Cv("c0_Count defined"), Cv("c0_Sum"),
-             Cv("c0_Mean"), Cv("c0_Min"), Cv("c0_Max"), Cv("c0_Mode"),
-             Cv("c0_Median"), Cv("c0_Var"), Cv("d1_Count defined"),
-             Dv("d1_Majority", ["a", "b"]), Cv("c1_Count defined"),
-             Cv("c1_Sum"), Cv("c1_Mean"), Cv("c1_Min"), Cv("c1_Max"),
-             Cv("c1_Mode"), Cv("c1_Median"), Cv("c1_Var"),
-             Cv("d2_Count defined"), Dv("d2_Majority", ["a", "b"]),
-             Cv("c2_Count defined"), Cv("c2_Sum"), Cv("c2_Mean"), Cv("c2_Min"),
-             Cv("c2_Max"), Cv("c2_Mode"), Cv("c2_Median"), Cv("c2_Var"),
-             Cv("cls_Count defined"), Dv("cls_Majority", ["a", "b"]),
-             Cv("m1_Count defined"), Cv("m2_Count defined")])
+            [var, Cv("(count)"), Cv("c0 (count defined)"), Cv("c0 (sum)"),
+             Cv("c0 (mean)"), Cv("c0 (min)"), Cv("c0 (max)"), Cv("c0 (mode)"),
+             Cv("c0 (median)"), Cv("c0 (var)"), Cv("d1 (count defined)"),
+             Dv("d1 (majority)", ["a", "b"]), Cv("c1 (count defined)"),
+             Cv("c1 (sum)"), Cv("c1 (mean)"), Cv("c1 (min)"), Cv("c1 (max)"),
+             Cv("c1 (mode)"), Cv("c1 (median)"), Cv("c1 (var)"),
+             Cv("d2 (count defined)"), Dv("d2 (majority)", ["a", "b"]),
+             Cv("c2 (count defined)"), Cv("c2 (sum)"), Cv("c2 (mean)"),
+             Cv("c2 (min)"), Cv("c2 (max)"), Cv("c2 (mode)"),
+             Cv("c2 (median)"), Cv("c2 (var)"), Cv("cls (count defined)"),
+             Dv("cls (majority)", ["a", "b"]), Cv("m1 (count defined)"),
+             Cv("m2 (count defined)")])
         X = np.array([[0, 2, 0, 0, np.nan, np.nan, np.nan, np.nan,
                        np.nan, np.nan, 2, 0, 2, 4, 2, 1, 3, 1, 2, 1,
                        2, 0, 1, 2, 2, 2, 2, 2, 2, 0, 2, 0, 2, 1],
@@ -396,7 +427,7 @@ class TestPivot(unittest.TestCase):
         pivot = Pivot(self.table, Pivot.Functions, domain[0], domain[1], domain[2])
         pivot_tab = pivot.pivot_table
         atts = (Dv("Aggregate", ["Count", "Count defined", "Sum", "Mean",
-                                   "Min", "Max", "Mode", "Median", "Var"]),
+                                 "Min", "Max", "Mode", "Median", "Var"]),
                 Cv("c"), Cv("d"), Cv("e"))
         X = np.array([[0, 0, 2, 1, 0],
                       [0, 1, 2, 1, 0],
@@ -524,6 +555,16 @@ class TestPivot(unittest.TestCase):
         pivot.update_pivot_table(domain[1])
         pivot.update_pivot_table(domain[2])
         self.assert_table_equal(pivot_tab1, pivot.pivot_table)
+
+    def test_pivot_data_subset(self):
+        data = Table("iris")
+        cls_var = data.domain.class_var
+        pivot = Pivot(data[:100], Pivot.Functions, cls_var, None, cls_var)
+        atts = (cls_var, Dv("Aggregate", ["Count", "Count defined", "Majority"]),
+                Dv("Iris-setosa", ["0.0", "50.0", "Iris-setosa"]),
+                Dv("Iris-versicolor", ["0.0", "50.0", "Iris-versicolor"]))
+        domain = Domain(atts)
+        self.assert_domain_equal(domain, pivot.pivot_table.domain)
 
     def assert_table_equal(self, table1, table2):
         self.assert_domain_equal(table1.domain, table2.domain)
