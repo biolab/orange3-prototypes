@@ -1,12 +1,16 @@
 import numpy as np
 
 from AnyQt.QtWidgets import QLayout
+from AnyQt.QtCore import Qt
 
 from Orange.widgets import widget, gui
 from Orange.widgets.settings import Setting
 from Orange.data import Table, Domain, DiscreteVariable, ContinuousVariable
 from Orange.clustering import DBSCAN
 from Orange import distance
+from Orange.widgets.utils.annotated_data import ANNOTATED_DATA_SIGNAL_NAME
+from Orange.widgets.utils.signals import Input, Output
+from Orange.widgets.widget import Msg
 
 
 class OWDBSCAN(widget.OWWidget):
@@ -15,16 +19,20 @@ class OWDBSCAN(widget.OWWidget):
     icon = "icons/DBSCAN.svg"
     priority = 2150
 
-    inputs = [("Data", Table, "set_data")]
+    class Inputs:
+        data = Input("Data", Table)
 
-    outputs = [("Annotated Data", Table, widget.Default)]
+    class Outputs:
+        annotated_data = Output(ANNOTATED_DATA_SIGNAL_NAME, Table)
 
-    OUTPUT_CLASS, OUTPUT_ATTRIBUTE, OUTPUT_META = range(3)
-    OUTPUT_METHODS = ("Class", "Feature", "Meta")
+    class Error(widget.OWWidget.Error):
+        not_enough_instances = Msg("Not enough unique data instances. "
+                                   "At least two are required.")
+
     METRICS = [
         ("Euclidean", "euclidean"),
         ("Manhattan", "manhattan"),
-        # ("Cosine", distance.Cosine),
+        ("Cosine", distance.Cosine),
         ("Jaccard", distance.Jaccard),
         # ("Spearman", distance.SpearmanR),
         # ("Spearman absolute", distance.SpearmanRAbsolute),
@@ -35,10 +43,7 @@ class OWDBSCAN(widget.OWWidget):
     min_samples = Setting(5)
     eps = Setting(0.5)
     metric_idx = Setting(0)
-    append_cluster_ids = Setting(True)
-    place_cluster_ids = Setting(OUTPUT_CLASS)
-    output_name = Setting("Cluster")
-    auto_run = Setting(True)
+    auto_commit = Setting(True)
 
     want_main_area = False
 
@@ -47,11 +52,12 @@ class OWDBSCAN(widget.OWWidget):
 
         self.data = None
         self.db = None
+        self.model = None
 
         box = gui.widgetBox(self.controlArea, "Parameters")
         gui.spin(box, self, "min_samples", 1, 100, 1, callback=self._invalidate,
                  label="Core point neighbors")
-        gui.doubleSpin(box, self, "eps", 0.1, 0.9, 0.1,
+        gui.doubleSpin(box, self, "eps", 0.1, 10, 0.1,
                        callback=self._invalidate,
                        label="Neighborhood distance")
 
@@ -60,17 +66,8 @@ class OWDBSCAN(widget.OWWidget):
                      items=list(zip(*self.METRICS))[0],
                      callback=self._invalidate)
 
-        box = gui.widgetBox(self.controlArea, "Output")
-        gui.comboBox(box, self, "place_cluster_ids",
-                     label="Append cluster id as ", orientation="horizontal",
-                     callback=self.send_data, items=self.OUTPUT_METHODS)
-        gui.lineEdit(box, self, "output_name",
-                     label="Name: ", orientation="horizontal",
-                     callback=self.send_data)
-
-        gui.auto_commit(self.controlArea, self, "auto_run", "Run",
-                        checkbox_label="Run after any change  ",
-                        orientation="horizontal")
+        gui.auto_commit(self.controlArea, self, "auto_commit", "Apply",
+                        orientation=Qt.Horizontal)
         gui.rubber(self.controlArea)
 
         self.controlArea.setMinimumWidth(self.controlArea.sizeHint().width())
@@ -82,15 +79,11 @@ class OWDBSCAN(widget.OWWidget):
 
     def check_data_size(self):
         if len(self.data) < 2:
-            self.error("Not enough unique data instances "
-                       "({}).".format(len(self.data)))
+            self.Error.not_enough_instances()
             return False
         return True
 
     def commit(self):
-        self.error()
-        if not self.data:
-            return
         self.cluster()
 
     def cluster(self):
@@ -100,25 +93,22 @@ class OWDBSCAN(widget.OWWidget):
             eps=self.eps,
             min_samples=self.min_samples,
             metric=self.METRICS[self.metric_idx][1]
-        )(self.data)
+        ).get_model(self.data)
         self.send_data()
 
-    def send_data(self, row=None):
+    def send_data(self):
         model = self.model
-        if not self.data or not self.model:
-            self.send("Annotated Data", None)
-            return
 
-        clusters = [c if c >= 0 else None for c in model.labels_]
-        k = len(set(clusters) - {None})
+        clusters = [c if c >= 0 else np.nan for c in model.labels]
+        k = len(set(clusters) - {np.nan})
         clusters = np.array(clusters).reshape(len(self.data), 1)
-        core_samples = set(model.core_sample_indices_)
-        in_core = np.array([0 if (i in core_samples) else 1
+        core_samples = set(model.projector.core_sample_indices_)
+        in_core = np.array([1 if (i in core_samples) else 0
                             for i in range(len(self.data))])
         in_core = in_core.reshape(len(self.data), 1)
 
         clust_var = DiscreteVariable(
-            self.output_name, values=["C%d" % (x + 1) for x in range(k)])
+            "Cluster", values=["C%d" % (x + 1) for x in range(k)])
         in_core_var = ContinuousVariable("DBSCAN Core")
 
         domain = self.data.domain
@@ -126,31 +116,25 @@ class OWDBSCAN(widget.OWWidget):
         meta_attrs = domain.metas
         X, Y, metas = self.data.X, self.data.Y, self.data.metas
 
-        if self.place_cluster_ids == self.OUTPUT_CLASS:
-            if classes:
-                meta_attrs += classes
-                metas = np.hstack((metas, Y.reshape(len(self.data), 1)))
-            classes = [clust_var]
-            Y = clusters
-        elif self.place_cluster_ids == self.OUTPUT_ATTRIBUTE:
-            attributes += (clust_var, )
-            X = np.hstack((X, clusters))
-        else:
-            meta_attrs += (clust_var, )
-            metas = np.hstack((metas, clusters))
+        meta_attrs += (clust_var, )
+        metas = np.hstack((metas, clusters))
         meta_attrs += (in_core_var, )
         metas = np.hstack((metas, in_core))
 
         domain = Domain(attributes, classes, meta_attrs)
         new_table = Table(domain, X, Y, metas, self.data.W)
 
-        self.send("Annotated Data", new_table)
+        self.Outputs.annotated_data.send(new_table)
 
+    @Inputs.data
     def set_data(self, data):
         self.data = data
         if self.data is None:
-            self.send("Annotated Data", None)
-        self.commit()
+            self.Outputs.annotated_data.send(None)
+        self.Error.clear()
+        if self.data is None:
+            return
+        self.unconditional_commit()
 
     def _invalidate(self):
         self.commit()
