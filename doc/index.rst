@@ -8,7 +8,6 @@ Widgets
    :maxdepth: 1
 
    widgets/contingency-table
-   widgets/enklik-anketa
    widgets/parallel-coordinates
 
 

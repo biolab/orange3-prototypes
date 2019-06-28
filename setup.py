@@ -67,13 +67,10 @@ if __name__ == '__main__':
             'scikit-learn',
             'pyqtgraph',
             'AnyQt>=0.0.8',
-            'serverfiles',
-            # For OWIPythonConnector
+            'serverfiles', # For OWIPythonConnector
             'ipython',
             'pandas',
             'joblib',  # For SignificantGoups
-
-            'BeautifulSoup4',  # for OW1Ka
             'plotly>=2.0.8',   # for OWParallelCoordinates
         ],
         extras_require={
