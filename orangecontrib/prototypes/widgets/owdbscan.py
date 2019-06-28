@@ -5,7 +5,7 @@ from AnyQt.QtCore import Qt
 
 from Orange.widgets import widget, gui
 from Orange.widgets.settings import Setting
-from Orange.data import Table, Domain, DiscreteVariable, ContinuousVariable
+from Orange.data import Table, Domain, DiscreteVariable
 from Orange.clustering import DBSCAN
 from Orange import distance
 from Orange.widgets.utils.annotated_data import ANNOTATED_DATA_SIGNAL_NAME
@@ -57,7 +57,7 @@ class OWDBSCAN(widget.OWWidget):
         box = gui.widgetBox(self.controlArea, "Parameters")
         gui.spin(box, self, "min_samples", 1, 100, 1, callback=self._invalidate,
                  label="Core point neighbors")
-        gui.doubleSpin(box, self, "eps", 0.1, 10, 0.1,
+        gui.doubleSpin(box, self, "eps", 0.1, 10, 0.01,
                        callback=self._invalidate,
                        label="Neighborhood distance")
 
@@ -109,12 +109,12 @@ class OWDBSCAN(widget.OWWidget):
 
         clust_var = DiscreteVariable(
             "Cluster", values=["C%d" % (x + 1) for x in range(k)])
-        in_core_var = ContinuousVariable("DBSCAN Core")
+        in_core_var = DiscreteVariable("DBSCAN Core", values=["0", "1"])
 
         domain = self.data.domain
         attributes, classes = domain.attributes, domain.class_vars
         meta_attrs = domain.metas
-        X, Y, metas = self.data.X, self.data.Y, self.data.metas
+        x, y, metas = self.data.X, self.data.Y, self.data.metas
 
         meta_attrs += (clust_var, )
         metas = np.hstack((metas, clusters))
@@ -122,7 +122,7 @@ class OWDBSCAN(widget.OWWidget):
         metas = np.hstack((metas, in_core))
 
         domain = Domain(attributes, classes, meta_attrs)
-        new_table = Table(domain, X, Y, metas, self.data.W)
+        new_table = Table(domain, x, y, metas, self.data.W)
 
         self.Outputs.annotated_data.send(new_table)
 
