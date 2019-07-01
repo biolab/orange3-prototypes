@@ -2,6 +2,7 @@ import numpy as np
 from Orange.data import Table
 from Orange.widgets.tests.base import WidgetTest
 from Orange.widgets.tests.utils import simulate
+from scipy.sparse import csr_matrix
 
 from orangecontrib.prototypes.widgets.owdbscan import OWDBSCAN
 
@@ -100,4 +101,19 @@ class TestOWCSVFileImport(WidgetTest):
         self.assertGreater(np.nansum(output1.metas[:, 0]),
                            np.nansum(output2.metas[:, 0]))
 
+    def test_sparse_data(self):
+        self.iris.X = csr_matrix(self.iris.X)
 
+        w = self.widget
+
+        self.send_signal(w.Inputs.data, self.iris)
+
+        output = self.get_output(w.Outputs.annotated_data)
+        self.assertIsNotNone(output)
+        self.assertEqual(len(self.iris), len(output))
+        self.assertTupleEqual(self.iris.X.shape, output.X.shape)
+        self.assertTupleEqual(self.iris.Y.shape, output.Y.shape)
+        self.assertEqual(2, output.metas.shape[1])
+
+        self.assertEqual("Cluster", str(output.domain.metas[0]))
+        self.assertEqual("DBSCAN Core", str(output.domain.metas[1]))
