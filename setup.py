@@ -83,4 +83,5 @@ if __name__ == '__main__':
         include_package_data=True,
         zip_safe=False,
         data_files=DATA_FILES,
+        test_suite="orangecontrib.prototypes.tests.suite",
     )
