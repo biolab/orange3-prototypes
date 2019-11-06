@@ -479,6 +479,7 @@ class OWExplainPredictions(OWWidget):
         if sample is not None:
             if len(sample.X) != 1:
                 self.to_explain = None
+                self.box_scene.clear()
                 self.Error.sample_too_big()
             else:
                 if sample.X.shape[1] == 1:
@@ -719,6 +720,9 @@ class GraphAttributes:
         w = QGraphicsSimpleTextItem(word, None)
         v = QGraphicsSimpleTextItem(val, None)
         return w.boundingRect().width(), v.boundingRect().width()
+
+    def clear(self):
+        self.scene.clear()
 
     def paint(self, wp, explanations=None, header_h=100):
         """
