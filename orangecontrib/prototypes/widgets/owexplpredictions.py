@@ -137,7 +137,7 @@ class ExplainPredictions:
 
     def anytime_explain(self, instance, callback=None, update_func=None, update_prediction=None):
         data_rows, no_atr = self.data.X.shape
-        class_value = self.model(instance)[0]
+        class_value = self.model(instance)
         prng = RandomState(self.seed)
 
         self.init_arrays(no_atr)
