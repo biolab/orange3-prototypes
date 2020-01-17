@@ -69,16 +69,23 @@ if __name__ == '__main__':
             'AnyQt>=0.0.8',
             'serverfiles', # For OWIPythonConnector
             'ipython',
-            'qtconsole',  # OWIPythonConsole
             'pandas',
             'joblib',  # For SignificantGoups
             'plotly>=2.0.8',   # for OWParallelCoordinates
-            'shap >=0.35.0'
+            'shap >=0.35.0',
+            # OWIPythonConsole
+            'qtconsole',
+            'jupyter-client>=5.1,<6.0',
+            'qasync',
+            'typing_extensions',
         ],
         extras_require={
             ':python_version<"3.5"': [
                 "typing"
-            ]
+            ],
+            ':python_version<"3.8"': [
+                "pickle5"
+            ],
         },
         entry_points=ENTRY_POINTS,
         namespace_packages=['orangecontrib'],
