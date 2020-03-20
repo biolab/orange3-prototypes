@@ -1,24 +1,14 @@
-from collections import OrderedDict
 from operator import itemgetter
 
 import numpy as np
 
-from AnyQt.QtCore import Qt, QTimer
-from AnyQt.QtWidgets import QApplication, QListView
+from AnyQt.QtCore import Qt
+from AnyQt.QtWidgets import QListView, QSizePolicy, QComboBox
 
 from Orange.data import Table
 from Orange.widgets import widget, gui, settings
 from Orange.widgets.utils.itemmodels import VariableListModel
-
-
-class DnDListView(QListView):
-    def __init__(self, callback, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._callback = callback
-
-    def dropEvent(self, event):
-        super().dropEvent(event)
-        QTimer.singleShot(1, self._callback)
+from Orange.widgets.utils.widgetpreview import WidgetPreview
 
 
 class OWUnique(widget.OWWidget):
@@ -26,92 +16,106 @@ class OWUnique(widget.OWWidget):
     icon = 'icons/Unique.svg'
     description = 'Filter instances unique by specified key attribute(s).'
 
-    inputs = [('Data', Table, 'set_data')]
-    outputs = [('Unique Data', Table)]
+    class Inputs:
+        data = widget.Input("Data", Table)
+
+    class Outputs:
+        data = widget.Output("Data", Table)
 
     want_main_area = False
 
+    TIEBREAKERS = {'Last instance': itemgetter(-1),
+                   'First instance': itemgetter(0),
+                   'Middle instance': lambda seq: seq[len(seq) // 2],
+                   'Random instance': np.random.choice,
+                   'Discard instances with non-unique keys':
+                   lambda seq: seq[0] if len(seq) == 1 else None}
+
     settingsHandler = settings.DomainContextHandler()
-
-    TIEBREAKERS = OrderedDict([('last', itemgetter(-1)),
-                               ('first', itemgetter(0)),
-                               ('middle', lambda seq: seq[len(seq) // 2]),
-                               ('random', np.random.choice),
-                               ('none (discard all instances with non-unique keys)',
-                                lambda seq: seq[0] if len(seq) == 1 else None)])
-
-    model_attrs = settings.ContextSetting(([], []))
+    grouping_attrs = settings.ContextSetting([])
     tiebreaker = settings.Setting(next(iter(TIEBREAKERS)))
     autocommit = settings.Setting(True)
 
     def __init__(self):
+        # Commit is thunked because autocommit redefines it
+        # pylint: disable=unnecessary-lambda
+        super().__init__()
+        self.data = None
+
+        list_args = dict(
+            alternatingRowColors=True,
+            dragEnabled=True, dragDropMode=QListView.DragDrop, acceptDrops=True,
+            defaultDropAction=Qt.MoveAction, showDropIndicator=True,
+            selectionMode=QListView.ExtendedSelection,
+            selectionBehavior=QListView.SelectRows)
+
         hbox = gui.hBox(self.controlArea)
-        _properties = dict(alternatingRowColors=True,
-                           defaultDropAction=Qt.MoveAction,
-                           dragDropMode=QListView.DragDrop,
-                           dragEnabled=True,
-                           selectionMode=QListView.ExtendedSelection,
-                           selectionBehavior=QListView.SelectRows,
-                           showDropIndicator=True,
-                           acceptDrops=True)
-        listview_avail = DnDListView(lambda: self.commit(), self, **_properties)
-        self.model_avail = model = VariableListModel(parent=self, enable_dnd=True)
-        listview_avail.setModel(model)
 
-        listview_key = DnDListView(lambda: self.commit(), self, **_properties)
-        self.model_key = model = VariableListModel(parent=self, enable_dnd=True)
-        listview_key.setModel(model)
+        listview_avail = QListView(self, **list_args)
+        self.model_avail = VariableListModel(parent=self, enable_dnd=True)
+        listview_avail.setModel(self.model_avail)
+        gui.vBox(hbox, 'Available Variables').layout().addWidget(listview_avail)
 
-        box = gui.vBox(hbox, 'Available Variables')
-        box.layout().addWidget(listview_avail)
-        box = gui.vBox(hbox, 'Group-By Key')
-        box.layout().addWidget(listview_key)
+        listview_key = QListView(self, **list_args)
+        self.model_key = VariableListModel(parent=self, enable_dnd=True)
+        listview_key.setModel(self.model_key)
+        self.model_key.rowsInserted.connect(lambda: self.commit())
+        self.model_key.rowsRemoved.connect(lambda: self.commit())
+        gui.vBox(hbox, 'Group by Variables').layout().addWidget(listview_key)
 
-        gui.comboBox(self.controlArea, self, 'tiebreaker',
-                     label='Which instance to select in each group:',
-                     items=tuple(self.TIEBREAKERS.keys()),
-                     callback=lambda: self.commit(),
-                     sendSelectedValue=True)
-        gui.auto_commit(self.controlArea, self, 'autocommit', 'Commit',
-                        orientation=Qt.Horizontal)
+        gui.comboBox(
+            self.controlArea, self, 'tiebreaker', box="Item Selection",
+            label='Instance to select in each group:', orientation=Qt.Horizontal,
+            items=tuple(self.TIEBREAKERS),
+            callback=lambda: self.commit(), sendSelectedValue=True,
+            sizeAdjustPolicy=QComboBox.AdjustToContents,
+            minimumContentsLength=20,
+            sizePolicy=(QSizePolicy.Minimum, QSizePolicy.Preferred))
+        gui.auto_commit(
+            self.controlArea, self, 'autocommit', 'Commit',
+            orientation=Qt.Horizontal)
 
+    def storeSpecificSettings(self):
+        self.grouping_attrs = list(self.model_key)
+
+    @Inputs.data
     def set_data(self, data):
-        self.data = data
-        if data is None:
-            self.model_avail.wrap([])
-            self.model_key.wrap([])
-            self.commit()
-            return
-
         self.closeContext()
-        self.model_attrs = (list(data.domain) + list(data.domain.metas), [])
-        self.openContext(data.domain)
-
-        self.model_avail.wrap(self.model_attrs[0])
-        self.model_key.wrap(self.model_attrs[1])
-        self.commit()
+        self.data = data
+        if data:
+            self.openContext(data.domain)
+            self.model_key[:] = self.grouping_attrs
+            self.model_avail[:] = \
+                [var for var in data.domain.variables + data.domain.metas
+                 if var not in self.model_key]
+        else:
+            self.grouping_attrs = []
+            self.model_key.clear()
+            self.model_avail.clear()
+        self.unconditional_commit()
 
     def commit(self):
         if self.data is None:
-            self.send('Unique Data', None)
-            return
+            self.Outputs.data.send(None)
+        else:
+            self.Outputs.data.send(self._compute_unique_data())
 
-        uniques = OrderedDict()
+    def _compute_unique_data(self):
+        uniques = {}
         keys = zip(*[self.data.get_column_view(attr)[0]
                      for attr in self.model_key])
         for i, key in enumerate(keys):
             uniques.setdefault(key, []).append(i)
 
         choose = self.TIEBREAKERS[self.tiebreaker]
-        selection = sorted([x for x in (choose(inds)
-                                        for inds in uniques.values())
-                            if x is not None])
-        self.send('Unique Data', self.data[selection] if selection else None)
+        selection = sorted(
+            x for x in (choose(inds) for inds in uniques.values())
+            if x is not None)
+        if selection:
+            return self.data[selection]
+        else:
+            return None
 
 
-if __name__ == '__main__':
-    app = QApplication([])
-    w = OWUnique()
-    w.show()
-    w.set_data(Table('iris'))
-    app.exec()
+if __name__ == "__main__":  # pragma: no cover
+    WidgetPreview(OWUnique).run(Table("iris"))
