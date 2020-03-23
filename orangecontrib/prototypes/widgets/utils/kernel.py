@@ -1,16 +1,9 @@
-import io
 import sys
-
-import pickle
 import traceback
-from typing import Mapping, Any
-
 
 from ipykernel.ipkernel import IPythonKernel
 
-
-if sys.version_info < (3, 8):
-    import pickle5 as pickle
+from .kernel_utils import load, dump
 
 
 class TransferMixin:
@@ -38,16 +31,15 @@ class TransferMixin:
         metadata = self.init_metadata(parent)
         ns = {}
         try:
-            head, *buffers = buffers
-            unpickler = pickle.Unpickler(io.BytesIO(head), buffers=buffers)
-            for name in names:
-                name_ = unpickler.load()
-                obj = unpickler.load()
-                assert name == name_
-                ns[name] = obj
+            ns = load(buffers)
+            assert isinstance(ns, dict)
+            assert set(ns.keys()) == set(names)
             reply_content = {"status": "ok"}
         except Exception:
-            reply_content = {"status": "error", "traceback": traceback.format_tb()}
+            reply_content = {
+                "status": "error",
+                "traceback": traceback.format_tb(sys.exc_info()[2])
+            }
 
         # Send the reply.
         metadata = self.finish_metadata(parent, metadata, reply_content)
@@ -72,19 +64,15 @@ class TransferMixin:
         metadata = self.init_metadata(parent)
 
         ns = {name: self.shell.user_ns.get(name) for name in names}
-        pickle_buffer = io.BytesIO()
-        buffers = []
-        pickler = pickle.Pickler(
-            pickle_buffer, pickle.HIGHEST_PROTOCOL,
-            buffer_callback=buffers.append)
         try:
-            for name in names:
-                pickler.dump((name, ns[name]))
+            buffers = dump(ns)
         except Exception:
             buffers = None
-            reply_content = {"status": "error", "traceback": traceback.format_tb()}
+            reply_content = {
+                "status": "error",
+                "traceback": traceback.format_tb(sys.exc_info()[2])
+            }
         else:
-            buffers = [pickle_buffer.getbuffer(), *[pb.raw() for pb in buffers]]
             reply_content = {"status": "ok", "names": names}
 
         # Send the reply.

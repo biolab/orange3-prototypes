@@ -1,14 +1,11 @@
-import sys
-import io
-import pickle
+import re
 
 from concurrent.futures import Future
-from typing import Mapping, Any, List, Callable
+from typing import Mapping, Any, List, Callable, Dict
 
 from qtconsole.client import QtKernelClient
 
-if sys.version_info < (3, 8):
-    import pickle5 as pickle
+from .kernel_utils import dump, load
 
 
 HandlerType = Callable[[dict], Any]
@@ -59,18 +56,14 @@ def push_namespace(
         client: QtKernelClient, ns: Mapping[str, Any]
 ) -> 'Future[dict]':
     """
-    Push the namespace in to the remote kernels interactive shell.
+    Push the namespace (`ns`) in to the remote kernel's interactive shell.
+
+    The remote kernel must respond to 'push_namespace_request' messages.
+
+    Return a future with the response message.
     """
-    buffer = io.BytesIO()
-    buffers = []  # type: List[pickle.PickleBuffer]
-    pickler = pickle.Pickler(buffer, protocol=5, buffer_callback=buffers.append)
     names = list(ns.keys())
-
-    for name in names:
-        pickler.dump(name)
-        pickler.dump(ns[name])
-
-    buffers = [buffer.getbuffer(), *[pb.raw() for pb in buffers]]
+    buffers = dump(ns)
     content = dict(names=names)
     msg = client.session.msg('push_namespace_request', content)
     client.session.send(
@@ -93,7 +86,16 @@ def push_namespace(
     return future
 
 
-def get_namespace(client: QtKernelClient, names: List[str]) -> 'Future[dict]':
+def get_namespace(
+        client: QtKernelClient, names: List[str]
+) -> 'Future[Dict[str, Any]]':
+    """
+    Extract named variables (`names`) from the remote kernel shell namespace.
+
+    The remote kernel must respond to 'get_namespace_request' messages.
+
+    Return a Future with the result namespace.
+    """
     content = dict(
         names=names,
     )
@@ -113,14 +115,10 @@ def get_namespace(client: QtKernelClient, names: List[str]) -> 'Future[dict]':
         if status == "ok":
             names = content["names"]
             buffers = msg["buffers"]
-            head, *buffers = buffers
-            unpickler = pickle.Unpickler(io.BytesIO(head), buffers=buffers)
-            ns = {}
             try:
-                for name in names:
-                    name_, obj = unpickler.load()
-                    assert name == name_
-                    ns[name] = obj
+                ns = load(buffers)
+                assert isinstance(ns, dict)
+                assert set(ns.keys()) == set(names)
             except Exception as e:
                 f.set_exception(e)
             else:
@@ -128,3 +126,8 @@ def get_namespace(client: QtKernelClient, names: List[str]) -> 'Future[dict]':
         else:
             f.set_exception(Exception(str(msg)))
     return f
+
+
+def remove_ansi_control(content: str) -> str:
+    """Remove ansi terminal control sequences from `content`."""
+    return re.sub("\x1b[\\[0-9;]+m", "", content)
