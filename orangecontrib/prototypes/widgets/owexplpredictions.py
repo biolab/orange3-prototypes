@@ -66,7 +66,7 @@ class ExplainPredictions:
     model: Orange.base.Model
         model to be used for prediction
     error: float
-        desired error 
+        desired absolute error per attribute 
     p_val : float
         p value of error
     batch_size : int
@@ -84,7 +84,6 @@ class ExplainPredictions:
         either index of predicted class or predicted value
     table: Orange.data.Table
         table containing atributes and corresponding contributions
-
     """
 
     def __init__(self, data, model, p_val=0.05, error=0.05, batch_size=500, max_iter=10000000, min_iter=1000, seed=42):
@@ -112,14 +111,17 @@ class ExplainPredictions:
         tiled_y = np.tile(instance._y, (self.batch_size, 1))
         return Table.from_numpy(instance.domain, tiled_x, tiled_y, tiled_metas)
 
-    def init_arrays(self, no_atr):
+    def init_arrays(self, no_atr, prng):
         if not self.saved:
-            self.saved = True
-            self.steps = np.zeros((1, no_atr), dtype=float)
-            self.mu = np.zeros((1, no_atr), dtype=float)
-            self.M2 = np.zeros((1, no_atr), dtype=float)
+            self.steps = np.full((1, no_atr), self.batch_size, dtype=float)
+            sample = self.data.X[prng.randint(0,
+                                              self.data.X.shape[0],
+                                              size=self.batch_size),
+                                 :]
+            self.mu = np.mean(sample, axis=0).reshape(1, -1)
+            self.M2 = np.sum((sample - self.mu)**2, axis=0).reshape(1, -1)
             self.expl = np.zeros((1, no_atr), dtype=float)
-            self.var = np.ones((1, no_atr), dtype=float)
+            self.var = (self.M2 / self.batch_size).reshape(1, -1)
             self.iterations_reached = np.zeros((1, no_atr))
         else:
             self.iterations_reached = np.copy(self.steps)
@@ -135,13 +137,24 @@ class ExplainPredictions:
                 attr_values.append(str(instance._x[idx]))
         return np.asarray(attr_values)
 
-    def anytime_explain(self, instance, callback=None, update_func=None, update_prediction=None):
+    def anytime_explain(self, instance, early_stop=None, update_func=None, update_prediction=None):
+        """
+        Callbacks are for visualization in gui, function still delivers final results
+        if they are not passed.
+        #TODO documentation on functions
+        early_stop : checks if 
+        """
+
         data_rows, no_atr = self.data.X.shape
         class_value = self.model(instance)
         prng = RandomState(self.seed)
 
-        self.init_arrays(no_atr)
+        self.init_arrays(no_atr, prng)
         attr_values = self.get_atr_column(instance)
+        if early_stop:
+            # Saving intermediate results of a computation is applicable
+            # only if there is a way to suspend the said computation
+            self.saved = True
 
         batch_mx_size = self.batch_size * no_atr
         z_sq = abs(st.norm.ppf(self.p_val/2))**2
@@ -154,9 +167,9 @@ class ExplainPredictions:
         time_point = time.time()
         update_table = False
 
-        domain = Domain([ContinuousVariable("Score"),
-                         ContinuousVariable("Error")],
-                        metas=[StringVariable(name="Feature"), StringVariable(name="Value")])
+        domain = Domain([ContinuousVariable("Score"), ContinuousVariable("Error")],
+                        metas=[StringVariable(name="Feature"),
+                               StringVariable(name="Value")])
 
         if update_prediction is not None:
             update_prediction(class_value)
@@ -176,11 +189,16 @@ class ExplainPredictions:
         while not(all(self.iterations_reached[0, :] > self.max_iter)):
             prog = 1 - np.sum(self.max_iter -
                               self.iterations_reached)/worst_case
-            if (callback(int(prog*100))):
+            if early_stop and early_stop(int(prog*100)):
                 break
             if not(any(self.iterations_reached[0, :] > self.max_iter)):
-                a = np.argmax(prng.multinomial(
-                    1, pvals=(self.var[0, :]/(np.sum(self.var[0, :])))))
+                # TODO: has nans
+                if True or np.sum(self.steps) == 0:
+                    a = np.argmax(prng.multinomial(
+                        1, pvals=(self.var[0, :]/(np.sum(self.var[0, :])))))
+                else:
+                    a = np.argmax(np.sqrt(
+                        self.var[0, :]/self.steps) - np.sqrt(self.var[0, :]/(self.steps+self.batch_size)))
             else:
                 a = np.argmin(self.iterations_reached[0, :])
 
@@ -212,7 +230,7 @@ class ExplainPredictions:
                 update_table = True
                 time_point = time.time()
 
-            if update_table:
+            if update_table and update_func:
                 update_table = False
                 update_func(create_res_table())
 
@@ -220,7 +238,9 @@ class ExplainPredictions:
             needed_iter = z_sq * self.var[0, a] / (self.error**2)
             if (needed_iter <= self.steps[0, a]) and (self.steps[0, a] >= self.min_iter) or (self.steps[0, a] > self.max_iter):
                 self.iterations_reached[0, a] = self.max_iter + 1
-
+        # TODO: saved ne mora bit tak
+        self.saved = False
+        print(self.steps)
         return class_value, create_res_table()
 
     def _get_predictions(self, inst, class_value):
@@ -243,6 +263,7 @@ class OWExplainPredictions(OWWidget):
     gui_p_val = settings.Setting(0.05)
     gui_num_atr = settings.Setting(20)
     sort_index = settings.Setting(SortBy.ABSOLUTE)
+
 
     class Inputs:
         data = Input("Data", Table, default=True)
@@ -382,7 +403,7 @@ class OWExplainPredictions(OWWidget):
             def sizeHint(self):
                 return QSize(600, 30)
 
-        """all will share the same scene, but will show different parts of it"""
+        #all will share the same scene, but will show different parts of it
         self.box_scene = QGraphicsScene(self)
 
         self.box_view = GraphicsView(self.box_scene, self)
@@ -405,7 +426,7 @@ class OWExplainPredictions(OWWidget):
                 self.gui_num_atr, self.explanations.Y.shape[0]))
             self.painter.paint(wp, self.explanations, header_h=header_height)
 
-        """set appropriate boxes for different views"""
+        # set appropriate boxes for different views
         rect = QRectF(self.box_scene.itemsBoundingRect().x(),
                       self.box_scene.itemsBoundingRect().y(),
                       self.box_scene.itemsBoundingRect().width(),
@@ -413,7 +434,7 @@ class OWExplainPredictions(OWWidget):
 
         self.box_scene.setSceneRect(rect)
         self.box_view.setSceneRect(
-            rect.x(), rect.y()+header_height+2, rect.width(), rect.height() - 80)
+            rect.x(), rect.y() + header_height + 2, rect.width(), rect.height() - 80)
         self.header_view.setSceneRect(
             rect.x(), rect.y(), rect.width(), 10)
         self.header_view.setFixedHeight(header_height)
@@ -447,7 +468,6 @@ class OWExplainPredictions(OWWidget):
         self.data_info.setText("Data: N/A")
         self.e = None
         if data is not None:
-            model = TableModel(data, parent=None)
             if data.X.shape[0] == 1:
                 inst = "1 instance and "
             else:
@@ -460,7 +480,7 @@ class OWExplainPredictions(OWWidget):
 
     @Inputs.model
     def set_predictor(self, model):
-        """Set input 'Model"""
+        """Set input Model"""
         self.model = model
         self.model_info.setText("Model: N/A")
         self.explanations = None
@@ -471,7 +491,7 @@ class OWExplainPredictions(OWWidget):
     @Inputs.sample
     @check_sql_input
     def set_sample(self, sample):
-        """Set input 'Sample', checks if size is appropriate"""
+        """Set input Sample, checks if size is appropriate"""
         self.to_explain = sample
         self.explanations = None
         self.Error.sample_too_big.clear()
@@ -524,7 +544,7 @@ class OWExplainPredictions(OWWidget):
                                             error=self.gui_error)
             self._task = task = Task()
 
-            def callback(progress):
+            def callback_stop(progress):
                 nonlocal task
                 # update progress bar
                 QMetaObject.invokeMethod(
@@ -543,9 +563,9 @@ class OWExplainPredictions(OWWidget):
 
             self.was_canceled = False
             explain_func = partial(
-                self.e.anytime_explain, self.to_explain[0], callback=callback, update_func=callback_update, update_prediction=callback_prediction)
+                self.e.anytime_explain, self.to_explain[0], early_stop=callback_stop, update_func=callback_update, update_prediction=callback_prediction)
 
-            self.progressBarInit(processEvents=None)
+            self.progressBarInit()
             task.future = self._executor.submit(explain_func)
             task.watcher = FutureWatcher(task.future)
             task.watcher.done.connect(self._task_finished)
@@ -564,7 +584,7 @@ class OWExplainPredictions(OWWidget):
 
     @pyqtSlot(int)
     def set_progress_value(self, value):
-        self.progressBarSet(value, processEvents=False)
+        self.progressBarSet(value)
 
     @pyqtSlot(concurrent.futures.Future)
     def _task_finished(self, f):
@@ -596,7 +616,7 @@ class OWExplainPredictions(OWWidget):
         else:
             self.update_view(results[1])
 
-        self.progressBarFinished(processEvents=False)
+        self.progressBarFinished()
 
     def commit_output(self):
         """
@@ -752,7 +772,7 @@ class GraphAttributes:
         self.unit = self.get_scale()
         unit_pixels = np.floor(self.atr_area_w/(self.max_contrib/self.unit))
         self.scale = unit_pixels / self.unit
-
+        # TODO: header footer prvi, da poravna imena spremenljivk, potlej ostalo
         self.draw_header_footer(
             wp, header_h, unit_pixels, coords[self.num_of_atr - 1], coords[0])
 
@@ -761,7 +781,7 @@ class GraphAttributes:
                 e._metas[1]), atr_contrib=e._x[0], error=e._x[1])
 
     def draw_header_footer(self, wp, header_h, unit_pixels, last_y, first_y, marking_len=15):
-        """header"""
+        # header
         max_x = self.max_contrib * self.scale
 
         atr_label = QGraphicsSimpleTextItem("Name", None)
@@ -786,7 +806,7 @@ class GraphAttributes:
         self.scene.addLine(-max_x + fix, -self.atr_area_h - header_h,
                            max_x + fix, -self.atr_area_h - header_h, white_pen)
 
-        """footer"""
+        # footer
         line_y = max(first_y + wp.height() + header_h/2 - 10,
                      last_y + header_h/2 + self.rect_height)
         self.scene.addLine(-max_x + fix, line_y, max_x +
@@ -796,7 +816,7 @@ class GraphAttributes:
         recomended_d = 35
         for i in range(0, int(self.max_contrib / self.unit) + 1):
             x = unit_pixels * i
-            """grid lines"""
+            # grid lines
             self.scene.addLine(x + fix, first_y, x + fix,
                                line_y, self.light_gray_pen)
             self.scene.addLine(-x + fix, first_y, -x + fix,
@@ -833,10 +853,10 @@ class GraphAttributes:
 
     def draw_attribute(self, y, atr_name, atr_val, atr_contrib, error):
         fix = (self.offset_left + self.atr_area_w)
-        """vertical line where x = 0"""
+        # vertical line where x = 0
         self.scene.addLine(0 + fix, y, 0 + fix, y +
                            self.rect_height, self.black_pen)
-        """borders"""
+        # borders
         self.scene.addLine(self.offset_left,
                            y, fix + self.atr_area_w, y, self.gray_pen)
         self.scene.addLine(self.offset_left, y + self.rect_height,
@@ -853,27 +873,23 @@ class GraphAttributes:
             graphed_rect.setBrush(self.brush)
             graphed_rect.setPen(QPen(Qt.NoPen))
             self.scene.addItem(graphed_rect)
-            """vertical line marks calculated contribution of attribute"""
+            # vertical line marks calculated contribution of attribute
             self.atr_line = self.scene.addLine(atr_contrib_x, y + self.offset_y + 2, atr_contrib_x,
                                                y + self.rect_height - self.offset_y - 2, self.blue_pen)
 
-            """atr name and value on the left"""
             self.place_left(QGraphicsSimpleTextItem(
                 atr_val, None), y + self.rect_height/2)
             self.place_left_edge(QGraphicsSimpleTextItem(
                 atr_name, None), y + self.rect_height/2)
 
-            """atr score on the right"""
             self.place_right(self.format_marking(
                 atr_contrib), y + self.rect_height/2)
 
     def place_left(self, text, y):
-        """places text to the left"""
         self.place_centered(text, 2 * self.space +
                             self.name_w + self.val_w/2, y)
 
     def place_left_edge(self, text, y):
-        """places text more left than place_left"""
         self.scene.addLine(0, y, 0 - 10, y + 2, QPen(Qt.white, 0))
         self.place_centered(text, self.space + self.name_w/2, y)
 
