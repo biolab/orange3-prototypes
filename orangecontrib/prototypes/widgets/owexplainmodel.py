@@ -131,6 +131,7 @@ class ViolinItem(QGraphicsWidget):
         dist = (counts - min_count) / (max_count - min_count)
         if min_count == max_count:
             dist[:] = 1
+        dist = dist ** 0.7
         indices = np.argsort(counts)
         for x, d in zip(x_data_unique[indices], dist[indices]):
             colors = color_data[x_data == np.round(x, 3)]
