@@ -234,6 +234,9 @@ class OWExplainModel(OWWidget, ConcurrentWidgetMixin):
         domain_transform_err = Msg("{}")
         unknown_err = Msg("{}")
 
+    class Info(OWWidget.Information):
+        data_sampled = Msg("Data has been sampled.")
+
     settingsHandler = ClassValuesContextHandler()
     target_index = ContextSetting(0)
     n_attributes = Setting(10)
@@ -366,6 +369,9 @@ class OWExplainModel(OWWidget, ConcurrentWidgetMixin):
 
     def on_done(self, results: Optional[Results]):
         self.__results = results
+        if self.data and results is not None and results.x is not None \
+                and len(self.data) != len(results.x[0]):
+            self.Info.data_sampled()
         self.update_scene()
 
     def on_exception(self, ex: Exception):
