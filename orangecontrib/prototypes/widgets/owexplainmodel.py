@@ -3,12 +3,12 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from AnyQt.QtCore import Qt, QRectF, QSizeF, QSize
+from AnyQt.QtCore import Qt, QRectF, QSizeF, QSize, pyqtSignal as Signal
 from AnyQt.QtGui import QColor, QPen, QBrush, QPainter, QLinearGradient
 from AnyQt.QtWidgets import QGraphicsItemGroup, QGraphicsLineItem, \
     QGraphicsScene, QGraphicsWidget, QGraphicsGridLayout, \
     QGraphicsEllipseItem, QGraphicsSimpleTextItem, QSizePolicy, \
-    QGraphicsRectItem
+    QGraphicsRectItem, QGraphicsSceneMouseEvent
 
 import pyqtgraph as pg
 
@@ -109,9 +109,24 @@ class ViolinItem(QGraphicsWidget):
     WIDTH, HEIGHT = 400, 40
     POINT_R = 4
 
+    class SelectionRect(QGraphicsRectItem):
+        COLOR = [255, 255, 0]
+
+        def __init__(self, parent):
+            super().__init__(parent)
+
+            color = QColor(*self.COLOR)
+            color.setAlpha(100)
+            self.setBrush(color)
+
+            color = QColor(*self.COLOR)
+            self.setPen(color)
+
     def __init__(self, parent):
         super().__init__(parent)
         self.__group = None  # type: Optional[QGraphicsItemGroup]
+        self.__selection_rect = None  # type: Optional[QGraphicsRectItem]
+        parent.selection_cleared.connect(self.__remove_selection_rect)
 
     def set_data(self, x_data: np.ndarray, color_data: np.ndarray):
         def put_point(_x, _y, _c):
@@ -152,11 +167,32 @@ class ViolinItem(QGraphicsWidget):
     def sizeHint(self, *_):
         return QSizeF(self.WIDTH, self.HEIGHT)
 
+    def __remove_selection_rect(self):
+        if self.__selection_rect is not None:
+            self.__selection_rect.setParentItem(None)
+            if self.scene() is not None:
+                self.scene().removeItem(self.__selection_rect)
+            self.__selection_rect = None
+
+    def mousePressEvent(self, event: QGraphicsSceneMouseEvent):
+        event.accept()
+
+    def mouseMoveEvent(self, event: QGraphicsSceneMouseEvent):
+        if event.buttons() & Qt.LeftButton:
+            if self.__selection_rect is None:
+                self.__selection_rect = ViolinItem.SelectionRect(self)
+            x = event.buttonDownPos(Qt.LeftButton).x()
+            rect = QRectF(x, 0, event.pos().x() - x, self.HEIGHT).normalized()
+            rect = rect.intersected(self.contentsRect())
+            self.__selection_rect.setRect(rect)
+            event.accept()
+
 
 class ViolinPlot(QGraphicsWidget):
     LABEL_COLUMN, VIOLIN_COLUMN, LEGEND_COLUMN = range(3)
     MAX_N_ITEMS = 100
     MAX_ATTR_LEN = 20
+    selection_cleared = Signal()
 
     def __init__(self):
         super().__init__()
@@ -224,6 +260,17 @@ class ViolinPlot(QGraphicsWidget):
                               len(self.__violin_items),
                               ViolinPlot.VIOLIN_COLUMN)
 
+    def deselect(self):
+        self.selection_cleared.emit()
+
+
+class GraphicsScene(QGraphicsScene):
+    mouse_clicked = Signal(object)
+
+    def mousePressEvent(self, event):
+        self.mouse_clicked.emit(event)
+        super().mousePressEvent(event)
+
 
 class OWExplainModel(OWWidget, ConcurrentWidgetMixin):
     name = "Explain Model"
@@ -266,7 +313,7 @@ class OWExplainModel(OWWidget, ConcurrentWidgetMixin):
         self.info.set_input_summary(self.info.NoInput)
 
     def _add_plot(self):
-        self.scene = QGraphicsScene()
+        self.scene = GraphicsScene()
         self.view = StickyGraphicsView(self.scene)
         self.view.setRenderHint(QPainter.Antialiasing, True)
         self.view.setAlignment(Qt.AlignTop | Qt.AlignLeft)
@@ -359,6 +406,7 @@ class OWExplainModel(OWWidget, ConcurrentWidgetMixin):
         self._violin_plot.layout().activate()
         self._violin_plot.geometryChanged.connect(self.update_scene_rect)
         self.scene.addItem(self._violin_plot)
+        self.scene.mouse_clicked.connect(self._violin_plot.deselect)
         self.update_scene_rect()
 
     def update_scene_rect(self):
