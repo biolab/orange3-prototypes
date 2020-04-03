@@ -113,7 +113,7 @@ class ViolinItem(QGraphicsWidget):
         super().__init__(parent)
         self.__group = None  # type: Optional[QGraphicsItemGroup]
 
-    def set_data(self, x_data, color_data):
+    def set_data(self, x_data: np.ndarray, color_data: np.ndarray):
         def put_point(_x, _y, _c):
             item = QGraphicsEllipseItem(_x, _y, self.POINT_R, self.POINT_R)
             color = QColor(*_c)
@@ -186,7 +186,7 @@ class ViolinPlot(QGraphicsWidget):
         self._set_bottom_axis()
         self.set_n_visible(n_attrs)
 
-    def set_n_visible(self, n):
+    def set_n_visible(self, n: int):
         for i in range(len(self.__violin_items)):
             violin_item = self.__layout.itemAt(i, ViolinPlot.VIOLIN_COLUMN)
             violin_item.setVisible(i < n)
@@ -197,7 +197,7 @@ class ViolinPlot(QGraphicsWidget):
         n = min(n, len(self.__violin_items))
         self.__vertical_line.setLine(x, 0, x, -ViolinItem.HEIGHT * n)
 
-    def _set_violin_items(self, x, colors):
+    def _set_violin_items(self, x: np.ndarray, colors: np.ndarray):
         x = x / self.__range[1] * 0.5  # scale data to [-0.5, 0.5]
         for i in range(x.shape[1]):
             item = ViolinItem(self)
@@ -207,7 +207,7 @@ class ViolinPlot(QGraphicsWidget):
             if i == self.MAX_N_ITEMS:
                 break
 
-    def _set_labels(self, labels):
+    def _set_labels(self, labels: List[str]):
         for i, (label, _) in enumerate(zip(labels, self.__violin_items)):
             short = f"{label[:self.MAX_ATTR_LEN - 1]}..." \
                 if len(label) > self.MAX_ATTR_LEN else label
