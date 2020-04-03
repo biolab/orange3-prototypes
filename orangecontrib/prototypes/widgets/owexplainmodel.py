@@ -13,7 +13,7 @@ from AnyQt.QtWidgets import QGraphicsItemGroup, QGraphicsLineItem, \
 import pyqtgraph as pg
 
 from Orange.base import Model
-from Orange.data import Table
+from Orange.data import Table, Domain, ContinuousVariable, StringVariable
 from Orange.data.table import DomainTransformationError
 from Orange.widgets import gui
 from Orange.widgets.settings import Setting, ContextSetting, \
@@ -24,7 +24,7 @@ from Orange.widgets.utils.sql import check_sql_input
 from Orange.widgets.utils.state_summary import format_summary_details
 from Orange.widgets.utils.stickygraphicsview import StickyGraphicsView
 from Orange.widgets.utils.widgetpreview import WidgetPreview
-from Orange.widgets.widget import Input, OWWidget, Msg
+from Orange.widgets.widget import Input, Output, OWWidget, Msg
 
 from orangecontrib.prototypes.explanation.explainer import \
     get_shap_values_and_colors, RGB_LOW, RGB_HIGH
@@ -235,6 +235,9 @@ class OWExplainModel(OWWidget, ConcurrentWidgetMixin):
         data = Input("Data", Table, default=True)
         model = Input("Model", Model)
 
+    class Outputs:
+        scores = Output("Scores", Table)
+
     class Error(OWWidget.Error):
         domain_transform_err = Msg("{}")
         unknown_err = Msg("{}")
@@ -338,13 +341,17 @@ class OWExplainModel(OWWidget, ConcurrentWidgetMixin):
 
     def update_scene(self):
         self.clear_scene()
+        scores = None
         if self.__results is not None:
             x = self.__results.x
             x = x[self.target_index] if isinstance(x, list) else x
-            indices = np.argsort(np.sum(np.abs(x), axis=0))[::-1]
+            scores_x = np.mean(np.abs(x), axis=0)
+            indices = np.argsort(scores_x)[::-1]
             colors = self.__results.colors
             names = [self.__results.names[i] for i in indices]
             self.setup_plot(x[:, indices], colors[:, indices], names)
+            scores = self.create_scores_table(scores_x, self.__results.names)
+        self.Outputs.scores.send(scores)
 
     def setup_plot(self, x: np.ndarray, colors: np.ndarray, names: List[str]):
         self._violin_plot = ViolinPlot()
@@ -368,6 +375,15 @@ class OWExplainModel(OWWidget, ConcurrentWidgetMixin):
         footer_geom = self._violin_plot.bottom_axis.geometry()
         footer = extend_horizontal(footer_geom.adjusted(0, -3, 0, 0))
         self.view.setFooterSceneRect(footer)
+
+    @staticmethod
+    def create_scores_table(scores: np.ndarray, names: List[str]):
+        domain = Domain([ContinuousVariable("Score (mean SHAP value)")],
+                        metas=[StringVariable("Feature")])
+        scores_table = Table(domain, scores[:, None],
+                             metas=np.array(names)[:, None])
+        scores_table.name = "Feature Scores"
+        return scores_table
 
     def on_partial_result(self, _):
         pass
