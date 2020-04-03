@@ -156,6 +156,7 @@ class ViolinItem(QGraphicsWidget):
 class ViolinPlot(QGraphicsWidget):
     LABEL_COLUMN, VIOLIN_COLUMN, LEGEND_COLUMN = range(3)
     MAX_N_ITEMS = 100
+    MAX_ATTR_LEN = 20
 
     def __init__(self):
         super().__init__()
@@ -208,7 +209,11 @@ class ViolinPlot(QGraphicsWidget):
 
     def _set_labels(self, labels):
         for i, (label, _) in enumerate(zip(labels, self.__violin_items)):
-            item = SimpleLayoutItem(QGraphicsSimpleTextItem(label, self))
+            short = f"{label[:self.MAX_ATTR_LEN - 1]}..." \
+                if len(label) > self.MAX_ATTR_LEN else label
+            text = QGraphicsSimpleTextItem(short, self)
+            text.setToolTip(label)
+            item = SimpleLayoutItem(text)
             item.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
             self.__layout.addItem(item, i, ViolinPlot.LABEL_COLUMN,
                                   Qt.AlignRight | Qt.AlignVCenter)
