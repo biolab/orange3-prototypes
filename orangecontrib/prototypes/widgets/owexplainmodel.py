@@ -133,6 +133,10 @@ class ViolinItem(QGraphicsWidget):
         self.__selection_rect = None  # type: Optional[QGraphicsRectItem]
         parent.selection_cleared.connect(self.__remove_selection_rect)
 
+    @property
+    def attr_name(self):
+        return self.__attr_name
+
     def set_data(self, x_data: np.ndarray, color_data: np.ndarray):
         def put_point(_x, _y, _c):
             item = QGraphicsEllipseItem(_x, _y, self.POINT_R, self.POINT_R)
@@ -146,7 +150,8 @@ class ViolinItem(QGraphicsWidget):
         if len(x_data) == 0:
             return
 
-        x_data = self._map_to_pixels(x_data)
+        x_data = self._values_to_pixels(x_data)
+        x_data = np.round(x_data - self.POINT_R / 2, 3)
 
         # remove duplicates and get counts (distribution) to set y
         x_data_unique, counts = np.unique(x_data, return_counts=True)
@@ -173,16 +178,15 @@ class ViolinItem(QGraphicsWidget):
                     put_point(x, y + i, colors.pop())  # y = [2, 8]
                     put_point(x, y - i, colors.pop())  # y = [-8, -2]
 
-    def _map_to_pixels(self, x: np.ndarray) -> np.ndarray:
+    def _values_to_pixels(self, x: np.ndarray) -> np.ndarray:
         # scale data to [-0.5, 0.5]
         x = x / self.__range * self.SCALE_FACTOR
         # round data to 3. decimal for sampling
         x = np.round(x, 3)
         # convert to pixels
-        p = x * self.WIDTH + self.WIDTH / 2 - self.POINT_R / 2
-        return np.round(p, 1)
+        return x * self.WIDTH + self.WIDTH / 2
 
-    def _map_from_pixels(self, p: np.ndarray) -> np.ndarray:
+    def _values_from_pixels(self, p: np.ndarray) -> np.ndarray:
         # convert from pixels
         x = (p - self.WIDTH / 2) / self.WIDTH
         # rescale data from [-0.5, 0.5]
@@ -197,6 +201,12 @@ class ViolinItem(QGraphicsWidget):
             if self.scene() is not None:
                 self.scene().removeItem(self.__selection_rect)
             self.__selection_rect = None
+
+    def add_selection_rect(self, x1, x2):
+        x1, x2 = self._values_to_pixels(np.array([x1, x2]))
+        rect = QRectF(x1, 0, x2 - x1, self.HEIGHT)
+        self.__selection_rect = ViolinItem.SelectionRect(self)
+        self.__selection_rect.setRect(rect)
 
     def mousePressEvent(self, event: QGraphicsSceneMouseEvent):
         event.accept()
@@ -216,7 +226,7 @@ class ViolinItem(QGraphicsWidget):
         x2 = event.pos().x()
         if x1 > x2:
             x2, x1 = x1, x2
-        x1, x2 = self._map_from_pixels(np.array([x1, x2]))
+        x1, x2 = self._values_from_pixels(np.array([x1, x2]))
         self.selection_changed.emit(x1, x2, self.__attr_name)
         event.accept()
 
@@ -302,6 +312,16 @@ class ViolinPlot(QGraphicsWidget):
     def select(self, *args):
         self.selection_changed.emit(*args)
 
+    def select_from_settings(self, x1: float, x2: float, attr_name: str):
+        point_r_diff = 2 * self.__range[1] / (ViolinItem.WIDTH / 2)
+        x1 -= point_r_diff
+        x2 += point_r_diff
+        for item in self.__violin_items:
+            if item.attr_name == attr_name:
+                item.add_selection_rect(x1, x2)
+                break
+        self.select(x1, x2, attr_name)
+
 
 class GraphicsScene(QGraphicsScene):
     mouse_clicked = Signal(object)
@@ -335,7 +355,7 @@ class OWExplainModel(OWWidget, ConcurrentWidgetMixin):
     settingsHandler = ClassValuesContextHandler()
     target_index = ContextSetting(0)
     n_attributes = Setting(10)
-    selection = Setting((), schema_only=True)
+    selection = Setting((), schema_only=True)  # type: Tuple[str, List[int]]
     auto_send = Setting(True)
 
     graph_name = "scene"
@@ -348,6 +368,7 @@ class OWExplainModel(OWWidget, ConcurrentWidgetMixin):
         self.model = None  # type: Optional[Model]
         self._violin_plot = None  # type: Optional[ViolinPlot]
         self.setup_gui()
+        self.__pending_selection = self.selection
 
     def setup_gui(self):
         self._add_controls()
@@ -439,7 +460,7 @@ class OWExplainModel(OWWidget, ConcurrentWidgetMixin):
         self._violin_plot = None
 
     def commit(self):
-        if not self.selection:
+        if not self.selection or not self.selection[1]:
             self.info.set_output_summary(self.info.NoOutput)
             self.Outputs.selected_data.send(None)
         else:
@@ -514,6 +535,23 @@ class OWExplainModel(OWWidget, ConcurrentWidgetMixin):
                 and len(self.data) != len(results.x[0]):
             self.Info.data_sampled()
         self.update_scene()
+        self.select_pending()
+
+    def select_pending(self):
+        if not self.__pending_selection or not self.__pending_selection[1] \
+                or self.__results is None:
+            return
+
+        attr_name, row_indices = self.__pending_selection
+        names = self.__results.names
+        if not names or attr_name not in names:
+            return
+        col_index = names.index(attr_name)
+        column = self.__results.x[self.target_index][row_indices, col_index]
+        x1, x2 = np.min(column), np.max(column)
+        self._violin_plot.select_from_settings(x1, x2, attr_name)
+        self.__pending_selection = []
+        self.unconditional_commit()
 
     def on_exception(self, ex: Exception):
         if isinstance(ex, DomainTransformationError):
