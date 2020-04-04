@@ -234,6 +234,7 @@ class ViolinPlot(QGraphicsWidget):
         self.__violin_items = []  # type: List[ViolinItem]
         self.__bottom_axis = pg.AxisItem(parent=self, orientation="bottom",
                                          maxTickLength=7, pen=QPen(Qt.black))
+        self.__bottom_axis.setLabel("Impact on model output")
         self.__vertical_line = QGraphicsLineItem(self.__bottom_axis)
         self.__vertical_line.setPen(QPen(Qt.gray))
         self.__legend = Legend(self)
@@ -492,7 +493,7 @@ class OWExplainModel(OWWidget, ConcurrentWidgetMixin):
         self.view.setSceneRect(geom)
 
         footer_geom = self._violin_plot.bottom_axis.geometry()
-        footer = extend_horizontal(footer_geom.adjusted(0, -3, 0, 0))
+        footer = extend_horizontal(footer_geom.adjusted(0, -3, 0, 10))
         self.view.setFooterSceneRect(footer)
 
     @staticmethod
@@ -526,7 +527,7 @@ class OWExplainModel(OWWidget, ConcurrentWidgetMixin):
 
     def sizeHint(self):
         sh = self.controlArea.sizeHint()
-        return sh.expandedTo(QSize(900, 500))
+        return sh.expandedTo(QSize(900, 520))
 
     def send_report(self):
         if not self.data or not self.model:
