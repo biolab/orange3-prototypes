@@ -108,6 +108,8 @@ class Legend(QGraphicsWidget):
 class ViolinItem(QGraphicsWidget):
     WIDTH, HEIGHT = 400, 40
     POINT_R = 4
+    SCALE_FACTOR = 0.5
+    selection_changed = Signal(float, float, str)
 
     class SelectionRect(QGraphicsRectItem):
         COLOR = [255, 255, 0]
@@ -122,8 +124,11 @@ class ViolinItem(QGraphicsWidget):
             color = QColor(*self.COLOR)
             self.setPen(color)
 
-    def __init__(self, parent):
+    def __init__(self, parent, attr_name: str, x_range: Tuple[float]):
         super().__init__(parent)
+        assert x_range[0] == -x_range[1]
+        self.__attr_name = attr_name
+        self.__range = x_range[1]
         self.__group = None  # type: Optional[QGraphicsItemGroup]
         self.__selection_rect = None  # type: Optional[QGraphicsRectItem]
         parent.selection_cleared.connect(self.__remove_selection_rect)
@@ -137,20 +142,24 @@ class ViolinItem(QGraphicsWidget):
             self.__group.addToGroup(item)
 
         self.__group = QGraphicsItemGroup(self)
-        x_data = np.round(x_data, 3)[~np.isnan(x_data)]
+        x_data = x_data[~np.isnan(x_data)]
         if len(x_data) == 0:
             return
 
+        x_data = self._map_to_pixels(x_data)
+
+        # remove duplicates and get counts (distribution) to set y
         x_data_unique, counts = np.unique(x_data, return_counts=True)
         min_count, max_count = np.min(counts), np.max(counts)
         dist = (counts - min_count) / (max_count - min_count)
         if min_count == max_count:
             dist[:] = 1
         dist = dist ** 0.7
+
+        # plot rarest values first
         indices = np.argsort(counts)
         for x, d in zip(x_data_unique[indices], dist[indices]):
             colors = color_data[x_data == np.round(x, 3)]
-            x = x * self.WIDTH + self.WIDTH / 2 - self.POINT_R / 2
             y = self.HEIGHT / 2 - self.POINT_R / 2
 
             np.random.seed(0)
@@ -163,6 +172,21 @@ class ViolinItem(QGraphicsWidget):
                 for i in range(2, int(offset), 2):
                     put_point(x, y + i, colors.pop())  # y = [2, 8]
                     put_point(x, y - i, colors.pop())  # y = [-8, -2]
+
+    def _map_to_pixels(self, x: np.ndarray) -> np.ndarray:
+        # scale data to [-0.5, 0.5]
+        x = x / self.__range * self.SCALE_FACTOR
+        # round data to 3. decimal for sampling
+        x = np.round(x, 3)
+        # convert to pixels
+        p = x * self.WIDTH + self.WIDTH / 2 - self.POINT_R / 2
+        return np.round(p, 1)
+
+    def _map_from_pixels(self, p: np.ndarray) -> np.ndarray:
+        # convert from pixels
+        x = (p - self.WIDTH / 2) / self.WIDTH
+        # rescale data from [-0.5, 0.5]
+        return np.round(x * self.__range / self.SCALE_FACTOR, 3)
 
     def sizeHint(self, *_):
         return QSizeF(self.WIDTH, self.HEIGHT)
@@ -187,12 +211,22 @@ class ViolinItem(QGraphicsWidget):
             self.__selection_rect.setRect(rect)
             event.accept()
 
+    def mouseReleaseEvent(self, event: QGraphicsSceneMouseEvent):
+        x1 = event.buttonDownPos(Qt.LeftButton).x()
+        x2 = event.pos().x()
+        if x1 > x2:
+            x2, x1 = x1, x2
+        x1, x2 = self._map_from_pixels(np.array([x1, x2]))
+        self.selection_changed.emit(x1, x2, self.__attr_name)
+        event.accept()
+
 
 class ViolinPlot(QGraphicsWidget):
     LABEL_COLUMN, VIOLIN_COLUMN, LEGEND_COLUMN = range(3)
     MAX_N_ITEMS = 100
     MAX_ATTR_LEN = 20
     selection_cleared = Signal()
+    selection_changed = Signal(float, float, str)
 
     def __init__(self):
         super().__init__()
@@ -217,7 +251,7 @@ class ViolinPlot(QGraphicsWidget):
                  names: List[str], n_attrs: float):
         abs_max = np.max(np.abs(x)) * 1.05
         self.__range = (-abs_max, abs_max)
-        self._set_violin_items(x, colors)
+        self._set_violin_items(x, colors, names)
         self._set_labels(names)
         self._set_bottom_axis()
         self.set_n_visible(n_attrs)
@@ -233,11 +267,12 @@ class ViolinPlot(QGraphicsWidget):
         n = min(n, len(self.__violin_items))
         self.__vertical_line.setLine(x, 0, x, -ViolinItem.HEIGHT * n)
 
-    def _set_violin_items(self, x: np.ndarray, colors: np.ndarray):
-        x = x / self.__range[1] * 0.5  # scale data to [-0.5, 0.5]
+    def _set_violin_items(self, x: np.ndarray, colors: np.ndarray,
+                          labels: List[str]):
         for i in range(x.shape[1]):
-            item = ViolinItem(self)
+            item = ViolinItem(self, labels[i], self.__range)
             item.set_data(x[:, i], colors[:, i])
+            item.selection_changed.connect(self.select)
             self.__violin_items.append(item)
             self.__layout.addItem(item, i, ViolinPlot.VIOLIN_COLUMN)
             if i == self.MAX_N_ITEMS:
@@ -263,6 +298,9 @@ class ViolinPlot(QGraphicsWidget):
     def deselect(self):
         self.selection_cleared.emit()
 
+    def select(self, *args):
+        self.selection_changed.emit(*args)
+
 
 class GraphicsScene(QGraphicsScene):
     mouse_clicked = Signal(object)
@@ -283,6 +321,7 @@ class OWExplainModel(OWWidget, ConcurrentWidgetMixin):
         model = Input("Model", Model)
 
     class Outputs:
+        selected_data = Output("Selected Data", Table)
         scores = Output("Scores", Table)
 
     class Error(OWWidget.Error):
@@ -295,6 +334,8 @@ class OWExplainModel(OWWidget, ConcurrentWidgetMixin):
     settingsHandler = ClassValuesContextHandler()
     target_index = ContextSetting(0)
     n_attributes = Setting(10)
+    selection = Setting((), schema_only=True)
+    auto_send = Setting(True)
 
     graph_name = "scene"
 
@@ -311,6 +352,7 @@ class OWExplainModel(OWWidget, ConcurrentWidgetMixin):
         self._add_controls()
         self._add_plot()
         self.info.set_input_summary(self.info.NoInput)
+        self.info.set_output_summary(self.info.NoOutput)
 
     def _add_plot(self):
         self.scene = GraphicsScene()
@@ -331,10 +373,14 @@ class OWExplainModel(OWWidget, ConcurrentWidgetMixin):
         self.n_spin = gui.spin(
             box, self, "n_attributes", 1, ViolinPlot.MAX_N_ITEMS,
             controlWidth=80, callback=self.__n_spin_changed)
+
         gui.rubber(self.controlArea)
+        box = gui.vBox(self.controlArea, box=True)
+        gui.auto_send(box, self, "auto_send", box=False)
 
     def __target_combo_changed(self):
         self.update_scene()
+        self.clear_selection()
 
     def __n_spin_changed(self):
         if self._violin_plot is not None:
@@ -375,8 +421,13 @@ class OWExplainModel(OWWidget, ConcurrentWidgetMixin):
     def clear(self):
         self.__results = None
         self.cancel()
+        self.clear_selection()
         self.clear_scene()
         self.clear_messages()
+
+    def clear_selection(self):
+        self.selection = ()
+        self.commit()
 
     def clear_scene(self):
         self.scene.clear()
@@ -385,6 +436,16 @@ class OWExplainModel(OWWidget, ConcurrentWidgetMixin):
         self.view.setHeaderSceneRect(QRectF())
         self.view.setFooterSceneRect(QRectF())
         self._violin_plot = None
+
+    def commit(self):
+        if not self.selection:
+            self.info.set_output_summary(self.info.NoOutput)
+            self.Outputs.selected_data.send(None)
+        else:
+            data = self.data[self.selection[1]]
+            detail = format_summary_details(data)
+            self.info.set_output_summary(len(data), detail)
+            self.Outputs.selected_data.send(data)
 
     def update_scene(self):
         self.clear_scene()
@@ -403,11 +464,21 @@ class OWExplainModel(OWWidget, ConcurrentWidgetMixin):
     def setup_plot(self, x: np.ndarray, colors: np.ndarray, names: List[str]):
         self._violin_plot = ViolinPlot()
         self._violin_plot.set_data(x, colors, names, self.n_attributes)
+        self._violin_plot.selection_cleared.connect(self.clear_selection)
+        self._violin_plot.selection_changed.connect(self.update_selection)
         self._violin_plot.layout().activate()
         self._violin_plot.geometryChanged.connect(self.update_scene_rect)
         self.scene.addItem(self._violin_plot)
         self.scene.mouse_clicked.connect(self._violin_plot.deselect)
         self.update_scene_rect()
+
+    def update_selection(self, min_val: float, max_val: float, attr_name: str):
+        assert self.__results is not None
+        x = self.__results.x[self.target_index]
+        column = self.__results.names.index(attr_name)
+        mask = np.logical_and(x[:, column] < max_val, x[:, column] > min_val)
+        self.selection = (attr_name, list(np.flatnonzero(mask)))
+        self.commit()
 
     def update_scene_rect(self):
         def extend_horizontal(rect):
