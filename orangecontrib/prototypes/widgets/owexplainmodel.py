@@ -129,7 +129,7 @@ class ViolinItem(QGraphicsWidget):
         super().__init__(parent)
         assert x_range[0] == -x_range[1]
         self.__attr_name = attr_name
-        self.__range = x_range[1]
+        self.__range = x_range[1] if x_range[1] else 1
         self.__group = None  # type: Optional[QGraphicsItemGroup]
         self.__selection_rect = None  # type: Optional[QGraphicsRectItem]
         parent.selection_cleared.connect(self.__remove_selection_rect)
@@ -316,11 +316,9 @@ class ViolinPlot(QGraphicsWidget):
 
     def select_from_settings(self, x1: float, x2: float, attr_name: str):
         point_r_diff = 2 * self.__range[1] / (ViolinItem.WIDTH / 2)
-        x1 -= point_r_diff
-        x2 += point_r_diff
         for item in self.__violin_items:
             if item.attr_name == attr_name:
-                item.add_selection_rect(x1, x2)
+                item.add_selection_rect(x1 - point_r_diff, x2 + point_r_diff)
                 break
         self.select(x1, x2, attr_name)
 
@@ -394,9 +392,8 @@ class OWExplainModel(OWWidget, ConcurrentWidgetMixin):
 
         box = gui.hBox(self.controlArea, "Display features")
         gui.label(box, self, "Best ranked: ")
-        self.n_spin = gui.spin(
-            box, self, "n_attributes", 1, ViolinPlot.MAX_N_ITEMS,
-            controlWidth=80, callback=self.__n_spin_changed)
+        gui.spin(box, self, "n_attributes", 1, ViolinPlot.MAX_N_ITEMS,
+                 controlWidth=80, callback=self.__n_spin_changed)
 
         gui.rubber(self.controlArea)
         box = gui.vBox(self.controlArea, box=True)
@@ -450,8 +447,9 @@ class OWExplainModel(OWWidget, ConcurrentWidgetMixin):
         self.clear_messages()
 
     def clear_selection(self):
-        self.selection = ()
-        self.commit()
+        if self.selection:
+            self.selection = ()
+            self.commit()
 
     def clear_scene(self):
         self.scene.clear()
@@ -476,10 +474,10 @@ class OWExplainModel(OWWidget, ConcurrentWidgetMixin):
         scores = None
         if self.__results is not None:
             assert isinstance(self.__results.x, list)
-            x = self.__results.x[self.target_index][self.__results.mask]
+            x = self.__results.x[self.target_index]
             scores_x = np.mean(np.abs(x), axis=0)
             indices = np.argsort(scores_x)[::-1]
-            colors = self.__results.colors[self.__results.mask]
+            colors = self.__results.colors
             names = [self.__results.names[i] for i in indices]
             self.setup_plot(x[:, indices], colors[:, indices], names)
             scores = self.create_scores_table(scores_x, self.__results.names)
@@ -500,8 +498,11 @@ class OWExplainModel(OWWidget, ConcurrentWidgetMixin):
         assert self.__results is not None
         x = self.__results.x[self.target_index]
         column = self.__results.names.index(attr_name)
-        mask = np.logical_and(x[:, column] < max_val, x[:, column] > min_val)
-        mask = np.logical_and(mask, self.__results.mask)
+        mask = self.__results.mask.copy()
+        mask[self.__results.mask] = np.logical_and(x[:, column] <= max_val,
+                                                   x[:, column] >= min_val)
+        if not self.selection and not any(mask):
+            return
         self.selection = (attr_name, list(np.flatnonzero(mask)))
         self.commit()
 
@@ -522,7 +523,7 @@ class OWExplainModel(OWWidget, ConcurrentWidgetMixin):
 
     @staticmethod
     def create_scores_table(scores: np.ndarray, names: List[str]):
-        domain = Domain([ContinuousVariable("Score (mean SHAP value)")],
+        domain = Domain([ContinuousVariable("Score")],
                         metas=[StringVariable("Feature")])
         scores_table = Table(domain, scores[:, None],
                              metas=np.array(names)[:, None])
@@ -549,10 +550,14 @@ class OWExplainModel(OWWidget, ConcurrentWidgetMixin):
         if not names or attr_name not in names:
             return
         col_index = names.index(attr_name)
+        mask = np.zeros(self.__results.mask.shape, dtype=bool)
+        mask[row_indices] = True
+        mask = np.logical_and(self.__results.mask, mask)
+        row_indices = np.flatnonzero(mask[self.__results.mask])
         column = self.__results.x[self.target_index][row_indices, col_index]
         x1, x2 = np.min(column), np.max(column)
         self._violin_plot.select_from_settings(x1, x2, attr_name)
-        self.__pending_selection = []
+        self.__pending_selection = ()
         self.unconditional_commit()
 
     def on_exception(self, ex: Exception):
