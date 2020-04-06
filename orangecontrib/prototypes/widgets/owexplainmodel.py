@@ -34,6 +34,7 @@ class Results(SimpleNamespace):
     x = None  # type: Optional[List[np.ndarray]]
     colors = None  # type: Optional[List[np.ndarray]]
     names = None  # type: Optional[List[str]]
+    mask = None  # type: Optional[List[np.ndarray]]
 
 
 def run(data: Table, model: Model, state: TaskState) -> Results:
@@ -47,8 +48,8 @@ def run(data: Table, model: Model, state: TaskState) -> Results:
         if state.is_interruption_requested():
             raise Exception
 
-    x, names, colors = get_shap_values_and_colors(model, data, callback)
-    return Results(x=x, colors=colors, names=names)
+    x, names, mask, colors = get_shap_values_and_colors(model, data, callback)
+    return Results(x=x, colors=colors, names=names, mask=mask)
 
 
 class Legend(QGraphicsWidget):
@@ -146,11 +147,12 @@ class ViolinItem(QGraphicsWidget):
             self.__group.addToGroup(item)
 
         self.__group = QGraphicsItemGroup(self)
+
+        x_data = self._values_to_pixels(x_data)
         x_data = x_data[~np.isnan(x_data)]
         if len(x_data) == 0:
             return
 
-        x_data = self._values_to_pixels(x_data)
         x_data = np.round(x_data - self.POINT_R / 2, 3)
 
         # remove duplicates and get counts (distribution) to set y
@@ -349,7 +351,7 @@ class OWExplainModel(OWWidget, ConcurrentWidgetMixin):
         domain_transform_err = Msg("{}")
         unknown_err = Msg("{}")
 
-    class Info(OWWidget.Information):
+    class Information(OWWidget.Information):
         data_sampled = Msg("Data has been sampled.")
 
     settingsHandler = ClassValuesContextHandler()
@@ -473,11 +475,11 @@ class OWExplainModel(OWWidget, ConcurrentWidgetMixin):
         self.clear_scene()
         scores = None
         if self.__results is not None:
-            x = self.__results.x
-            x = x[self.target_index] if isinstance(x, list) else x
+            assert isinstance(self.__results.x, list)
+            x = self.__results.x[self.target_index][self.__results.mask]
             scores_x = np.mean(np.abs(x), axis=0)
             indices = np.argsort(scores_x)[::-1]
-            colors = self.__results.colors
+            colors = self.__results.colors[self.__results.mask]
             names = [self.__results.names[i] for i in indices]
             self.setup_plot(x[:, indices], colors[:, indices], names)
             scores = self.create_scores_table(scores_x, self.__results.names)
@@ -499,6 +501,7 @@ class OWExplainModel(OWWidget, ConcurrentWidgetMixin):
         x = self.__results.x[self.target_index]
         column = self.__results.names.index(attr_name)
         mask = np.logical_and(x[:, column] < max_val, x[:, column] > min_val)
+        mask = np.logical_and(mask, self.__results.mask)
         self.selection = (attr_name, list(np.flatnonzero(mask)))
         self.commit()
 
@@ -531,9 +534,8 @@ class OWExplainModel(OWWidget, ConcurrentWidgetMixin):
 
     def on_done(self, results: Optional[Results]):
         self.__results = results
-        if self.data and results is not None and results.x is not None \
-                and len(self.data) != len(results.x[0]):
-            self.Info.data_sampled()
+        if self.data and results is not None and not all(results.mask):
+            self.Information.data_sampled()
         self.update_scene()
         self.select_pending()
 
