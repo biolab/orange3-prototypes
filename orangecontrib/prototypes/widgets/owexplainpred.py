@@ -3,11 +3,12 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from AnyQt.QtCore import Qt, QRectF, QSizeF, QSize
-from AnyQt.QtGui import QColor, QPen, QBrush, QPainter, QPainterPath
+from AnyQt.QtCore import Qt, QRectF, QSizeF, QSize, QPointF
+from AnyQt.QtGui import QColor, QPen, QBrush, QPainter, QPainterPath, QPolygonF
 from AnyQt.QtWidgets import QGraphicsItemGroup, QGraphicsLineItem, \
     QGraphicsScene, QGraphicsWidget, QGraphicsLinearLayout, QGraphicsView, \
-    QGraphicsSimpleTextItem, QGraphicsRectItem, QGraphicsPathItem
+    QGraphicsSimpleTextItem, QGraphicsRectItem, QGraphicsPathItem, \
+    QGraphicsPolygonItem
 
 import pyqtgraph as pg
 
@@ -119,6 +120,38 @@ class LowPartItem(PartItem):
         return path
 
 
+class CoverItem(QGraphicsPolygonItem):
+    COLOR = QColor(Qt.white)
+    ADJUST = 2
+
+    def __init__(self):
+        super().__init__()
+        self.setPolygon(self._get_polygon())
+        self.setPen(self.COLOR)
+        self.setBrush(self.COLOR)
+        self.setPos(0, 0)
+
+    def _get_polygon(self) -> QPolygonF:
+        return QPolygonF([QPointF(x, y) for x, y in self.get_points()])
+
+    def get_points(self) -> List[Tuple[float]]:
+        raise NotImplementedError
+
+
+class LowCoverItem(CoverItem):
+    def get_points(self) -> List[Tuple[int, int]]:
+        width = StripeItem.WIDTH
+        return [(0, 0), (0, -self.ADJUST), (width, -self.ADJUST),
+                (width, 0), (int(width / 2), PartItem.TIP_LEN), (0, 0)]
+
+
+class HighCoverItem(CoverItem):
+    def get_points(self) -> List[Tuple[int, int]]:
+        width = StripeItem.WIDTH
+        return [(0, 0), (0, self.ADJUST), (width, self.ADJUST),
+                (width, 0), (int(width / 2), -PartItem.TIP_LEN), (0, 0)]
+
+
 class IndicatorItem(QGraphicsSimpleTextItem):
     COLOR = QColor(*(100, 100, 100))
     PADDING = 2
@@ -174,6 +207,9 @@ class StripeItem(QGraphicsWidget):
         self.__high_item.setPen(QPen(high_color))
         self.__high_item.setBrush(QBrush(high_color))
 
+        self.__low_cover_item = LowCoverItem()
+        self.__high_cover_item = HighCoverItem()
+
         self.__model_output_line = QGraphicsLineItem()
         pen = QPen(IndicatorItem.COLOR)
         pen.setStyle(Qt.DashLine)
@@ -183,9 +219,11 @@ class StripeItem(QGraphicsWidget):
         self.__model_output_ind = IndicatorItem()
         self.__base_value_ind = IndicatorItem()
 
-        self.__group.addToGroup(self.__model_output_line)
         self.__group.addToGroup(self.__low_item)
         self.__group.addToGroup(self.__high_item)
+        self.__group.addToGroup(self.__low_cover_item)
+        self.__group.addToGroup(self.__high_cover_item)
+        self.__group.addToGroup(self.__model_output_line)
         self.__group.addToGroup(self.__model_output_ind)
         self.__group.addToGroup(self.__base_value_ind)
 
@@ -221,8 +259,12 @@ class StripeItem(QGraphicsWidget):
                             self.__high_parts, HighPartItem)
         if self.__low_parts:
             self.__low_parts[-1].setVisible(False)
+        else:
+            self.__low_cover_item.setVisible(False)
         if self.__high_parts:
             self.__high_parts[-1].setVisible(False)
+        else:
+            self.__high_cover_item.setVisible(False)
 
         self.set_height(height)
 
@@ -237,13 +279,15 @@ class StripeItem(QGraphicsWidget):
     def set_height(self, height: float):
         height = height / (self.__range[1] - self.__range[0])
 
-        y1 = height * (self.__range[1] - self.__value_range[1])
-        h1 = height * (self.__value_range[1] - self.__model_output)
-        y2 = height * (self.__range[1] - self.__model_output)
-        h2 = height * (self.__model_output - self.__value_range[0])
+        y_top = height * (self.__range[1] - self.__value_range[1])
+        h_top = height * (self.__value_range[1] - self.__model_output)
+        y_bot = height * (self.__range[1] - self.__model_output)
+        h_bot = height * (self.__model_output - self.__value_range[0])
 
-        self.__low_item.setRect(QRectF(0, y1, self.WIDTH, h1))
-        self.__high_item.setRect(QRectF(0, y2, self.WIDTH, h2))
+        self.__low_item.setRect(QRectF(0, y_top, self.WIDTH, h_top))
+        self.__high_item.setRect(QRectF(0, y_bot, self.WIDTH, h_bot))
+        self.__low_cover_item.setY(y_top)
+        self.__high_cover_item.setY(y_bot + h_bot)
 
         self._set_indicators_pos(height)
 
@@ -255,10 +299,10 @@ class StripeItem(QGraphicsWidget):
             k = 0.4 if i == 0 else 0.8
             return -PartItem.TIP_LEN * k
 
-        self._set_parts_pos(
-            height, y1, h1 / height, self.__low_parts, adjust_y_text_low)
-        self._set_parts_pos(
-            height, y2, h2 / height, self.__high_parts, adjust_y_text_high)
+        self._set_parts_pos(height, y_top, h_top / height,
+                            self.__low_parts, adjust_y_text_low)
+        self._set_parts_pos(height, y_bot, h_bot / height,
+                            self.__high_parts, adjust_y_text_high)
 
     @staticmethod
     def _set_parts_pos(height: float, y: float, diff: float,
