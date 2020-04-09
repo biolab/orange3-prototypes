@@ -161,6 +161,7 @@ class StripeItem(QGraphicsWidget):
         self.__range = None  # type: Tuple[float]
         self.__value_range = None  # type: Tuple[float]
         self.__model_output = None  # type: float
+        self.__base_value = None  # type: float
 
         self.__group = QGraphicsItemGroup(self)
         low_color, high_color = QColor(*RGB_LOW), QColor(*RGB_HIGH)
@@ -179,27 +180,35 @@ class StripeItem(QGraphicsWidget):
         pen.setWidth(1)
         self.__model_output_line.setPen(pen)
 
-        self.__indicator = IndicatorItem()
+        self.__model_output_ind = IndicatorItem()
+        self.__base_value_ind = IndicatorItem()
 
         self.__group.addToGroup(self.__model_output_line)
         self.__group.addToGroup(self.__low_item)
         self.__group.addToGroup(self.__high_item)
-        self.__group.addToGroup(self.__indicator)
+        self.__group.addToGroup(self.__model_output_ind)
+        self.__group.addToGroup(self.__base_value_ind)
 
         self.__low_parts = []  # type: List[LowPartItem]
         self.__high_parts = []  # type: List[HighPartItem]
 
     @property
-    def indicator(self) -> IndicatorItem:
-        return self.__indicator
+    def model_output_ind(self) -> IndicatorItem:
+        return self.__model_output_ind
+
+    @property
+    def base_value_ind(self) -> IndicatorItem:
+        return self.__base_value_ind
 
     def set_data(self, data: PlotData, y_range: Tuple[float, float],
                  height: float):
         self.__range = y_range
         self.__value_range = data.value_range
         self.__model_output = data.model_output
+        self.__base_value = data.base_value
 
-        self.__indicator.set_text(self.__model_output)
+        self.__model_output_ind.set_text(self.__model_output)
+        self.__base_value_ind.set_text(self.__base_value)
 
         # TODO - remove if handled in explainer.py
         data.low_values = [v for v in data.low_values if v]
@@ -235,10 +244,8 @@ class StripeItem(QGraphicsWidget):
 
         self.__low_item.setRect(QRectF(0, y1, self.WIDTH, h1))
         self.__high_item.setRect(QRectF(0, y2, self.WIDTH, h2))
-        self.__model_output_line.setLine(
-            0, y2, -StripePlot.SPACING - IndicatorItem.MARGIN, y2)
-        ind_h = self.__indicator.boundingRect().height()
-        self.__indicator.setY(y2 - ind_h / 2)
+
+        self._set_indicators_pos(height)
 
         def adjust_y_text_low(i):
             k = 0.4 if i == len(self.__low_parts) - 1 else 0.8
@@ -271,11 +278,24 @@ class StripeItem(QGraphicsWidget):
             y = y + y_delta
             item.setY(y)
 
+    def _set_indicators_pos(self, height: float):
+        mo_y = height * (self.__range[1] - self.__model_output)
+        mo_h = self.__model_output_ind.boundingRect().height()
+        self.__model_output_ind.setY(mo_y - mo_h / 2)
+        self.__model_output_line.setLine(
+            0, mo_y, -StripePlot.SPACING - IndicatorItem.MARGIN, mo_y)
+
+        bv_y = height * (self.__range[1] - self.__base_value)
+        bv_h = self.__base_value_ind.boundingRect().height()
+        self.__base_value_ind.setY(bv_y - bv_h / 2)
+        collides = _collides(mo_y, mo_y + mo_h, bv_y, bv_y + bv_h, d=6)
+        self.__base_value_ind.setVisible(not collides)
+
 
 class AxisItem(pg.AxisItem):
-    def __init__(self, indicator: IndicatorItem, **kwargs):
+    def __init__(self, indicators: List[IndicatorItem], **kwargs):
         super().__init__(**kwargs)
-        self.__plot_indicator = indicator
+        self.__plot_indicators = indicators
 
     def drawPicture(self, p: QPainter, axis_spec: Tuple, tick_specs: List,
                     text_specs: List):
@@ -289,10 +309,18 @@ class AxisItem(pg.AxisItem):
     def __collides_with_indicator(self, rect: QRectF) -> bool:
         y1 = rect.y()
         y2 = y1 + rect.height()
-        ind_y1 = self.__plot_indicator.y()
-        ind_y2 = ind_y1 + self.__plot_indicator.boundingRect().height()
-        d = 4
-        return ind_y1 - d <= y2 <= ind_y2 + d or ind_y1 - d <= y1 <= ind_y2 + d
+        for indicator in self.__plot_indicators:
+            if not indicator.isVisible():
+                continue
+            ind_y1 = indicator.y()
+            ind_y2 = ind_y1 + indicator.boundingRect().height()
+            if _collides(ind_y1, ind_y2, y1, y2):
+                return True
+        return False
+
+
+def _collides(ind_y1, ind_y2, y1, y2, d=4):
+    return ind_y1 - d <= y2 <= ind_y2 + d or ind_y1 - d <= y1 <= ind_y2 + d
 
 
 class StripePlot(QGraphicsWidget):
@@ -312,7 +340,8 @@ class StripePlot(QGraphicsWidget):
         self.setLayout(self.__layout)
 
         self.__stripe_item = StripeItem(self)
-        self.__left_axis = AxisItem(self.__stripe_item.indicator,
+        self.__left_axis = AxisItem([self.__stripe_item.model_output_ind,
+                                     self.__stripe_item.base_value_ind],
                                     parent=self, orientation="left",
                                     maxTickLength=7, pen=QPen(Qt.black))
 
