@@ -210,11 +210,13 @@ class StripeItem(QGraphicsWidget):
         self.__low_cover_item = LowCoverItem()
         self.__high_cover_item = HighCoverItem()
 
-        self.__model_output_line = QGraphicsLineItem()
         pen = QPen(IndicatorItem.COLOR)
         pen.setStyle(Qt.DashLine)
         pen.setWidth(1)
+        self.__model_output_line = QGraphicsLineItem()
         self.__model_output_line.setPen(pen)
+        self.__base_value_line = QGraphicsLineItem()
+        self.__base_value_line.setPen(pen)
 
         self.__model_output_ind = IndicatorItem()
         self.__base_value_ind = IndicatorItem()
@@ -224,6 +226,7 @@ class StripeItem(QGraphicsWidget):
         self.__group.addToGroup(self.__low_cover_item)
         self.__group.addToGroup(self.__high_cover_item)
         self.__group.addToGroup(self.__model_output_line)
+        self.__group.addToGroup(self.__base_value_line)
         self.__group.addToGroup(self.__model_output_ind)
         self.__group.addToGroup(self.__base_value_ind)
 
@@ -332,6 +335,9 @@ class StripeItem(QGraphicsWidget):
         bv_y = height * (self.__range[1] - self.__base_value)
         bv_h = self.__base_value_ind.boundingRect().height()
         self.__base_value_ind.setY(bv_y - bv_h / 2)
+        self.__base_value_line.setLine(
+            -StripePlot.SPACING, bv_y,
+            -StripePlot.SPACING - IndicatorItem.MARGIN, bv_y)
         collides = _collides(mo_y, mo_y + mo_h, bv_y, bv_y + bv_h, d=6)
         self.__base_value_ind.setVisible(not collides)
 
