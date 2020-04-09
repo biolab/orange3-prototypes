@@ -251,9 +251,6 @@ class StripeItem(QGraphicsWidget):
         self.__model_output_ind.set_text(self.__model_output)
         self.__base_value_ind.set_text(self.__base_value)
 
-        # TODO - remove if handled in explainer.py
-        data.low_values = [v for v in data.low_values if v]
-        data.high_values = [v for v in data.high_values if v]
         for value, label in zip(data.low_values, data.low_labels):
             self.__add_part(value, label, value / sum(data.low_values),
                             self.__low_parts, LowPartItem)
@@ -263,10 +260,12 @@ class StripeItem(QGraphicsWidget):
         if self.__low_parts:
             self.__low_parts[-1].setVisible(False)
         else:
+            self.__low_item.setVisible(False)
             self.__low_cover_item.setVisible(False)
         if self.__high_parts:
             self.__high_parts[-1].setVisible(False)
         else:
+            self.__high_item.setVisible(False)
             self.__high_cover_item.setVisible(False)
 
         self.set_height(height)
@@ -280,6 +279,8 @@ class StripeItem(QGraphicsWidget):
         self.__group.addToGroup(item.label_item)
 
     def set_height(self, height: float):
+        if self.__range[1] == self.__range[0]:
+            return
         height = height / (self.__range[1] - self.__range[0])
 
         y_top = height * (self.__range[1] - self.__value_range[1])
