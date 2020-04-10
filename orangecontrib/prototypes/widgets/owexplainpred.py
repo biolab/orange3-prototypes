@@ -455,6 +455,8 @@ class OWExplainPrediction(OWWidget, ConcurrentWidgetMixin):
         self.background_data = None  # type: Optional[Table]
         self.data = None  # type: Optional[Table]
         self._stripe_plot = None  # type: Optional[StripePlot]
+        self.mo_info = ""
+        self.bv_info = ""
         self.setup_gui()
 
     def setup_gui(self):
@@ -480,6 +482,10 @@ class OWExplainPrediction(OWWidget, ConcurrentWidgetMixin):
                     createLabel=False, callback=self.__size_slider_changed)
 
         gui.rubber(self.controlArea)
+
+        box = gui.vBox(self.controlArea, "Prediction info")
+        gui.label(box, self, "%(mo_info)s")
+        gui.label(box, self, "%(bv_info)s")
 
     def __target_combo_changed(self):
         self.update_scene()
@@ -525,6 +531,8 @@ class OWExplainPrediction(OWWidget, ConcurrentWidgetMixin):
         self.start(run, data, self.background_data, self.model)
 
     def clear(self):
+        self.mo_info = ""
+        self.bv_info = ""
         self.__results = None
         self.cancel()
         self.clear_scene()
@@ -556,6 +564,8 @@ class OWExplainPrediction(OWWidget, ConcurrentWidgetMixin):
 
     def update_scene(self):
         self.clear_scene()
+        self.mo_info = ""
+        self.bv_info = ""
         scores = None
         if self.__results is not None:
             data = self.__results.transformed_data
@@ -574,6 +584,9 @@ class OWExplainPrediction(OWWidget, ConcurrentWidgetMixin):
                                  model_output=pred[index][self.target_index],
                                  base_value=base[self.target_index])
             self.setup_plot(plot_data)
+
+            self.mo_info = f"Model output: {round(plot_data.model_output, 3)}"
+            self.bv_info = f"Base value: {round(plot_data.base_value, 3)}"
 
             assert isinstance(self.__results.values, list)
             scores = self.__results.values[self.target_index][0, :]
