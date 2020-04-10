@@ -53,6 +53,16 @@ def run(data: Table, background_data: Table, model: Model, state: TaskState) \
                          transformed_data=data, base_value=base_value)
 
 
+def _collides(ind_y1: float, ind_y2: float, y1: float, y2: float, d=4) -> bool:
+    return ind_y1 - d <= y2 <= ind_y2 + d or ind_y1 - d <= y1 <= ind_y2 + d
+
+
+def _str(x: float, n=2) -> str:
+    if x == int(x):
+        return str(int(x))
+    return "%.1e" % x if abs(x) >= 1000 or abs(x) <= 0.01 else str(round(x, n))
+
+
 class PartItem(QGraphicsPathItem):
     COLOR = NotImplemented
     TIP_LEN = 13
@@ -69,18 +79,19 @@ class PartItem(QGraphicsPathItem):
         self.setPen(pen)
 
         value = np.abs(value)
-        self.value_item = item = QGraphicsSimpleTextItem(str(round(value, 2)))
+        self.value_item = item = QGraphicsSimpleTextItem(_str(value))
         item.setToolTip(str(value))
-        width = item.boundingRect().width()
-        item.setX(StripeItem.WIDTH / 2 - width / 2)
         font = item.font()
         font.setPixelSize(11)
         item.setFont(font)
+        width = item.boundingRect().width()
+        item.setX(StripeItem.WIDTH / 2 - width / 2)
         item.setPen(color)
         item.setBrush(color)
 
         self.label_item = QGraphicsSimpleTextItem(
-            f"{label[0]} = {str(label[1])}")
+            f"{label[0]} = {_str(label[1])}")
+        self.label_item.setToolTip(f"{label[0]} = {label[1]}")
         self.label_item.setX(StripeItem.WIDTH + StripePlot.SPACING)
 
     @property
@@ -162,8 +173,12 @@ class IndicatorItem(QGraphicsSimpleTextItem):
         self.setPen(QPen(Qt.NoPen))
         self.setBrush(QColor(Qt.white))
 
-    def set_text(self, value: float):
-        self.setText(str(np.round(value, 2)))
+    def set_text(self, value: float, range_: float):
+        try:
+            n_dec = int(np.ceil(-np.log10(range_/10)))
+        except:
+            n_dec = 2
+        self.setText(_str(value, n_dec))
         self.setToolTip(str(value))
         width = self.boundingRect().width()
         self.setX(-width - self.MARGIN - self.PADDING - StripePlot.SPACING)
@@ -248,8 +263,9 @@ class StripeItem(QGraphicsWidget):
         self.__model_output = data.model_output
         self.__base_value = data.base_value
 
-        self.__model_output_ind.set_text(self.__model_output)
-        self.__base_value_ind.set_text(self.__base_value)
+        r = self.__range[1] - self.__range[0]
+        self.__model_output_ind.set_text(self.__model_output, r)
+        self.__base_value_ind.set_text(self.__base_value, r)
 
         for value, label in zip(data.low_values, data.low_labels):
             self.__add_part(value, label, value / sum(data.low_values),
@@ -309,6 +325,8 @@ class StripeItem(QGraphicsWidget):
         self._set_indicators_pos(height)
 
         def adjust_y_text_low(i):
+            # adjust label y according to TIP_LEN
+            # adjust for 0.8 * TIP_LEN, because label is not 1 pixel wide
             k = 0.4 if i == len(self.__low_parts) - 1 else 0.8
             return PartItem.TIP_LEN * k
 
@@ -386,14 +404,10 @@ class AxisItem(pg.AxisItem):
         return False
 
 
-def _collides(ind_y1, ind_y2, y1, y2, d=4):
-    return ind_y1 - d <= y2 <= ind_y2 + d or ind_y1 - d <= y1 <= ind_y2 + d
-
-
 class StripePlot(QGraphicsWidget):
     HEIGHT = 400
     SPACING = 20
-    MARGIN = 20
+    MARGIN = 30
 
     def __init__(self):
         super().__init__()
@@ -601,8 +615,8 @@ class OWExplainPrediction(OWWidget, ConcurrentWidgetMixin):
                                  base_value=base[self.target_index])
             self.setup_plot(plot_data)
 
-            self.mo_info = f"Model output: {round(plot_data.model_output, 3)}"
-            self.bv_info = f"Base value: {round(plot_data.base_value, 3)}"
+            self.mo_info = f"Model output: {_str(plot_data.model_output)}"
+            self.bv_info = f"Base value: {_str(plot_data.base_value)}"
 
             assert isinstance(self.__results.values, list)
             scores = self.__results.values[self.target_index][0, :]
