@@ -268,6 +268,7 @@ class StripeItem(QGraphicsWidget):
             self.__high_item.setVisible(False)
             self.__high_cover_item.setVisible(False)
 
+        self.set_z_values()
         self.set_height(height)
 
     def __add_part(self, value: float, label: Tuple[str, str], norm_val: float,
@@ -277,6 +278,18 @@ class StripeItem(QGraphicsWidget):
         self.__group.addToGroup(item)
         self.__group.addToGroup(item.value_item)
         self.__group.addToGroup(item.label_item)
+
+    def set_z_values(self):
+        if len(self.__high_parts) < len(self.__low_parts):
+            self.__high_cover_item.setZValue(-2)
+            self.__high_item.setZValue(-3)
+            for i, item in enumerate(self.__high_parts):
+                item.setZValue(-1)
+        else:
+            self.__low_cover_item.setZValue(-2)
+            self.__low_item.setZValue(-3)
+            for i, item in enumerate(self.__low_parts):
+                item.setZValue(-1)
 
     def set_height(self, height: float):
         if self.__range[1] == self.__range[0]:
@@ -308,8 +321,7 @@ class StripeItem(QGraphicsWidget):
         self._set_parts_pos(height, y_bot, h_bot / height,
                             self.__high_parts, adjust_y_text_high)
 
-    @staticmethod
-    def _set_parts_pos(height: float, y: float, diff: float,
+    def _set_parts_pos(self, height: float, y: float, diff: float,
                        parts: List[PartItem], adjust_y: Callable):
         for i, item in enumerate(parts):
             y_delta = height * item.norm_value * diff
@@ -317,11 +329,15 @@ class StripeItem(QGraphicsWidget):
             y_text = y + y_delta / 2 - item.value_height / 2
             visible = y_delta > item.value_height + 8
 
-            item.value_item.setY(y_text + adjust_y(i))
-            item.value_item.setVisible(visible)
+            y_test_adj = y_text + adjust_y(i)
+            y_mid = height * (self.__range[1] - self.__model_output)
+            collides = _collides(y_mid, y_mid, y_test_adj, y_test_adj +
+                                 item.value_item.boundingRect().height())
+            item.value_item.setVisible(visible and not collides)
+            item.value_item.setY(y_test_adj)
 
-            item.label_item.setY(y_text)
             item.label_item.setVisible(visible)
+            item.label_item.setY(y_text)
 
             y = y + y_delta
             item.setY(y)
@@ -478,7 +494,7 @@ class OWExplainPrediction(OWWidget, ConcurrentWidgetMixin):
                                           contentsLength=12)
 
         box = gui.hBox(self.controlArea, "Stripe height")
-        gui.hSlider(box, self, "stripe_len", None, minValue=1, maxValue=100,
+        gui.hSlider(box, self, "stripe_len", None, minValue=1, maxValue=500,
                     createLabel=False, callback=self.__size_slider_changed)
 
         gui.rubber(self.controlArea)
