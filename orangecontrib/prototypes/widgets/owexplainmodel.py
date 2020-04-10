@@ -27,7 +27,7 @@ from Orange.widgets.utils.widgetpreview import WidgetPreview
 from Orange.widgets.widget import Input, Output, OWWidget, Msg
 
 from orangecontrib.prototypes.explanation.explainer import \
-    get_shap_values_and_colors, RGB_LOW, RGB_HIGH
+    get_shap_values_and_colors, RGB_LOW, RGB_HIGH, temp_seed
 
 
 class Results(SimpleNamespace):
@@ -169,7 +169,6 @@ class ViolinItem(QGraphicsWidget):
             colors = color_data[x_data == np.round(x, 3)]
             y = self.HEIGHT / 2 - self.POINT_R / 2
 
-            np.random.seed(0)
             colors = list(colors[np.random.choice(len(colors), 11)])
             put_point(x, y, colors.pop())  # y = 0
             if d > 0:
@@ -282,14 +281,15 @@ class ViolinPlot(QGraphicsWidget):
 
     def _set_violin_items(self, x: np.ndarray, colors: np.ndarray,
                           labels: List[str]):
-        for i in range(x.shape[1]):
-            item = ViolinItem(self, labels[i], self.__range)
-            item.set_data(x[:, i], colors[:, i])
-            item.selection_changed.connect(self.select)
-            self.__violin_items.append(item)
-            self.__layout.addItem(item, i, ViolinPlot.VIOLIN_COLUMN)
-            if i == self.MAX_N_ITEMS:
-                break
+        with temp_seed(0):
+            for i in range(x.shape[1]):
+                item = ViolinItem(self, labels[i], self.__range)
+                item.set_data(x[:, i], colors[:, i])
+                item.selection_changed.connect(self.select)
+                self.__violin_items.append(item)
+                self.__layout.addItem(item, i, ViolinPlot.VIOLIN_COLUMN)
+                if i == self.MAX_N_ITEMS:
+                    break
 
     def _set_labels(self, labels: List[str]):
         for i, (label, _) in enumerate(zip(labels, self.__violin_items)):
@@ -479,7 +479,8 @@ class OWExplainModel(OWWidget, ConcurrentWidgetMixin):
             indices = np.argsort(scores_x)[::-1]
             colors = self.__results.colors
             names = [self.__results.names[i] for i in indices]
-            self.setup_plot(x[:, indices], colors[:, indices], names)
+            if x.shape[1]:
+                self.setup_plot(x[:, indices], colors[:, indices], names)
             scores = self.create_scores_table(scores_x, self.__results.names)
         self.Outputs.scores.send(scores)
 
