@@ -413,7 +413,8 @@ class AxisItem(pg.AxisItem):
 class StripePlot(QGraphicsWidget):
     HEIGHT = 400
     SPACING = 20
-    MARGIN = 30
+    HMARGIN = 30
+    VMARGIN = 20
 
     def __init__(self):
         super().__init__()
@@ -423,7 +424,8 @@ class StripePlot(QGraphicsWidget):
         self.__layout = QGraphicsLinearLayout()
         self.__layout.setOrientation(Qt.Horizontal)
         self.__layout.setSpacing(self.SPACING)
-        self.__layout.setContentsMargins(*[self.MARGIN] * 4)
+        self.__layout.setContentsMargins(self.HMARGIN, self.VMARGIN,
+                                         self.HMARGIN, self.VMARGIN)
         self.setLayout(self.__layout)
 
         self.__stripe_item = StripeItem(self)
@@ -440,7 +442,7 @@ class StripePlot(QGraphicsWidget):
         return self.HEIGHT + 10 * self.__height
 
     def set_data(self, data: PlotData, height: float):
-        diff = (data.value_range[1] - data.value_range[0]) * 0.1
+        diff = (data.value_range[1] - data.value_range[0]) * 0.01
         self.__range = (data.value_range[0] - diff, data.value_range[1] + diff)
         self.__left_axis.setRange(*self.__range)
         self.__height = height
@@ -453,8 +455,8 @@ class StripePlot(QGraphicsWidget):
 
     def sizeHint(self, *_) -> QSizeF:
         return QSizeF(self.__left_axis.boundingRect().width() +
-                      self.__stripe_item.total_width + self.MARGIN * 2,
-                      self.height + self.MARGIN * 2)
+                      self.__stripe_item.total_width + self.HMARGIN * 2,
+                      self.height + self.VMARGIN * 2)
 
 
 class OWExplainPrediction(OWWidget, ConcurrentWidgetMixin):
@@ -481,7 +483,7 @@ class OWExplainPrediction(OWWidget, ConcurrentWidgetMixin):
 
     settingsHandler = ClassValuesContextHandler()
     target_index = ContextSetting(0)
-    stripe_len = Setting(1)
+    stripe_len = Setting(10)
 
     graph_name = "scene"
 
@@ -673,7 +675,7 @@ class OWExplainPrediction(OWWidget, ConcurrentWidgetMixin):
 
     def sizeHint(self) -> QSizeF:
         sh = self.controlArea.sizeHint()
-        return sh.expandedTo(QSize(600, 520))
+        return sh.expandedTo(QSize(700, 700))
 
     def send_report(self):
         if not self.data or not self.model:
