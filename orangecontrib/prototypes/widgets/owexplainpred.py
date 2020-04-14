@@ -507,7 +507,7 @@ class OWExplainPrediction(OWWidget, ConcurrentWidgetMixin):
                                           callback=self.__target_combo_changed,
                                           contentsLength=12)
 
-        box = gui.hBox(self.controlArea, "Stripe height")
+        box = gui.hBox(self.controlArea, "Zoom")
         gui.hSlider(box, self, "stripe_len", None, minValue=1, maxValue=500,
                     createLabel=False, callback=self.__size_slider_changed)
 
