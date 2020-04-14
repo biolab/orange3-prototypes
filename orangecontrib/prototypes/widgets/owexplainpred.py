@@ -249,6 +249,12 @@ class StripeItem(QGraphicsWidget):
         self.__high_parts = []  # type: List[HighPartItem]
 
     @property
+    def total_width(self):
+        widths = [part.label_item.boundingRect().width()
+                  for part in self.__low_parts + self.__high_parts] + [0]
+        return self.WIDTH + StripePlot.SPACING + max(widths)
+
+    @property
     def model_output_ind(self) -> IndicatorItem:
         return self.__model_output_ind
 
@@ -446,7 +452,9 @@ class StripePlot(QGraphicsWidget):
         self.updateGeometry()
 
     def sizeHint(self, *_) -> QSizeF:
-        return QSizeF(200, self.height + self.MARGIN * 2)
+        return QSizeF(self.__left_axis.boundingRect().width() +
+                      self.__stripe_item.total_width + self.MARGIN * 2,
+                      self.height + self.MARGIN * 2)
 
 
 class OWExplainPrediction(OWWidget, ConcurrentWidgetMixin):
