@@ -578,6 +578,11 @@ class OWExplainModel(OWWidget, ConcurrentWidgetMixin):
     def send_report(self):
         if not self.data or not self.model:
             return
+        items = {"Target class": "None"}
+        if self.model.domain.has_discrete_class:
+            class_var = self.model.domain.class_var
+            items["Target class"] = class_var.values[self.target_index]
+        self.report_items(items)
         self.report_plot()
 
 

@@ -171,6 +171,17 @@ class TestOWExplainPrediction(WidgetTest):
         self.send_signal(self.widget.Inputs.data, None)
         self.assertFalse(self.widget.Information.multiple_instances.is_shown())
 
+    def test_send_report(self):
+        self.widget.send_report()
+        self.send_signal(self.widget.Inputs.data, self.iris[:1])
+        self.send_signal(self.widget.Inputs.background_data, self.iris)
+        self.send_signal(self.widget.Inputs.model, self.rf_cls)
+        self.widget.send_report()
+        self.send_signal(self.widget.Inputs.data, self.housing[:1])
+        self.send_signal(self.widget.Inputs.background_data, self.housing)
+        self.send_signal(self.widget.Inputs.model, self.rf_reg)
+        self.widget.send_report()
+
     def assertPlotEmpty(self, plot: StripePlot):
         self.assertIsNone(plot)
 

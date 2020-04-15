@@ -231,6 +231,15 @@ class TestOWExplainModel(WidgetTest):
         self.wait_until_finished()
         self.assertFalse(self.widget.Information.data_sampled.is_shown())
 
+    def test_send_report(self):
+        self.widget.send_report()
+        self.send_signal(self.widget.Inputs.data, self.iris)
+        self.send_signal(self.widget.Inputs.model, self.rf_cls)
+        self.widget.send_report()
+        self.send_signal(self.widget.Inputs.data, self.housing)
+        self.send_signal(self.widget.Inputs.model, self.rf_reg)
+        self.widget.send_report()
+
     def assertPlotEmpty(self, plot: ViolinPlot):
         self.assertIsNone(plot)
 

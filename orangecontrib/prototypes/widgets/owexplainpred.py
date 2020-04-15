@@ -168,8 +168,9 @@ class IndicatorItem(QGraphicsSimpleTextItem):
     PADDING = 2
     MARGIN = 10
 
-    def __init__(self):
+    def __init__(self, tooltip_prefix):
         super().__init__()
+        self.__tooltip_prefix = tooltip_prefix
         self.setPen(QPen(Qt.NoPen))
         self.setBrush(QColor(Qt.white))
 
@@ -179,7 +180,7 @@ class IndicatorItem(QGraphicsSimpleTextItem):
         except:
             n_dec = 2
         self.setText(_str(value, n_dec))
-        self.setToolTip(str(value))
+        self.setToolTip(self.__tooltip_prefix.format(value))
         width = self.boundingRect().width()
         self.setX(-width - self.MARGIN - self.PADDING - StripePlot.SPACING)
 
@@ -233,8 +234,9 @@ class StripeItem(QGraphicsWidget):
         self.__base_value_line = QGraphicsLineItem()
         self.__base_value_line.setPen(pen)
 
-        self.__model_output_ind = IndicatorItem()
-        self.__base_value_ind = IndicatorItem()
+        self.__model_output_ind = IndicatorItem("Model prediction: {}")
+        self.__base_value_ind = IndicatorItem("Base value: {}\nThe average "
+                                              "prediction for selected class.")
 
         self.__group.addToGroup(self.__low_item)
         self.__group.addToGroup(self.__high_item)
@@ -247,6 +249,12 @@ class StripeItem(QGraphicsWidget):
 
         self.__low_parts = []  # type: List[LowPartItem]
         self.__high_parts = []  # type: List[HighPartItem]
+
+    @property
+    def total_width(self):
+        widths = [part.label_item.boundingRect().width()
+                  for part in self.__low_parts + self.__high_parts] + [0]
+        return self.WIDTH + StripePlot.SPACING + max(widths)
 
     @property
     def model_output_ind(self) -> IndicatorItem:
@@ -407,7 +415,8 @@ class AxisItem(pg.AxisItem):
 class StripePlot(QGraphicsWidget):
     HEIGHT = 400
     SPACING = 20
-    MARGIN = 30
+    HMARGIN = 30
+    VMARGIN = 20
 
     def __init__(self):
         super().__init__()
@@ -417,7 +426,8 @@ class StripePlot(QGraphicsWidget):
         self.__layout = QGraphicsLinearLayout()
         self.__layout.setOrientation(Qt.Horizontal)
         self.__layout.setSpacing(self.SPACING)
-        self.__layout.setContentsMargins(*[self.MARGIN] * 4)
+        self.__layout.setContentsMargins(self.HMARGIN, self.VMARGIN,
+                                         self.HMARGIN, self.VMARGIN)
         self.setLayout(self.__layout)
 
         self.__stripe_item = StripeItem(self)
@@ -434,7 +444,7 @@ class StripePlot(QGraphicsWidget):
         return self.HEIGHT + 10 * self.__height
 
     def set_data(self, data: PlotData, height: float):
-        diff = (data.value_range[1] - data.value_range[0]) * 0.1
+        diff = (data.value_range[1] - data.value_range[0]) * 0.01
         self.__range = (data.value_range[0] - diff, data.value_range[1] + diff)
         self.__left_axis.setRange(*self.__range)
         self.__height = height
@@ -446,7 +456,9 @@ class StripePlot(QGraphicsWidget):
         self.updateGeometry()
 
     def sizeHint(self, *_) -> QSizeF:
-        return QSizeF(200, self.height + self.MARGIN * 2)
+        return QSizeF(self.__left_axis.boundingRect().width() +
+                      self.__stripe_item.total_width + self.HMARGIN * 2,
+                      self.height + self.VMARGIN * 2)
 
 
 class OWExplainPrediction(OWWidget, ConcurrentWidgetMixin):
@@ -473,7 +485,7 @@ class OWExplainPrediction(OWWidget, ConcurrentWidgetMixin):
 
     settingsHandler = ClassValuesContextHandler()
     target_index = ContextSetting(0)
-    stripe_len = Setting(1)
+    stripe_len = Setting(10)
 
     graph_name = "scene"
 
@@ -514,8 +526,9 @@ class OWExplainPrediction(OWWidget, ConcurrentWidgetMixin):
         gui.rubber(self.controlArea)
 
         box = gui.vBox(self.controlArea, "Prediction info")
-        gui.label(box, self, "%(mo_info)s")
-        gui.label(box, self, "%(bv_info)s")
+        gui.label(box, self, "%(mo_info)s")  # type: QLabel
+        bv_label = gui.label(box, self, "%(bv_info)s")  # type: QLabel
+        bv_label.setToolTip("The average prediction for selected class.")
 
     def __target_combo_changed(self):
         self.update_scene()
@@ -615,7 +628,7 @@ class OWExplainPrediction(OWWidget, ConcurrentWidgetMixin):
                                  base_value=base[self.target_index])
             self.setup_plot(plot_data)
 
-            self.mo_info = f"Model output: {_str(plot_data.model_output)}"
+            self.mo_info = f"Model prediction: {_str(plot_data.model_output)}"
             self.bv_info = f"Base value: {_str(plot_data.base_value)}"
 
             assert isinstance(self.__results.values, list)
@@ -665,11 +678,16 @@ class OWExplainPrediction(OWWidget, ConcurrentWidgetMixin):
 
     def sizeHint(self) -> QSizeF:
         sh = self.controlArea.sizeHint()
-        return sh.expandedTo(QSize(600, 520))
+        return sh.expandedTo(QSize(700, 700))
 
     def send_report(self):
-        if not self.data or not self.model:
+        if not self.data or not self.background_data or not self.model:
             return
+        items = {"Target class": "None"}
+        if self.model.domain.has_discrete_class:
+            class_var = self.model.domain.class_var
+            items["Target class"] = class_var.values[self.target_index]
+        self.report_items(items)
         self.report_plot()
 
 
