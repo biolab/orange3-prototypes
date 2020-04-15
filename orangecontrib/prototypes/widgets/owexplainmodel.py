@@ -3,7 +3,8 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from AnyQt.QtCore import Qt, QRectF, QSizeF, QSize, pyqtSignal as Signal
+from AnyQt.QtCore import Qt, QRectF, QSizeF, QSize, pyqtSignal as Signal, \
+    QTimer
 from AnyQt.QtGui import QColor, QPen, QBrush, QPainter, QLinearGradient
 from AnyQt.QtWidgets import QGraphicsItemGroup, QGraphicsLineItem, \
     QGraphicsScene, QGraphicsWidget, QGraphicsGridLayout, \
@@ -107,8 +108,9 @@ class Legend(QGraphicsWidget):
 
 
 class ViolinItem(QGraphicsWidget):
-    WIDTH, HEIGHT = 400, 40
-    POINT_R = 4
+    MIN_WIDTH, HEIGHT = 300, 50
+    OFFSET = 250
+    POINT_R = 6
     SCALE_FACTOR = 0.5
     selection_changed = Signal(float, float, str)
 
@@ -125,10 +127,12 @@ class ViolinItem(QGraphicsWidget):
             color = QColor(*self.COLOR)
             self.setPen(color)
 
-    def __init__(self, parent, attr_name: str, x_range: Tuple[float]):
+    def __init__(self, parent, attr_name: str, x_range: Tuple[float],
+                 view_width: int):
         super().__init__(parent)
         assert x_range[0] == -x_range[1]
         self.__attr_name = attr_name
+        self.__width = max(view_width - self.OFFSET, self.MIN_WIDTH)
         self.__range = x_range[1] if x_range[1] else 1
         self.__group = None  # type: Optional[QGraphicsItemGroup]
         self.__selection_rect = None  # type: Optional[QGraphicsRectItem]
@@ -137,6 +141,10 @@ class ViolinItem(QGraphicsWidget):
     @property
     def attr_name(self):
         return self.__attr_name
+
+    @property
+    def width(self):
+        return self.__width
 
     def set_data(self, x_data: np.ndarray, color_data: np.ndarray):
         def put_point(_x, _y, _c):
@@ -185,16 +193,16 @@ class ViolinItem(QGraphicsWidget):
         # round data to 3. decimal for sampling
         x = np.round(x, 3)
         # convert to pixels
-        return x * self.WIDTH + self.WIDTH / 2
+        return x * self.width + self.width / 2
 
     def _values_from_pixels(self, p: np.ndarray) -> np.ndarray:
         # convert from pixels
-        x = (p - self.WIDTH / 2) / self.WIDTH
+        x = (p - self.width / 2) / self.width
         # rescale data from [-0.5, 0.5]
         return np.round(x * self.__range / self.SCALE_FACTOR, 3)
 
     def sizeHint(self, *_):
-        return QSizeF(self.WIDTH, self.HEIGHT)
+        return QSizeF(self.width, self.HEIGHT)
 
     def __remove_selection_rect(self):
         if self.__selection_rect is not None:
@@ -239,8 +247,9 @@ class ViolinPlot(QGraphicsWidget):
     selection_cleared = Signal()
     selection_changed = Signal(float, float, str)
 
-    def __init__(self):
+    def __init__(self, view_width):
         super().__init__()
+        self.__view_width = view_width
         self.__range = None  # type: Optional[Tuple[float, float]]
         self.__violin_items = []  # type: List[ViolinItem]
         self.__bottom_axis = pg.AxisItem(parent=self, orientation="bottom",
@@ -275,7 +284,8 @@ class ViolinPlot(QGraphicsWidget):
             text_item = self.__layout.itemAt(i, ViolinPlot.LABEL_COLUMN).item
             text_item.setVisible(i < n)
 
-        x = ViolinItem.WIDTH / 2
+        x = self.__violin_items[0].width / 2 if self.__violin_items \
+            else ViolinItem.MIN_WIDTH / 2
         n = min(n, len(self.__violin_items))
         self.__vertical_line.setLine(x, 0, x, -ViolinItem.HEIGHT * n)
 
@@ -283,7 +293,8 @@ class ViolinPlot(QGraphicsWidget):
                           labels: List[str]):
         with temp_seed(0):
             for i in range(x.shape[1]):
-                item = ViolinItem(self, labels[i], self.__range)
+                item = ViolinItem(self, labels[i], self.__range,
+                                  self.__view_width)
                 item.set_data(x[:, i], colors[:, i])
                 item.selection_changed.connect(self.select)
                 self.__violin_items.append(item)
@@ -315,9 +326,9 @@ class ViolinPlot(QGraphicsWidget):
         self.selection_changed.emit(*args)
 
     def select_from_settings(self, x1: float, x2: float, attr_name: str):
-        point_r_diff = 2 * self.__range[1] / (ViolinItem.WIDTH / 2)
         for item in self.__violin_items:
             if item.attr_name == attr_name:
+                point_r_diff = 2 * self.__range[1] / (item.width / 2)
                 item.add_selection_rect(x1 - point_r_diff, x2 + point_r_diff)
                 break
         self.select(x1, x2, attr_name)
@@ -329,6 +340,24 @@ class GraphicsScene(QGraphicsScene):
     def mousePressEvent(self, event):
         self.mouse_clicked.emit(event)
         super().mousePressEvent(event)
+
+
+class GraphicsView(StickyGraphicsView):
+    resized = Signal()
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.__timer = None
+
+    def resizeEvent(self, ev):
+        if ev.size().width() != ev.oldSize().width():
+            if self.__timer is not None:
+                self.__timer.stop()
+            self.__timer = None
+            self.__timer = QTimer(self, interval=300, singleShot=True)
+            self.__timer.timeout.connect(self.resized)
+            self.__timer.start()
+        return super().resizeEvent(ev)
 
 
 class OWExplainModel(OWWidget, ConcurrentWidgetMixin):
@@ -378,7 +407,8 @@ class OWExplainModel(OWWidget, ConcurrentWidgetMixin):
 
     def _add_plot(self):
         self.scene = GraphicsScene()
-        self.view = StickyGraphicsView(self.scene)
+        self.view = GraphicsView(self.scene)
+        self.view.resized.connect(self.update_scene)
         self.view.setRenderHint(QPainter.Antialiasing, True)
         self.view.setAlignment(Qt.AlignTop | Qt.AlignLeft)
         self.mainArea.layout().addWidget(self.view)
@@ -485,7 +515,8 @@ class OWExplainModel(OWWidget, ConcurrentWidgetMixin):
         self.Outputs.scores.send(scores)
 
     def setup_plot(self, x: np.ndarray, colors: np.ndarray, names: List[str]):
-        self._violin_plot = ViolinPlot()
+        width = int(self.view.viewport().rect().width())
+        self._violin_plot = ViolinPlot(width)
         self._violin_plot.set_data(x, colors, names, self.n_attributes)
         self._violin_plot.selection_cleared.connect(self.clear_selection)
         self._violin_plot.selection_changed.connect(self.update_selection)
