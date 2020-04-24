@@ -57,10 +57,14 @@ def _collides(ind_y1: float, ind_y2: float, y1: float, y2: float, d=4) -> bool:
     return ind_y1 - d <= y2 <= ind_y2 + d or ind_y1 - d <= y1 <= ind_y2 + d
 
 
-def _str(x: float, n=2) -> str:
-    if x == int(x):
+def _str(x: float, n_dec=2) -> str:
+    _max = 10000
+    if not np.isnan(x) and x == int(x) and abs(x) < _max:
         return str(int(x))
-    return "%.1e" % x if abs(x) >= 1000 or abs(x) <= 0.01 else str(round(x, n))
+    elif 10 / _max < abs(x) < _max:
+        return str(round(x, max(n_dec, 1)))
+    else:
+        return "%.*e" % (max(n_dec, 1), x)
 
 
 class PartItem(QGraphicsPathItem):
@@ -80,7 +84,7 @@ class PartItem(QGraphicsPathItem):
 
         value = np.abs(value)
         self.value_item = item = QGraphicsSimpleTextItem(_str(value))
-        item.setToolTip(str(value))
+        item.setToolTip(_str(value, 3))
         font = item.font()
         font.setPixelSize(11)
         item.setFont(font)
@@ -91,7 +95,7 @@ class PartItem(QGraphicsPathItem):
 
         self.label_item = QGraphicsSimpleTextItem(
             f"{label[0]} = {_str(label[1])}")
-        self.label_item.setToolTip(f"{label[0]} = {label[1]}")
+        self.label_item.setToolTip(f"{label[0]} = {_str(label[1], 3)}")
         self.label_item.setX(StripeItem.WIDTH + StripePlot.SPACING)
 
     @property
@@ -176,11 +180,11 @@ class IndicatorItem(QGraphicsSimpleTextItem):
 
     def set_text(self, value: float, range_: float):
         try:
-            n_dec = int(np.ceil(-np.log10(range_/10)))
+            n_dec = max(int(np.ceil(-np.log10(range_/10))), 2)
         except:
             n_dec = 2
         self.setText(_str(value, n_dec))
-        self.setToolTip(self.__tooltip_prefix.format(value))
+        self.setToolTip(self.__tooltip_prefix.format(_str(value, n_dec + 1)))
         width = self.boundingRect().width()
         self.setX(-width - self.MARGIN - self.PADDING - StripePlot.SPACING)
 
