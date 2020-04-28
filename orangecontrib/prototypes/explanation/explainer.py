@@ -97,7 +97,10 @@ def _join_shap_values(
 
 
 def _explain_trees(
-    model: Model, transformed_data: Table, progress_callback: Callable
+    model: Model,
+    transformed_data: Table,
+    transformed_reference_data: Table,
+    progress_callback: Callable,
 ) -> Tuple[
     Optional[List[np.ndarray]], Optional[np.ndarray], Optional[np.ndarray]
 ]:
@@ -111,13 +114,13 @@ def _explain_trees(
         return None, None, None
     try:
         explainer = TreeExplainer(
-            model.skl_model, feature_perturbation="tree_path_dependent"
+            model.skl_model, data=sample(transformed_reference_data.X, 100),
         )
     except (SHAPError, AttributeError):
         return None, None, None
 
-    # TreeExplaner cannot explain in normal time more cases than 10000
-    data_sample, sample_mask = _subsample_data(transformed_data, 10000)
+    # TreeExplaner cannot explain in normal time more cases than 1000
+    data_sample, sample_mask = _subsample_data(transformed_data, 1000)
     num_classes = (
         len(transformed_data.domain.class_var.values)
         if transformed_data.domain.class_var.is_discrete
@@ -238,7 +241,10 @@ def compute_shap_values(
         reference_data_transformed = model.data_to_model_domain(reference_data)
 
         shap_values, sample_mask, base_value = _explain_trees(
-            model, data_transformed, progress_callback
+            model,
+            data_transformed,
+            reference_data_transformed,
+            progress_callback,
         )
         if shap_values is None:
             shap_values, sample_mask, base_value = _explain_other_models(
