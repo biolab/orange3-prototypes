@@ -53,6 +53,7 @@ def run(data: Table, model: Model, state: TaskState) -> Results:
 
 
 class Legend(QGraphicsWidget):
+    WIDTH = 30
     BAR_WIDTH = 7
 
     def __init__(self, parent):
@@ -103,7 +104,7 @@ class Legend(QGraphicsWidget):
         self.__group.addToGroup(item)
 
     def sizeHint(self, *_):
-        return QSizeF(30, ViolinItem.HEIGHT)
+        return QSizeF(self.WIDTH, ViolinItem.HEIGHT)
 
 
 class ViolinItem(QGraphicsWidget):
@@ -340,6 +341,12 @@ class ViolinPlot(QGraphicsWidget):
         x = self.violin_column_width / 2
         self.__vertical_line.setLine(x, 0, x, self.__vertical_line.line().y2())
 
+    def show_legend(self, show: bool):
+        self.__legend.setVisible(show)
+        self.__bottom_axis.setWidth(self.violin_column_width)
+        x = self.violin_column_width / 2
+        self.__vertical_line.setLine(x, 0, x, self.__vertical_line.line().y2())
+
     def _set_violin_items(self, x: np.ndarray, colors: np.ndarray,
                           labels: List[str]):
         with temp_seed(0):
@@ -431,6 +438,7 @@ class OWExplainModel(OWWidget, ConcurrentWidgetMixin):
     settingsHandler = ClassValuesContextHandler()
     target_index = ContextSetting(0)
     n_attributes = Setting(10)
+    show_legend = Setting(True)
     selection = Setting((), schema_only=True)  # type: Tuple[str, List[int]]
     auto_send = Setting(True)
 
@@ -471,6 +479,9 @@ class OWExplainModel(OWWidget, ConcurrentWidgetMixin):
         gui.label(box, self, "Best ranked: ")
         gui.spin(box, self, "n_attributes", 1, ViolinPlot.MAX_N_ITEMS,
                  controlWidth=80, callback=self.__n_spin_changed)
+        box = gui.hBox(self.controlArea, True)
+        gui.checkBox(box, self, "show_legend", "Show legend",
+                     callback=self.__show_check_changed)
 
         gui.rubber(self.controlArea)
         box = gui.vBox(self.controlArea, box=True)
@@ -483,6 +494,10 @@ class OWExplainModel(OWWidget, ConcurrentWidgetMixin):
     def __n_spin_changed(self):
         if self._violin_plot is not None:
             self._violin_plot.set_n_visible(self.n_attributes)
+
+    def __show_check_changed(self):
+        if self._violin_plot is not None:
+            self._violin_plot.show_legend(self.show_legend)
 
     @Inputs.data
     @check_sql_input
@@ -565,6 +580,7 @@ class OWExplainModel(OWWidget, ConcurrentWidgetMixin):
         width = int(self.view.viewport().rect().width())
         self._violin_plot = ViolinPlot()
         self._violin_plot.set_data(x, colors, names, self.n_attributes, width)
+        self._violin_plot.show_legend(self.show_legend)
         self._violin_plot.selection_cleared.connect(self.clear_selection)
         self._violin_plot.selection_changed.connect(self.update_selection)
         self._violin_plot.layout().activate()

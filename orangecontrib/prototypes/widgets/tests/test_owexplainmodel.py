@@ -186,6 +186,13 @@ class TestOWExplainModel(WidgetTest):
         self.assertEqual(self.widget._target_combo.currentText(), "")
         self.assertTrue(self.widget._target_combo.isEnabled())
 
+    def test_show_legend(self):
+        self.widget.controls.show_legend.setChecked(False)
+        self.send_signal(self.widget.Inputs.data, self.iris)
+        self.widget.controls.show_legend.setChecked(True)
+        self.send_signal(self.widget.Inputs.data, None)
+        self.widget.controls.show_legend.setChecked(False)
+
     def test_plot(self):
         self.send_signal(self.widget.Inputs.data, self.iris)
         self.assertPlotEmpty(self.widget._violin_plot)
