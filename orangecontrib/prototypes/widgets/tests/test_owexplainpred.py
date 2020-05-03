@@ -52,7 +52,7 @@ class TestOWExplainPrediction(WidgetTest):
         self.send_signal(self.widget.Inputs.model, self.rf_reg)
         self.wait_until_finished()
         self.assertPlotEmpty(self.widget._stripe_plot)
-        self.assertTrue(self.widget.Error.unknown_err.is_shown())
+        self.assertTrue(self.widget.Error.domain_transform_err.is_shown())
 
     def test_regression_data_regression_model(self):
         self.send_signal(self.widget.Inputs.background_data, self.housing)

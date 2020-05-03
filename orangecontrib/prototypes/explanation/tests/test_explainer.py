@@ -9,7 +9,7 @@ from Orange.classification import (
     SVMLearner,
     TreeLearner,
 )
-from Orange.data import Table
+from Orange.data import Table, Domain
 from Orange.regression import LinearRegressionLearner
 from Orange.tests.test_classification import LearnerAccessibility
 from Orange.tests.test_regression import TestRegression
@@ -541,6 +541,29 @@ class TestExplainer(unittest.TestCase):
             labels,
         )
         self.assertListEqual([(-5, 4), (3, 13), (-6, 4)], ranges)
+
+    def test_no_class(self):
+        iris_no_class = Table.from_table(
+            Domain(self.iris.domain.attributes), self.iris
+        )
+
+        # tree
+        model = RandomForestLearner()(self.iris)
+        shap_values, _, sample_mask, _ = compute_shap_values(
+            model, iris_no_class, iris_no_class
+        )
+
+        self.assertTupleEqual(self.iris.X.shape, shap_values[0].shape)
+        self.assertTupleEqual((len(self.iris),), sample_mask.shape)
+
+        # kernel
+        model = LogisticRegressionLearner()(self.iris)
+        shap_values, _, sample_mask, _ = compute_shap_values(
+            model, iris_no_class, iris_no_class
+        )
+
+        self.assertTupleEqual(self.iris.X.shape, shap_values[0].shape)
+        self.assertTupleEqual((len(self.iris),), sample_mask.shape)
 
 
 if __name__ == "__main__":

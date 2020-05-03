@@ -9,7 +9,7 @@ from sklearn.cluster import KMeans
 from sklearn.impute import SimpleImputer
 
 from Orange.base import Model
-from Orange.data import Table
+from Orange.data import Table, Domain
 from Orange.util import dummy_callback, wrap_callback
 from shap import KernelExplainer, TreeExplainer
 from shap.common import DenseData, SHAPError, sample
@@ -119,8 +119,8 @@ def _explain_trees(
     # TreeExplaner cannot explain in normal time more cases than 10000
     data_sample, sample_mask = _subsample_data(transformed_data, 10000)
     num_classes = (
-        len(transformed_data.domain.class_var.values)
-        if transformed_data.domain.class_var.is_discrete
+        len(model.domain.class_var.values)
+        if model.domain.class_var.is_discrete
         else None
     )
 
@@ -442,8 +442,13 @@ def explain_predictions(
         progress_callback = dummy_callback
     progress_callback(0)
 
+    # prediction happens independent from the class -
+    # same than for prediction widget
+    classless_data = data.transform(
+        Domain(data.domain.attributes, None, data.domain.metas)
+    )
     predictions = model(
-        data, model.Probs if data.domain.class_var.is_discrete else model.Value
+        classless_data, model.Probs if model.domain.class_var.is_discrete else model.Value
     )
     # for regression - predictions array is 1d transform it shape N x 1
     if predictions.ndim == 1:
