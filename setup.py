@@ -27,6 +27,8 @@ DATA_FILES = [
     # Data files that will be installed outside site-packages folder
 ]
 
+LONG_DESCRIPTION = open(path.join(path.dirname(__file__), 'README.pypi')).read()
+
 
 def include_documentation(local_dir, install_dir):
     global DATA_FILES
@@ -53,6 +55,8 @@ if __name__ == '__main__':
         keywords=(
             'orange3 add-on',
         ),
+        long_description=LONG_DESCRIPTION,
+        long_description_content_type='text/markdown',
         packages=find_packages(),
         package_data={
             "orangecontrib.prototypes.widgets": ["icons/*.svg"],
