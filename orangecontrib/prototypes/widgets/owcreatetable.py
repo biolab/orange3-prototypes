@@ -149,6 +149,7 @@ class EditableTableModel(QAbstractTableModel):
 
 class OWCreateTable(OWWidget):
     name = "Create Table"
+    icon = "icons/CreateTable.png"
     priority = 50
     keywords = []
 
