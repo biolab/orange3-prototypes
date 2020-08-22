@@ -28,6 +28,7 @@ from qtconsole.manager import QtKernelManager
 from qtconsole.pygments_highlighter import PygmentsHighlighter
 from traitlets import DottedObjectName, Type
 
+from orangecanvas.gui.utils import message_question
 from Orange.canvas import config
 from Orange.widgets.data.utils.python_console import OrangeConsoleWidget
 from Orange.widgets.data.utils.pythoneditor.editor import PythonEditor
@@ -38,7 +39,6 @@ from Orange.widgets.utils import itemmodels
 from Orange.widgets.settings import Setting
 from Orange.widgets.utils.widgetpreview import WidgetPreview
 from Orange.widgets.widget import OWWidget, Input, Output, Msg
-from orangecanvas.gui.utils import message_question
 
 # pylint: disable=too-many-lines,too-many-instance-attributes
 
@@ -683,7 +683,9 @@ class OWPythonScript(OWWidget):
         kernel_client = kernel_manager.client()
         kernel_client.start_channels()
 
-        editor = PythonEditor(kernel_manager, kernel_client, self)
+        editor = PythonEditor(self)
+        editor.kernel_manager = kernel_manager
+        editor.kernel_client = kernel_client
         editor.setFont(eFont)
         editor.setup_completer_appearance((300, 180), eFont)
 

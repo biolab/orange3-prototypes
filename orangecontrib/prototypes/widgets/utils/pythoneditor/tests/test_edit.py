@@ -64,15 +64,6 @@ class Test(WidgetTest):
         self.qpart.document().undo()
         self.assertEqual(self.qpart.text, 'abcd')
 
-    def test_alt_does_not_type(self):
-        """ By default when Alt+Key is pressed - text is inserted.
-        Qutepart ignores this key pressings
-        """
-        QTest.keyClick(self.qpart, Qt.Key_A, Qt.AltModifier)
-        self.assertEqual(self.qpart.text, '')
-        QTest.keyClick(self.qpart, Qt.Key_A)
-        self.assertEqual(self.qpart.text, 'a')
-
     def test_home1(self):
         """ Test the operation of the home key. """
 

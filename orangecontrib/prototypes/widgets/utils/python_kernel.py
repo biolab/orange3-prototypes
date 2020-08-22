@@ -6,6 +6,9 @@ from ipykernel.ipkernel import IPythonKernel
 
 from Orange.widgets.data.owpythonscript import OWPythonScript
 
+# Sometimes the comm's msg argument isn't used
+# pylint: disable=unused-argument
+
 
 class OrangeIPythonKernel(IPythonKernel):
     def __init__(self, *args, **kwargs):

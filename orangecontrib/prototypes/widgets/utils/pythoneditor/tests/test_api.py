@@ -12,6 +12,7 @@ import unittest
 from Orange.widgets.data.utils.pythoneditor.tests.base import SimpleWidget
 from Orange.widgets.tests.base import WidgetTest
 
+# pylint: disable=protected-access
 
 class _BaseTest(WidgetTest):
     """Base class for tests
@@ -195,7 +196,7 @@ class Signals(_BaseTest):
 
 class Lines(_BaseTest):
     def setUp(self):
-        super(Lines, self).setUp()
+        super().setUp()
         self.qpart.text = 'abcd\nefgh\nklmn\nopqr'
 
     def test_accessByIndex(self):
@@ -272,7 +273,7 @@ class Lines(_BaseTest):
 
 class LinesWin(Lines):
     def setUp(self):
-        super(LinesWin, self).setUp()
+        super().setUp()
         self.qpart.eol = '\r\n'
 
 

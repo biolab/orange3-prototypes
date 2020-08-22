@@ -29,7 +29,7 @@ class HTMLDelegate(QStyledItemDelegate):
     """
 
     def __init__(self, parent, margin=0):
-        super(HTMLDelegate, self).__init__(parent)
+        super().__init__(parent)
         self._margin = margin
 
     def _prepare_text_document(self, option, index):
@@ -91,7 +91,7 @@ class CompletionWidget(QListWidget):
     sig_completion_hint = Signal(str, str, QPoint)
 
     def __init__(self, parent, ancestor):
-        super(CompletionWidget, self).__init__(ancestor)
+        super().__init__(ancestor)
         self.textedit = parent
         self._language = None
         self.setWindowFlags(Qt.SubWindow | Qt.FramelessWindowHint)
@@ -574,5 +574,5 @@ class Completer(BaseFrontendMixin, QObject):
     def _handle_kernel_restarted(self):
         self.ready = True
 
-    def _handle_kernel_died(self, since_last_heartbeat):
+    def _handle_kernel_died(self, _):
         self.ready = False

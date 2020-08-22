@@ -15,6 +15,9 @@ from AnyQt.QtGui import QColor, QPainter, QPalette, QTextCursor, QKeySequence, Q
     QTextFormat, QBrush, QPen, QTextCharFormat
 from AnyQt.QtWidgets import QPlainTextEdit, QWidget, QTextEdit, QAction, QApplication
 
+from pygments.token import Token
+from qtconsole.pygments_highlighter import PygmentsHighlighter, PygmentsBlockUserData
+
 from Orange.widgets.data.utils.pythoneditor.completer import Completer
 from Orange.widgets.data.utils.pythoneditor.brackethighlighter import BracketHighlighter
 from Orange.widgets.data.utils.pythoneditor.indenter import Indenter
@@ -22,8 +25,6 @@ from Orange.widgets.data.utils.pythoneditor.lines import Lines
 from Orange.widgets.data.utils.pythoneditor.rectangularselection import RectangularSelection
 from Orange.widgets.data.utils.pythoneditor.vim import Vim, isChar
 
-from pygments.token import Token
-from qtconsole.pygments_highlighter import PygmentsHighlighter, PygmentsBlockUserData
 
 # pylint: disable=protected-access
 # pylint: disable=unused-argument
@@ -71,7 +72,7 @@ class PythonEditor(QPlainTextEdit):
     _DEFAULT_COMPLETION_THRESHOLD = 3
     _DEFAULT_COMPLETION_ENABLED = True
 
-    def __init__(self, kernel_manager, kernel_client, *args):
+    def __init__(self, *args):
         QPlainTextEdit.__init__(self, *args)
 
         self.setAttribute(Qt.WA_KeyCompression, False)  # vim can't process compressed keys
@@ -114,8 +115,6 @@ class PythonEditor(QPlainTextEdit):
         self.completionThreshold = self._DEFAULT_COMPLETION_THRESHOLD
         self.completionEnabled = self._DEFAULT_COMPLETION_ENABLED
         self._completer = Completer(self)
-        self._completer.kernel_manager = kernel_manager
-        self._completer.kernel_client = kernel_client
         self.auto_invoke_completions = False
         self.dot_invoke_completions = False
 
@@ -290,7 +289,8 @@ class PythonEditor(QPlainTextEdit):
         cursor = self.textCursor()
         if cursor.hasSelection():
             self._indenter.onChangeSelectedBlocksIndent(increase=True)
-        elif cursor.positionInBlock() == cursor.block().length() - 1:
+        elif cursor.positionInBlock() == cursor.block().length() - 1 and \
+                cursor.block().text().strip():
             self._onCompletion()
         else:
             self._indenter.onShortcutIndentAfterCursor()
@@ -479,6 +479,22 @@ class PythonEditor(QPlainTextEdit):
         """
         if self._completer:
             self._completer.invokeCompletion()
+
+    @property
+    def kernel_client(self):
+        return self._completer.kernel_client
+
+    @kernel_client.setter
+    def kernel_client(self, kernel_client):
+        self._completer.kernel_client = kernel_client
+
+    @property
+    def kernel_manager(self):
+        return self._completer.kernel_manager
+
+    @kernel_manager.setter
+    def kernel_manager(self, kernel_manager):
+        self._completer.kernel_manager = kernel_manager
 
     @property
     def vimModeEnabled(self):
@@ -918,7 +934,7 @@ class PythonEditor(QPlainTextEdit):
             self._rectangularSelection.onExpandKeyEvent(event)
         elif shouldAutoIndent(event):
             with self:
-                super(PythonEditor, self).keyPressEvent(event)
+                super().keyPressEvent(event)
                 self._indenter.autoIndentBlock(cursor.block(), event.text())
         else:
             if self._vim is not None:
@@ -933,7 +949,7 @@ class PythonEditor(QPlainTextEdit):
                     break
             else:
                 self._lastKeyPressProcessedByParent = True
-                super(PythonEditor, self).keyPressEvent(event)
+                super().keyPressEvent(event)
 
         if event.key() == Qt.Key_Escape:
             event.accept()
@@ -1269,21 +1285,21 @@ class PythonEditor(QPlainTextEdit):
                     or dotTyped or importTyped:
                 self._completer.invokeCompletionIfAvailable()
 
-        super(PythonEditor, self).keyReleaseEvent(event)
+        super().keyReleaseEvent(event)
 
     def mousePressEvent(self, mouseEvent):
         if mouseEvent.modifiers() in RectangularSelection.MOUSE_MODIFIERS and \
                 mouseEvent.button() == Qt.LeftButton:
             self._rectangularSelection.mousePressEvent(mouseEvent)
         else:
-            super(PythonEditor, self).mousePressEvent(mouseEvent)
+            super().mousePressEvent(mouseEvent)
 
     def mouseMoveEvent(self, mouseEvent):
         if mouseEvent.modifiers() in RectangularSelection.MOUSE_MODIFIERS and \
                 mouseEvent.buttons() == Qt.LeftButton:
             self._rectangularSelection.mouseMoveEvent(mouseEvent)
         else:
-            super(PythonEditor, self).mouseMoveEvent(mouseEvent)
+            super().mouseMoveEvent(mouseEvent)
 
     def _chooseVisibleWhitespace(self, text):
         result = [False for _ in range(len(text))]
@@ -1442,7 +1458,7 @@ class PythonEditor(QPlainTextEdit):
         """Paint event
         Draw indentation markers after main contents is drawn
         """
-        super(PythonEditor, self).paintEvent(event)
+        super().paintEvent(event)
         self._drawIndentMarkersAndEdge(event.rect())
 
     def _currentLineExtraSelections(self):
@@ -1467,14 +1483,16 @@ class PythonEditor(QPlainTextEdit):
             return [makeSelection(self.textCursor())]
 
     def insertFromMimeData(self, source):
-        if source.hasUrls():
+        if source.hasFormat(self._rectangularSelection.MIME_TYPE):
+            self._rectangularSelection.paste(source)
+        elif source.hasUrls():
             cursor = self.textCursor()
             filenames = [url.toLocalFile() for url in source.urls()]
             text = ', '.join("'" + f.replace("'", "'\"'\"'") + "'"
                              for f in filenames)
             cursor.insertText(text)
         else:
-            super(PythonEditor, self).insertFromMimeData(source)
+            super().insertFromMimeData(source)
 
     def __cursorRect(self, block, column, offset):
         cursor = QTextCursor(block)
