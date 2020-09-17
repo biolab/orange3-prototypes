@@ -1,3 +1,4 @@
+import copy
 from typing import Optional
 
 import numpy as np
@@ -5,12 +6,20 @@ from AnyQt.QtCore import Qt, QAbstractTableModel, QModelIndex, QSize
 from AnyQt.QtWidgets import QTableView, QItemDelegate, QLineEdit, QCompleter
 
 from Orange.data import (
-    Table, Domain, ContinuousVariable, DiscreteVariable, TimeVariable
+    Table,
+    Domain,
+    ContinuousVariable,
+    DiscreteVariable,
+    TimeVariable,
 )
 from Orange.widgets import gui
 from Orange.widgets.settings import (
-    Setting, ContextSetting, PerfectDomainContextHandler
+    Setting,
+    ContextSetting,
+    PerfectDomainContextHandler,
+    ContextHandler,
 )
+from Orange.widgets.utils import vartype
 from Orange.widgets.utils.widgetpreview import WidgetPreview
 from Orange.widgets.widget import OWWidget, Output, Input, Msg
 
@@ -48,14 +57,15 @@ class EditableTableModel(QAbstractTableModel):
 
     def set_domain(self, domain: Optional[Domain]):
         self._domain = domain
-        self.clear()
-        n_columns = len(domain) if domain is not None else 1
+        n_columns = len(domain) if domain is not None else 3
         self.columns_changed_to(n_columns)
+        self.clear()
 
     def is_discrete(self, column):
         column_data = set(row[column] for row in self._table) - {None}
         return (
-            self._domain is not None and self._domain[column].is_discrete
+            self._domain is not None
+            and self._domain[column].is_discrete
             or (
                 column_data
                 and not self.is_time_variable(column)
@@ -70,10 +80,10 @@ class EditableTableModel(QAbstractTableModel):
     def time_vals(self, column):
         column_data = [row[column] for row in self._table]
         try:
-            tvar = TimeVariable('_')
+            tvar = TimeVariable("_")
             values = [
-                tvar.parse_exact_iso(d) if d is not None
-                else None for d in column_data
+                tvar.parse_exact_iso(d) if d is not None else None
+                for d in column_data
             ]
             return values
         except ValueError:
@@ -108,14 +118,17 @@ class EditableTableModel(QAbstractTableModel):
         return True
 
     def set_table(self, table):
-        self._table = table
+        self.rows_changed_to(len(table))
+        self.columns_changed_to(len(table[0]))
+        # must be a copy since model change it inplace
+        self._table = copy.deepcopy(table)
         self.dataChanged.emit(
-            self.index(0, 0),
-            self.index(len(table) - 1, len(table[0]))
+            self.index(0, 0), self.index(len(table) - 1, len(table[0]))
         )
 
     def get_raw_table(self):
-        return self._table
+        # the model updates the table inplace
+        return copy.deepcopy(self._table)
 
     def rows_changed_to(self, n_rows):
         while n_rows != self.rowCount():
@@ -127,8 +140,9 @@ class EditableTableModel(QAbstractTableModel):
             self._table.append([None for _ in range(self.columnCount())])
             self.endInsertRows()
         elif n_rows < self.rowCount():
-            self.beginRemoveRows(QModelIndex(),
-                                 self.rowCount() - 1, self.rowCount() - 1)
+            self.beginRemoveRows(
+                QModelIndex(), self.rowCount() - 1, self.rowCount() - 1
+            )
             self._table.pop()
             self.endRemoveRows()
 
@@ -143,9 +157,9 @@ class EditableTableModel(QAbstractTableModel):
                 row.append(None)
             self.endInsertColumns()
         elif n_columns < self.columnCount():
-            self.beginRemoveColumns(QModelIndex(),
-                                    self.columnCount() - 1,
-                                    self.columnCount() - 1)
+            self.beginRemoveColumns(
+                QModelIndex(), self.columnCount() - 1, self.columnCount() - 1
+            )
             for row in self._table:
                 row.pop()
             self.endRemoveColumns()
@@ -161,9 +175,12 @@ class EditableTableModel(QAbstractTableModel):
                 return self._domain[section].name
 
     def clear(self):
-        self.rows_changed_to(3)
-        self.columns_changed_to(3)
-        self.set_table([[None for x in range(3)] for y in range(3)])
+        self.set_table(
+            [
+                [None for __ in range(self.columnCount())]
+                for _ in range(self.rowCount())
+            ]
+        )
 
     def get_table(self):
         domain = self.get_domain()
@@ -192,6 +209,37 @@ class EditableTableModel(QAbstractTableModel):
         return Domain(vars)
 
 
+class CreateTableContextHandler(PerfectDomainContextHandler):
+    def open_context(self, widget, domain):
+        ContextHandler.open_context(
+            self, widget, domain, *self.encode_domain(domain)
+        )
+
+    def encode_domain(self, domain):
+        """
+        Encode domain into tuples (name, type)
+        A tuple is returned for each of attributes, class_vars and metas.
+        """
+        if self.match_values == self.MATCH_VALUES_ALL:
+
+            def _encode(attrs):
+                return tuple(
+                    (v.name, list(v.values) if v.is_discrete else vartype(v))
+                    for v in attrs
+                )
+
+        else:
+
+            def _encode(attrs):
+                return tuple((v.name, vartype(v)) for v in attrs)
+
+        return (
+            _encode(domain.attributes) if domain else None,
+            _encode(domain.class_vars) if domain else None,
+            _encode(domain.metas) if domain else None,
+        )
+
+
 class OWCreateTable(OWWidget):
     name = "Create Table"
     icon = "icons/CreateTable.png"
@@ -207,24 +255,42 @@ class OWCreateTable(OWWidget):
     class Error(OWWidget.Error):
         transform_err = Msg("Data does not fit to domain")
 
-    settingsHandler = PerfectDomainContextHandler()
+    settingsHandler = CreateTableContextHandler()
 
     n_rows = Setting(len(DEFAULT_DATA))
     n_columns = Setting(len(DEFAULT_DATA[0]))
     auto_commit = Setting(True)
     # since data is a small (at most 20x20) table we can afford to store it
     # as a context
-    data = ContextSetting(DEFAULT_DATA.copy(), schema_only=True)
+    context_data = ContextSetting(DEFAULT_DATA.copy(), schema_only=True)
 
     def __init__(self):
         super().__init__()
 
         options = {"labelWidth": 100, "controlWidth": 50}
         box = gui.vBox(self.controlArea, "Control")
-        self.r_spin = gui.spin(box, self, "n_rows", 1, 20, 1, **options,
-                               label="Rows:", callback=self.rows_changed)
-        self.c_spin = gui.spin(box, self, "n_columns", 1, 20, 1, **options,
-                               label="Columns:", callback=self.columns_changed)
+        self.r_spin = gui.spin(
+            box,
+            self,
+            "n_rows",
+            1,
+            20,
+            1,
+            **options,
+            label="Rows:",
+            callback=self.rows_changed
+        )
+        self.c_spin = gui.spin(
+            box,
+            self,
+            "n_columns",
+            1,
+            20,
+            1,
+            **options,
+            label="Columns:",
+            callback=self.columns_changed
+        )
         box.setMinimumWidth(200)
 
         gui.rubber(self.controlArea)
@@ -237,9 +303,10 @@ class OWCreateTable(OWWidget):
 
         self.table_model = EditableTableModel()
         self.table.setModel(self.table_model)
-        self.table_model.dataChanged.connect(self.commit)
+        self.table_model.dataChanged.connect(self.data_changed)
         self.rows_changed()
         self.columns_changed()
+        self.set_dataset(None)  # to init the context
 
     def rows_changed(self):
         self.table_model.rows_changed_to(self.n_rows)
@@ -247,6 +314,10 @@ class OWCreateTable(OWWidget):
 
     def columns_changed(self):
         self.table_model.columns_changed_to(self.n_columns)
+        self.commit()
+
+    def data_changed(self):
+        self.context_data = self.table_model.get_raw_table()
         self.commit()
 
     def commit(self):
@@ -261,16 +332,19 @@ class OWCreateTable(OWWidget):
     @Inputs.data
     def set_dataset(self, data):
         self.closeContext()
-        self.data = DEFAULT_DATA.copy()
         if data is not None:
             self.table_model.set_domain(data.domain)
             self.c_spin.setEnabled(False)
+            self.context_data = [
+                [None for _ in range(len(data.domain.variables))]
+                for __ in range(3)
+            ]
         else:
             self.table_model.set_domain(None)
             self.c_spin.setEnabled(True)
+            self.context_data = DEFAULT_DATA.copy()
         self.r_spin.setValue(self.table_model.rowCount())
         self.c_spin.setValue(self.table_model.columnCount())
-        print(self.data)
         self.openContext(data)
         self.unconditional_commit()
 
@@ -278,17 +352,9 @@ class OWCreateTable(OWWidget):
     def sizeHint():
         return QSize(800, 500)
 
-    def closeContext(self):
-        self.data = self.table_model.get_raw_table()
-        print("here", DEFAULT_DATA)
-        super(OWCreateTable, self).closeContext()
-
-    def openContext(self, domain):
-        print(self.data)
-        super(OWCreateTable, self).openContext(domain)
-        print(self.data)
-        self.table_model.set_table(self.data)
-        print(self.data)
+    def openContext(self, data):
+        super(OWCreateTable, self).openContext(data.domain if data else None)
+        self.table_model.set_table(self.context_data)
 
 
 if __name__ == "__main__":  # pragma: no cover
