@@ -10,7 +10,7 @@ from AnyQt.QtGui import QDragEnterEvent, QDropEvent, QTextCursor
 from Orange.data import Table
 from Orange.classification import LogisticRegressionLearner
 from Orange.tests import named_file
-from Orange.widgets.data.owpythonscript import OWPythonScript, read_file_content, Script, \
+from orangecontrib.prototypes.widgets.owpythonscript import OWPythonScript, read_file_content, Script, \
     DEFAULT_FILENAME, SCRIPTS_FOLDER_PATH
 from Orange.widgets.tests.base import WidgetTest
 from Orange.widgets.widget import OWWidget

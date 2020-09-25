@@ -30,8 +30,6 @@ from traitlets import DottedObjectName, Type
 
 from orangecanvas.gui.utils import message_question
 from Orange.canvas import config
-from Orange.widgets.data.utils.python_console import OrangeConsoleWidget
-from Orange.widgets.data.utils.pythoneditor.editor import PythonEditor
 from Orange.data import Table, pandas_compat
 from Orange.base import Learner, Model
 from Orange.widgets import gui
@@ -44,6 +42,8 @@ from Orange.widgets.widget import OWWidget, Input, Output, Msg
 
 __all__ = ["OWPythonScript"]
 
+from orangecontrib.prototypes.widgets.utils.python_console import OrangeConsoleWidget
+from orangecontrib.prototypes.widgets.utils.pythoneditor.editor import PythonEditor
 
 SCRIPTS_FOLDER_PATH = os.path.join(config.data_dir(), 'python_script_library/')
 DEFAULT_FILENAME = 'scratch'
@@ -437,7 +437,7 @@ class KernelClient(QtKernelClient):
 
 
 class KernelManager(QtKernelManager):
-    client_class = DottedObjectName('Orange.widgets.data.owpythonscript.KernelClient')
+    client_class = DottedObjectName('orangecontrib.prototypes.widgets.owpythonscript.KernelClient')
 
 
 class OWPythonScript(OWWidget):
@@ -476,7 +476,7 @@ class OWPythonScript(OWWidget):
     splitterState: Optional[bytes] = Setting(None)
 
     multi_kernel_manager = MultiKernelManager()
-    multi_kernel_manager.kernel_manager_class = 'Orange.widgets.data.owpythonscript.KernelManager'
+    multi_kernel_manager.kernel_manager_class = 'orangecontrib.prototypes.widgets.owpythonscript.KernelManager'
 
     script_state_manager = ScriptStateManager()
 
@@ -674,7 +674,7 @@ class OWPythonScript(OWWidget):
         self.kernel_id = kernel_id = self.multi_kernel_manager.start_kernel(
             extra_arguments=[
                 '--IPKernelApp.kernel_class='
-                'Orange.widgets.data.utils.python_kernel.OrangeIPythonKernel',
+                'orangecontrib.prototypes.widgets.utils.python_kernel.OrangeIPythonKernel',
                 '--matplotlib='
                 'inline'
             ]

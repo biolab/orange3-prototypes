@@ -9,8 +9,8 @@ This is compatible with Orange3's GPL-3.0 license.
 """
 import unittest
 
-from Orange.widgets.data.utils.pythoneditor.brackethighlighter import BracketHighlighter
-from Orange.widgets.data.utils.pythoneditor.tests.base import SimpleWidget
+from orangecontrib.prototypes.widgets.utils.pythoneditor.brackethighlighter import BracketHighlighter
+from orangecontrib.prototypes.widgets.utils.pythoneditor.tests.base import SimpleWidget
 from Orange.widgets.tests.base import WidgetTest
 
 

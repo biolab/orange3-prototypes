@@ -12,7 +12,7 @@ import unittest
 import os.path
 import sys
 
-from Orange.widgets.data.utils.pythoneditor.tests.test_indenter.indenttest import IndentTest
+from orangecontrib.prototypes.widgets.utils.pythoneditor.tests.test_indenter.indenttest import IndentTest
 
 sys.path.append(os.path.abspath(os.path.join(__file__, '..')))
 

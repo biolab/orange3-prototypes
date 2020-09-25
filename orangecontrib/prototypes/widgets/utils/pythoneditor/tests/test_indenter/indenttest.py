@@ -13,7 +13,7 @@ import os
 from AnyQt.QtCore import Qt
 from AnyQt.QtTest import QTest
 
-from Orange.widgets.data.utils.pythoneditor.tests.base import SimpleWidget
+from orangecontrib.prototypes.widgets.utils.pythoneditor.tests.base import SimpleWidget
 from Orange.widgets.tests.base import WidgetTest
 
 # pylint: disable=protected-access

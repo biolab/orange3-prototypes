@@ -15,7 +15,7 @@ from AnyQt.QtTest import QTest
 from AnyQt.QtCore import Qt, QCoreApplication
 
 from Orange.widgets import widget
-from Orange.widgets.data.utils.pythoneditor.editor import PythonEditor
+from orangecontrib.prototypes.widgets.utils.pythoneditor.editor import PythonEditor
 
 
 def _processPendingEvents(app):

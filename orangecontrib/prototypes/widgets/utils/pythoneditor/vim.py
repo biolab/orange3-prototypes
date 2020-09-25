@@ -9,9 +9,9 @@ This is compatible with Orange3's GPL-3.0 license.
 """
 import sys
 
-from PyQt5.QtCore import Qt, pyqtSignal, QObject
-from PyQt5.QtWidgets import QTextEdit
-from PyQt5.QtGui import QColor, QTextCursor
+from AnyQt.QtCore import Qt, pyqtSignal, QObject
+from AnyQt.QtWidgets import QTextEdit
+from AnyQt.QtGui import QColor, QTextCursor
 
 # pylint: disable=protected-access
 # pylint: disable=unused-argument

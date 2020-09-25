@@ -17,8 +17,8 @@ from AnyQt.QtCore import Qt
 from AnyQt.QtTest import QTest
 from AnyQt.QtGui import QKeySequence
 
-from Orange.widgets.data.utils.pythoneditor.tests import base
-from Orange.widgets.data.utils.pythoneditor.tests.base import SimpleWidget
+from orangecontrib.prototypes.widgets.utils.pythoneditor.tests import base
+from orangecontrib.prototypes.widgets.utils.pythoneditor.tests.base import SimpleWidget
 from Orange.widgets.tests.base import WidgetTest
 
 

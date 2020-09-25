@@ -18,12 +18,12 @@ from AnyQt.QtWidgets import QPlainTextEdit, QWidget, QTextEdit, QAction, QApplic
 from pygments.token import Token
 from qtconsole.pygments_highlighter import PygmentsHighlighter, PygmentsBlockUserData
 
-from Orange.widgets.data.utils.pythoneditor.completer import Completer
-from Orange.widgets.data.utils.pythoneditor.brackethighlighter import BracketHighlighter
-from Orange.widgets.data.utils.pythoneditor.indenter import Indenter
-from Orange.widgets.data.utils.pythoneditor.lines import Lines
-from Orange.widgets.data.utils.pythoneditor.rectangularselection import RectangularSelection
-from Orange.widgets.data.utils.pythoneditor.vim import Vim, isChar
+from orangecontrib.prototypes.widgets.utils.pythoneditor.completer import Completer
+from orangecontrib.prototypes.widgets.utils.pythoneditor.brackethighlighter import BracketHighlighter
+from orangecontrib.prototypes.widgets.utils.pythoneditor.indenter import Indenter
+from orangecontrib.prototypes.widgets.utils.pythoneditor.lines import Lines
+from orangecontrib.prototypes.widgets.utils.pythoneditor.rectangularselection import RectangularSelection
+from orangecontrib.prototypes.widgets.utils.pythoneditor.vim import Vim, isChar
 
 
 # pylint: disable=protected-access

@@ -4,7 +4,7 @@ from collections import defaultdict
 
 from ipykernel.ipkernel import IPythonKernel
 
-from Orange.widgets.data.owpythonscript import OWPythonScript
+from orangecontrib.prototypes.widgets.owpythonscript import OWPythonScript
 
 # Sometimes the comm's msg argument isn't used
 # pylint: disable=unused-argument
