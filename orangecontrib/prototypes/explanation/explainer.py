@@ -4,15 +4,13 @@ from typing import Callable, List, Optional, Tuple, Union
 import numpy as np
 from Orange.widgets.utils.colorpalettes import LimitedDiscretePalette
 from scipy import sparse
-from scipy.sparse import issparse
-from sklearn.cluster import KMeans
-from sklearn.impute import SimpleImputer
 
 from Orange.base import Model
 from Orange.data import Table, Domain
 from Orange.util import dummy_callback, wrap_callback
 from shap import KernelExplainer, TreeExplainer
-from shap.common import DenseData, SHAPError, sample
+from shap.utils import sample
+from shap.utils._legacy import kmeans
 
 RGB_LOW = [0, 137, 229]
 RGB_HIGH = [255, 0, 66]
@@ -30,37 +28,6 @@ def temp_seed(seed):
         yield
     finally:
         np.random.set_state(state)
-
-
-def kmeans(X, k, round_values=True):
-    """
-    This function should be imported from shap.kmeans. Remove it when they
-    merge and release the following changes:
-    https://github.com/slundberg/shap/pull/1135
-    """
-    group_names = [str(i) for i in range(X.shape[1])]
-    if str(type(X)).endswith("'pandas.core.frame.DataFrame'>"):
-        group_names = X.columns
-        X = X.values
-
-    # in case there are any missing values in data impute them
-    imp = SimpleImputer(missing_values=np.nan, strategy="mean")
-    X = imp.fit_transform(X)
-
-    kmeans = KMeans(n_clusters=k, random_state=0).fit(X)
-
-    if round_values:
-        for i in range(k):
-            for j in range(X.shape[1]):
-                xj = X[:, j].toarray().flatten() if issparse(X) else X[:, j]
-                ind = np.argmin(np.abs(xj - kmeans.cluster_centers_[i, j]))
-                kmeans.cluster_centers_[i, j] = X[ind, j]
-    return DenseData(
-        kmeans.cluster_centers_,
-        group_names,
-        None,
-        1.0 * np.bincount(kmeans.labels_),
-    )
 
 
 def _subsample_data(data: Table, n_samples: int) -> Tuple[Table, np.array]:
@@ -116,7 +83,8 @@ def _explain_trees(
         explainer = TreeExplainer(
             model.skl_model, data=sample(transformed_reference_data.X, 100),
         )
-    except (SHAPError, AttributeError):
+    # I know it is too broad but this is what TreeExplainer trows
+    except Exception:
         return None, None, None
 
     # TreeExplaner cannot explain in normal time more cases than 1000
@@ -184,7 +152,7 @@ def _explain_other_models(
     for i, row in enumerate(data_sample.X):
         progress_callback(i / len(data_sample))
         shap_values.append(
-            explainer.shap_values(row, nsamples=100, silent=True, l1_reg=False)
+            explainer.shap_values(row, nsamples=100, silent=True, l1_reg="num_features(90)")
         )
     return (
         _join_shap_values(shap_values),
