@@ -76,7 +76,14 @@ if __name__ == '__main__':
             'pandas',
             'joblib',  # For SignificantGoups
             'plotly>=2.0.8',   # for OWParallelCoordinates
-            'shap ==0.37.*'  # shap makes significant changes between versions
+            'shap==0.37.*',  # shap makes significant changes between versions
+
+            # for OWPythonScript
+            'qtconsole==5.0.1',
+            'jupyter_client>=5.3.4',
+            'jupyter_core>=4.6.1',
+            'ipython>=7.2.0',
+            'jedi>=0.13.3'
         ],
         extras_require={
             ':python_version<"3.5"': [
