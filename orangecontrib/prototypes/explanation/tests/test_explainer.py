@@ -12,7 +12,7 @@ from Orange.classification import (
 from Orange.data import Table, Domain
 from Orange.regression import LinearRegressionLearner
 from Orange.tests.test_classification import LearnerAccessibility
-from Orange.tests.test_regression import TestRegression
+from Orange.tests import test_regression
 from Orange.widgets.data import owcolor
 from orangecontrib.prototypes.explanation.explainer import (
     compute_colors,
@@ -176,7 +176,7 @@ class TestExplainer(unittest.TestCase):
 
     def test_all_regressors(self):
         """ Test explanation for all regressors """
-        for learner in TestRegression.all_learners(None):
+        for learner in test_regression.all_learners():
             with self.subTest(learner.name):
                 model = learner()(self.housing)
                 shap_values, _, _, _ = compute_shap_values(
