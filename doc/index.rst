@@ -10,6 +10,7 @@ Widgets
    widgets/contingency-table
    widgets/parallel-coordinates
    widgets/explain-model
+   widgets/explain-pred
 
 
 Indices and tables
