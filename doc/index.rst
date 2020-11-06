@@ -9,6 +9,7 @@ Widgets
 
    widgets/contingency-table
    widgets/parallel-coordinates
+   widgets/explain-model
 
 
 Indices and tables
