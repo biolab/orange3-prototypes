@@ -1,14 +1,1 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- Generator: Adobe Illustrator 22.0.1, SVG Export Plug-In . SVG Version: 6.00 Build 0)  -->
-<svg version="1.1" id="Layer_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
-	 viewBox="101.5 339.5 48 48" enable-background="new 101.5 339.5 48 48" xml:space="preserve">
-<g>
-
-		<rect x="133.617" y="341.545" transform="matrix(4.525606e-11 1 -1 4.525606e-11 488.1059 212.7135)" fill="#333333" width="8.159" height="17.73"/>
-
-		<rect x="113.657" y="359.026" transform="matrix(2.296189e-11 1 -1 2.296189e-11 481.1945 245.7218)" fill="#333333" width="8.159" height="8.865"/>
-	<rect x="124.383" y="346.339" fill="#333333" width="2.233" height="34.331"/>
-
-		<rect x="109.224" y="367.704" transform="matrix(4.503224e-11 1 -1 4.503224e-11 489.8732 263.2656)" fill="#333333" width="8.159" height="17.73"/>
-</g>
-</svg>
+<svg id="Layer_1" data-name="Layer 1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><defs><style>.cls-1{fill:#333;}.cls-2{fill:#b2b2b2;}.cls-3{fill:#666;}</style></defs><title>ExplainModel</title><rect class="cls-1" x="22.88" y="6.83" width="2.23" height="34.33"/><path class="cls-1" d="M35.51,11.32A4.42,4.42,0,1,0,31,15.67,4.42,4.42,0,0,0,35.51,11.32Z"/><path class="cls-2" d="M10.93,36.81a4.42,4.42,0,1,0-4.48,4.36A4.43,4.43,0,0,0,10.93,36.81Z"/><path class="cls-3" d="M21.32,24a4.42,4.42,0,1,0-4.48,4.35A4.41,4.41,0,0,0,21.32,24Z"/><path class="cls-1" d="M45.91,11.32a4.42,4.42,0,1,0-4.48,4.35A4.44,4.44,0,0,0,45.91,11.32Z"/><path class="cls-3" d="M21.32,36.81a4.42,4.42,0,1,0-4.48,4.36A4.41,4.41,0,0,0,21.32,36.81Z"/></svg>
