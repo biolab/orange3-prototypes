@@ -1,14 +1,1 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- Generator: Adobe Illustrator 22.0.1, SVG Export Plug-In . SVG Version: 6.00 Build 0)  -->
-<svg version="1.1" id="Layer_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
-	 viewBox="101.5 339.5 48 48" enable-background="new 101.5 339.5 48 48" xml:space="preserve">
-<g>
-
-		<rect x="133.617" y="341.545" transform="matrix(4.525606e-11 1 -1 4.525606e-11 488.1059 212.7135)" fill="#333333" width="8.159" height="17.73"/>
-
-		<rect x="113.657" y="359.026" transform="matrix(2.296189e-11 1 -1 2.296189e-11 481.1945 245.7218)" fill="#333333" width="8.159" height="8.865"/>
-	<rect x="124.383" y="346.339" fill="#333333" width="2.233" height="34.331"/>
-
-		<rect x="109.224" y="367.704" transform="matrix(4.503224e-11 1 -1 4.503224e-11 489.8732 263.2656)" fill="#333333" width="8.159" height="17.73"/>
-</g>
-</svg>
+<svg id="Layer_1" data-name="Layer 1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><defs><style>.cls-1{fill:#333;}</style></defs><title>ExplainPrediction</title><rect class="cls-1" x="30.07" y="6.8" width="2.23" height="34.4"/><rect class="cls-1" x="6.44" y="33.02" width="31.76" height="8.16"/><polyline class="cls-1" points="38.2 37.1 41.56 37.1 38.2 41.18 38.2 33.02"/><polyline class="cls-1" points="38.2 37.1 41.56 37.1 38.2 33.02 38.2 41.18"/><rect class="cls-1" x="21.61" y="6.8" width="8.45" height="8.16"/><polyline class="cls-1" points="21.61 10.88 18.25 10.88 21.61 14.96 21.61 6.8"/><polyline class="cls-1" points="21.61 10.88 18.25 10.88 21.61 6.8 21.61 14.96"/><rect class="cls-1" x="9.8" y="19.92" width="8.45" height="8.16"/><polyline class="cls-1" points="9.8 24 6.44 24 9.8 28.08 9.8 19.92"/><polyline class="cls-1" points="9.8 24 6.44 24 9.8 19.92 9.8 28.08"/></svg>
