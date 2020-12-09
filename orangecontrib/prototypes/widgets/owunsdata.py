@@ -288,55 +288,53 @@ class UNSdata(OWWidget):
     def create_matrix(self, json_data):
         recieved_data = json_data
         # print(recieved_data)
-        n_sensors = len(recieved_data)
-
-        final_data = [defaultdict(int) for i in range(n_sensors)]
-
-
-        print(json_data)
+        data_array = defaultdict(list)
+        timestamps_dict = defaultdict(int)
 
         for i in json_data:
-        	print(i["sensor"])
+            print(i["sensor"])
+            for d in i["data"]:
+                data_array[i["sensor"]].append([d["measured_at"], d["decibels"]])
+                timestamps_dict[d["measured_at"]] += 1
+
+
+        print(data_array, timestamps_dict)
+
+
+        for k in timestamps_dict.keys():
+            timestamps_dict[k] = [0 for i in range(len(data_array))]
+
+
+        for n, sensor_key in enumerate(data_array.keys()):
+            sensor_data = data_array[sensor_key]
+            print(sensor_data)
+            for measurement in sensor_data:
+                timestamps_dict[measurement[0]][n] = measurement[1]
 
 
 
+        final_array = []
+        
+        for time_key in timestamps_dict.keys():
+            timestr = time_key
+            timestr = timestr.replace("T", " ")
+            timestr = timestr.replace("Z", "")
 
+            time_var = TimeVariable()
+            time = time_var.parse(str(datetime.strptime(timestr, '%Y-%m-%d %H:%M:%S.%f')))
+            
+            temp = [time]
+            temp += timestamps_dict[time_key]
+            final_array.append(temp)
 
-
-
-
-        for id, sensor in enumerate(recieved_data):
-            for dd in sensor["data"]:
-                timestr = str(dd["measured_at"])
-                timestr = timestr.replace("T", " ")
-                timestr = timestr.replace("Z", "")
-
-                time_var = TimeVariable()
-                time = time_var.parse(str(datetime.strptime(timestr, '%Y-%m-%d %H:%M:%S.%f')))
-
-                for n, defdic in enumerate(final_data):
-                    defdic[time] += 0
-                    if n == id:
-                        defdic[time] = dd["decibels"]
-
-
-        data_matrix = []
-
-        for key in final_data[0].keys():
-            temp = []
-            temp.append(key)
-            for n, sens_data in enumerate(final_data):
-                temp.append(sens_data[key])
-
-            data_matrix.append(temp)
 
         con_domena = []
 
-        for i in range(n_sensors):
+        for i in range(len(data_array)):
             con_domena.append(ContinuousVariable("sensor_" + str(i)))
 
 
-        transformed_data = Table.from_list( Domain([TimeVariable('datetime')], con_domena),data_matrix)
+        transformed_data = Table.from_list( Domain([TimeVariable('datetime')], con_domena),final_array)
 
         return transformed_data
 
