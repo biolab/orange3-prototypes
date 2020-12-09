@@ -244,10 +244,21 @@ class UNSdata(OWWidget):
         fft_data = []
         frequens = []
 
+        sensors = defaultdict(int)
+
+        for dd in recieved_data:
+            sensors[dd["sensor"]] = 1
+
+        num = 0
+
+        for s_k in sensors.keys():
+            sensors[s_k] = num
+            num += 1
+
         for id, sensor in enumerate(recieved_data):
             for dd in sensor["data"]:
                 decibels.append(dd["decibels"])
-                ids.append(id)
+                ids.append(sensors[sensor["sensor"]])
 
                 lat.append(sensor["location"][0])
                 long.append(sensor["location"][1])
@@ -261,7 +272,7 @@ class UNSdata(OWWidget):
                 date_time.append(str(time))
                 fft_data.append(dd["fftValues"])
 
-                frekvence = [math.floor(((i + 0.5) / len(dd["fftValues"])) * dd["frequencyRange"]) for i in
+                frekvence = [math.floor(((i + 0.5) / len(dd["fftValues"])) * dd["frequencyRange"]/2) for i in
                              range(len(dd["fftValues"]))]
                 frequens = frekvence
 
