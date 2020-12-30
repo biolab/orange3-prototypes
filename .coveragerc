@@ -1,0 +1,12 @@
+[run]
+source = orangecontrib/prototypes
+omit =
+    orangecontrib/prototypes/tests/*
+    orangecontrib/prototypes/widgets/tests/*
+
+[report]
+exclude_lines =
+    pragma: no cover
+    raise NotImplementedError
+    if __name__ == .__main__.:
+ignore_errors = True
