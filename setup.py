@@ -32,11 +32,11 @@ LONG_DESCRIPTION = open(path.join(path.dirname(__file__), 'README.pypi')).read()
 
 def include_documentation(local_dir, install_dir):
     global DATA_FILES
-    if 'bdist_wheel' in sys.argv and not path.exists(local_dir):
-        print("Directory '{}' does not exist. "
-              "Please build documentation before running bdist_wheel."
-              .format(path.abspath(local_dir)))
-        sys.exit(0)
+    # if 'bdist_wheel' in sys.argv and not path.exists(local_dir):
+    #     print("Directory '{}' does not exist. "
+    #           "Please build documentation before running bdist_wheel."
+    #           .format(path.abspath(local_dir)))
+    #     sys.exit(0)
     doc_files = []
     for dirpath, dirs, files in walk(local_dir):
         doc_files.append((dirpath.replace(local_dir, install_dir),
@@ -80,7 +80,8 @@ if __name__ == '__main__':
         extras_require={
             ':python_version<"3.5"': [
                 "typing"
-            ]
+            ],
+            'test': ['coverage']
         },
         entry_points=ENTRY_POINTS,
         namespace_packages=['orangecontrib'],

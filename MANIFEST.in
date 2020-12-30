@@ -1,4 +1,4 @@
-# From https://docs.python.org/2/distutils/sourcedist.html#commands
-include README.md
-recursive-include orangecontrib *.svg icons/*
-recursive-include orangecontrib *.html *.js *.css
+recursive-include doc *.bat *.css *.md *.png *.py *.rst Makefile
+recursive-include orangecontrib *.svg icons/*  *.html *.js *.css *.txt
+include *.pypi *.md *.ini .coveragerc
+
