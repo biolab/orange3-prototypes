@@ -233,10 +233,12 @@ class CreateTableContextHandler(PerfectDomainContextHandler):
             def _encode(attrs):
                 return tuple((v.name, vartype(v)) for v in attrs)
 
+        if domain is None:
+            return (None, None, None)
         return (
-            _encode(domain.attributes) if domain else None,
-            _encode(domain.class_vars) if domain else None,
-            _encode(domain.metas) if domain else None,
+            _encode(domain.attributes),
+            _encode(domain.class_vars),
+            _encode(domain.metas),
         )
 
 
