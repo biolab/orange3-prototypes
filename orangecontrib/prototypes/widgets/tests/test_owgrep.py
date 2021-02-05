@@ -7,6 +7,8 @@ import unittest
 from unittest.mock import Mock, patch
 
 import numpy as np
+from AnyQt.QtTest import QTest
+from AnyQt.QtCore import Qt
 from AnyQt.QtWidgets import QApplication
 
 from Orange.widgets.utils.filedialogs import RecentPath
@@ -15,8 +17,9 @@ from orangecontrib.prototypes.widgets import owgrep
 
 
 def patch_file_dlg(filename):
+    path = os.path.join(os.path.dirname(__file__), filename)
     return patch.object(owgrep.QFileDialog, "getOpenFileName",
-                        return_value=(filename, None))
+                        return_value=(path, None))
 
 
 class TestOWGrep(WidgetTest):
