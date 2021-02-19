@@ -10,11 +10,9 @@ def suite(loader=None, pattern='test*.py'):
 
     test_dir = os.path.dirname(__file__)
     project_dir = os.path.dirname(test_dir)
-    widget_tests = os.path.join(project_dir, "widgets", "tests")
-    utils_tests = os.path.join(project_dir, "widgets", "utils", "tests")
 
     ts = unittest.TestSuite()
-    for folder in [test_dir, widget_tests, utils_tests]:
+    for folder in [test_dir]:
         ts.addTests(loader.discover(folder, pattern, top_level_dir=project_dir))
 
     return ts

@@ -22,3 +22,6 @@ __pycache__
 
 # Windows temp files
 Thumbs.db
+
+
+.coverage
