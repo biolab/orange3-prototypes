@@ -52,7 +52,7 @@ class TestOWCreateTable(WidgetTest):
             self.assertSetEqual(cv, set(a.values))
 
     def test_continuous_columns(self):
-        _input = [["1", "2", "3"], ["4", "5", "6"]]
+        _input = [["1", "2.0", "3"], ["4", "5.0", "6"]]
         self.widget.table_model.set_table(_input)
         self.wait_until_finished()
         output = self.get_output(self.widget.Outputs.data)
