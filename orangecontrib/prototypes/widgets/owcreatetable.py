@@ -63,13 +63,26 @@ class EditableTableModel(QAbstractTableModel):
 
     def is_discrete(self, column):
         column_data = set(row[column] for row in self._table) - {None}
+
+        def is_number(x):
+            """
+            Check if x is number
+            x.is_digit only works for usigned ints this on works for ints and
+            floats
+            """
+            try:
+                float(x)
+                return True
+            except ValueError:
+                return False
+
         return (
             self._domain is not None
             and self._domain[column].is_discrete
             or (
                 column_data
                 and not self.is_time_variable(column)
-                and not all(map(lambda s: s.isdigit(), column_data))
+                and not all(map(lambda s: is_number(s), column_data))
             )
         )
 
