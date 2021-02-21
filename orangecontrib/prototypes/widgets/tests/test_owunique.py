@@ -5,8 +5,11 @@ from unittest.mock import Mock
 
 import numpy as np
 
+from orangewidget.widget import StateInfo
 from Orange.data import DiscreteVariable, ContinuousVariable, Domain, Table
 from Orange.widgets.tests.base import WidgetTest
+from Orange.widgets.utils.state_summary import format_summary_details
+
 from orangecontrib.prototypes.widgets import owunique
 
 
@@ -30,24 +33,31 @@ class TestOWUnique(WidgetTest):
             np.zeros((6, 2)))
 
     def test_model(self):
+        # false positive for call_args, pylint: disable=unsubscriptable-object
         w = self.widget
-        w.unconditional_commit = Mock()
+        data = self.table
+        w._compute_unique_data = lambda *_: data
+        input_sum = self.widget.info.set_input_summary = Mock()
+        output_sum = self.widget.info.set_output_summary = Mock()
 
-        self.assertEqual(tuple(w.model_key), ())
-        self.assertEqual(tuple(w.model_avail), ())
+        self.send_signal(self.widget.Inputs.data, None)
+        self.assertIsNone(self.get_output(w.Outputs.data))
+        self.assertIsInstance(input_sum.call_args[0][0], StateInfo.Empty)
+        self.assertIsInstance(output_sum.call_args[0][0], StateInfo.Empty)
 
-        self.send_signal(w.Inputs.data, self.table)
-        self.assertEqual(tuple(w.model_key), ())
-        self.assertEqual(tuple(w.model_avail),
-                         self.domain.variables + self.domain.metas)
-        w.unconditional_commit.assert_called()
-        w.unconditional_commit.reset_mock()
+        input_sum.reset_mock()
+        output_sum.reset_mock()
 
-        self.send_signal(w.Inputs.data, None)
-        self.assertEqual(tuple(w.model_key), ())
-        self.assertEqual(tuple(w.model_avail), ())
-        w.unconditional_commit.assert_called()
-        w.unconditional_commit.reset_mock()
+        self.send_signal(self.widget.Inputs.data, data)
+        input_sum.assert_called_with(len(data), format_summary_details(data))
+        output = self.get_output(self.widget.Outputs.data)
+        output_sum.assert_called_with(len(output),
+                                      format_summary_details(output))
+
+        self.send_signal(self.widget.Inputs.data, None)
+        self.assertIsNone(self.get_output(w.Outputs.data))
+        self.assertIsInstance(input_sum.call_args[0][0], StateInfo.Empty)
+        self.assertIsInstance(output_sum.call_args[0][0], StateInfo.Empty)
 
     def test_settings(self):
         w = self.widget
@@ -55,31 +65,22 @@ class TestOWUnique(WidgetTest):
         w.unconditional_commit = Mock()
 
         self.send_signal(w.Inputs.data, self.table)
-        w.model_key.append(w.model_avail.pop(2))
+        w.selected_vars = [w.var_model[2]]
 
         self.send_signal(w.Inputs.data, None)
-        self.assertEqual(tuple(w.model_key), ())
-        self.assertEqual(tuple(w.model_avail), ())
+        self.assertEqual(w.selected_vars, [])
 
         domain = Domain(domain.attributes[2:], domain.class_vars, domain.metas)
         table = self.table.transform(domain)
         self.send_signal(w.Inputs.data, table)
-        self.assertEqual(tuple(w.model_key), (self.domain[2], ))
-        self.assertEqual(tuple(w.model_avail),
-                         self.domain.variables[3:] + self.domain.metas)
-
-        self.send_signal(w.Inputs.data, None)
-        self.assertEqual(tuple(w.model_key), ())
-        self.assertEqual(tuple(w.model_avail), ())
-        w.unconditional_commit.assert_called()
-        w.unconditional_commit.reset_mock()
+        self.assertEqual(w.selected_vars, [self.domain[2]])
 
     def test_unconditional_commit(self):
         w = self.widget
         w.autocommit = False
 
         w._compute_unique_data = cud = Mock()
-        cud.return_value = Mock()
+        cud.return_value = self.table
 
         self.send_signal(w.Inputs.data, self.table)
         out = self.get_output(w.Outputs.data)
@@ -94,10 +95,9 @@ class TestOWUnique(WidgetTest):
 
         self.send_signal(w.Inputs.data, self.table)
         out = self.get_output(w.Outputs.data)
-        self.assertIsNone(out, None)
+        np.testing.assert_equal(out.Y, self.table.Y)
 
-        w.model_key[:] = w.model_avail[:2]
-        del w.model_avail[:2]
+        w.selected_vars = w.var_model[:2]
 
         w.tiebreaker = "Last instance"
         w.commit()
@@ -114,10 +114,34 @@ class TestOWUnique(WidgetTest):
         out = self.get_output(w.Outputs.data)
         np.testing.assert_equal(out.Y, [1, 3, 4, 5])
 
-        w.tiebreaker = "Discard instances with non-unique keys"
+        w.tiebreaker = "Discard non-unique instances"
         w.commit()
         out = self.get_output(w.Outputs.data)
         np.testing.assert_equal(out.Y, [3, 4, 5])
+
+    def test_use_all_when_non_selected(self):
+        w = self.widget
+        w.tiebreaker = "First instance"
+
+        data = self.table.transform(Domain(self.table.domain.attributes))
+
+        self.send_signal(w.Inputs.data, data)
+        out = self.get_output(w.Outputs.data)
+        np.testing.assert_equal(out.X, data.X[2:])
+
+        w.selected_vars.clear()
+        w.unconditional_commit()
+        out = self.get_output(w.Outputs.data)
+        np.testing.assert_equal(out.X, data.X[2:])
+
+    def test_no_output_on_no_unique(self):
+        w = self.widget
+        w.tiebreaker = "Discard non-unique instances"
+
+        attrs = self.table.domain.attributes
+        data = Table.from_numpy(Domain(attrs), np.zeros((5, len(attrs))))
+        self.send_signal(w.Inputs.data, data)
+        self.assertIsNone(self.get_output(w.Outputs.data))
 
 
 if __name__ == "__main__":

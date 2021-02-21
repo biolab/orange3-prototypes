@@ -3,11 +3,11 @@ from operator import itemgetter
 import numpy as np
 
 from AnyQt.QtCore import Qt
-from AnyQt.QtWidgets import QListView, QSizePolicy, QComboBox
 
 from Orange.data import Table
 from Orange.widgets import widget, gui, settings
-from Orange.widgets.utils.itemmodels import VariableListModel
+from Orange.widgets.utils.itemmodels import DomainModel
+from Orange.widgets.utils.state_summary import format_summary_details
 from Orange.widgets.utils.widgetpreview import WidgetPreview
 
 
@@ -28,11 +28,11 @@ class OWUnique(widget.OWWidget):
                    'First instance': itemgetter(0),
                    'Middle instance': lambda seq: seq[len(seq) // 2],
                    'Random instance': np.random.choice,
-                   'Discard instances with non-unique keys':
+                   'Discard non-unique instances':
                    lambda seq: seq[0] if len(seq) == 1 else None}
 
     settingsHandler = settings.DomainContextHandler()
-    grouping_attrs = settings.ContextSetting([])
+    selected_vars = settings.ContextSetting([])
     tiebreaker = settings.Setting(next(iter(TIEBREAKERS)))
     autocommit = settings.Setting(True)
 
@@ -42,68 +42,54 @@ class OWUnique(widget.OWWidget):
         super().__init__()
         self.data = None
 
-        list_args = dict(
-            alternatingRowColors=True,
-            dragEnabled=True, dragDropMode=QListView.DragDrop, acceptDrops=True,
-            defaultDropAction=Qt.MoveAction, showDropIndicator=True,
-            selectionMode=QListView.ExtendedSelection,
-            selectionBehavior=QListView.SelectRows)
-
-        hbox = gui.hBox(self.controlArea)
-
-        listview_avail = QListView(self, **list_args)
-        self.model_avail = VariableListModel(parent=self, enable_dnd=True)
-        listview_avail.setModel(self.model_avail)
-        gui.vBox(hbox, 'Available Variables').layout().addWidget(listview_avail)
-
-        listview_key = QListView(self, **list_args)
-        self.model_key = VariableListModel(parent=self, enable_dnd=True)
-        listview_key.setModel(self.model_key)
-        self.model_key.rowsInserted.connect(lambda: self.commit())
-        self.model_key.rowsRemoved.connect(lambda: self.commit())
-        gui.vBox(hbox, 'Group by Variables').layout().addWidget(listview_key)
+        self.var_model = DomainModel(parent=self, order=DomainModel.MIXED)
+        var_list = gui.listView(
+            self.controlArea, self, "selected_vars", box="Group by",
+            model=self.var_model, callback=lambda: self.commit())
+        var_list.setSelectionMode(var_list.ExtendedSelection)
 
         gui.comboBox(
-            self.controlArea, self, 'tiebreaker', box="Item Selection",
-            label='Instance to select in each group:', orientation=Qt.Horizontal,
+            self.controlArea, self, 'tiebreaker', box=True,
+            label='Instance to select in each group:',
             items=tuple(self.TIEBREAKERS),
-            callback=lambda: self.commit(), sendSelectedValue=True,
-            sizeAdjustPolicy=QComboBox.AdjustToContents,
-            minimumContentsLength=20,
-            sizePolicy=(QSizePolicy.Minimum, QSizePolicy.Preferred))
+            callback=lambda: self.commit(), sendSelectedValue=True)
         gui.auto_commit(
             self.controlArea, self, 'autocommit', 'Commit',
             orientation=Qt.Horizontal)
-
-    def storeSpecificSettings(self):
-        self.grouping_attrs = list(self.model_key)
 
     @Inputs.data
     def set_data(self, data):
         self.closeContext()
         self.data = data
         if data:
+            self.var_model.set_domain(data.domain)
+            self.selected_vars = self.var_model[:]
             self.openContext(data.domain)
-            self.model_key[:] = self.grouping_attrs
-            self.model_avail[:] = \
-                [var for var in data.domain.variables + data.domain.metas
-                 if var not in self.model_key]
+            self.info.set_input_summary(len(data), format_summary_details(data))
         else:
-            self.grouping_attrs = []
-            self.model_key.clear()
-            self.model_avail.clear()
+            self.var_model.set_domain(None)
+            self.selected_vars.clear()
+            self.info.set_input_summary(self.info.NoInput)
+
         self.unconditional_commit()
 
     def commit(self):
         if self.data is None:
-            self.Outputs.data.send(None)
+            output = None
         else:
-            self.Outputs.data.send(self._compute_unique_data())
+            output = self._compute_unique_data()
+
+        self.Outputs.data.send(output)
+        if output is None:
+            self.info.set_output_summary(self.info.NoOutput)
+        else:
+            self.info.set_output_summary(
+                len(output), format_summary_details(output))
 
     def _compute_unique_data(self):
         uniques = {}
         keys = zip(*[self.data.get_column_view(attr)[0]
-                     for attr in self.model_key])
+                     for attr in self.selected_vars or self.var_model])
         for i, key in enumerate(keys):
             uniques.setdefault(key, []).append(i)
 
