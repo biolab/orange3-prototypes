@@ -7,7 +7,6 @@ from AnyQt.QtCore import Qt
 from Orange.data import Table
 from Orange.widgets import widget, gui, settings
 from Orange.widgets.utils.itemmodels import DomainModel
-from Orange.widgets.utils.state_summary import format_summary_details
 from Orange.widgets.utils.widgetpreview import WidgetPreview
 
 
@@ -61,30 +60,21 @@ class OWUnique(widget.OWWidget):
     def set_data(self, data):
         self.closeContext()
         self.data = data
+        self.selected_vars = []
         if data:
             self.var_model.set_domain(data.domain)
             self.selected_vars = self.var_model[:]
             self.openContext(data.domain)
-            self.info.set_input_summary(len(data), format_summary_details(data))
         else:
             self.var_model.set_domain(None)
-            self.selected_vars.clear()
-            self.info.set_input_summary(self.info.NoInput)
 
         self.unconditional_commit()
 
     def commit(self):
         if self.data is None:
-            output = None
+            self.Outputs.data.send(None)
         else:
-            output = self._compute_unique_data()
-
-        self.Outputs.data.send(output)
-        if output is None:
-            self.info.set_output_summary(self.info.NoOutput)
-        else:
-            self.info.set_output_summary(
-                len(output), format_summary_details(output))
+            self.Outputs.data.send(self._compute_unique_data())
 
     def _compute_unique_data(self):
         uniques = {}
