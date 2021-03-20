@@ -43,6 +43,7 @@ def include_documentation(local_dir, install_dir):
                           [path.join(dirpath, f) for f in files]))
     DATA_FILES.extend(doc_files)
 
+
 if __name__ == '__main__':
     include_documentation('doc/_build/htmlhelp', 'help/orange3-prototypes')
     setup(
@@ -59,28 +60,18 @@ if __name__ == '__main__':
         long_description_content_type='text/markdown',
         packages=find_packages(),
         package_data={
-            "orangecontrib.prototypes.widgets": ["icons/*.svg"],
-            "orangecontrib.prototypes.widgets.utils": ["_plotly/*"],
-            "orangecontrib.prototypes.widgets": ["_owparallelcoordiantes/*"],
-            "orangecontrib.prototypes.widgets": ["data/*"]
+            "orangecontrib.prototypes.widgets": ["icons/*.svg"]
         },
         install_requires=[
-            'Orange3',
+            'Orange3>=3.28',
             'numpy',
             'scipy',
             'scikit-learn',
             'pyqtgraph',
             'AnyQt>=0.0.8',
-            'serverfiles',  # For OWIPythonConnector
-            'ipython',
             'pandas',
-            'joblib',  # For SignificantGoups
-            'plotly>=2.0.8',   # for OWParallelCoordinates
         ],
         extras_require={
-            ':python_version<"3.5"': [
-                "typing"
-            ],
             'test': ['coverage']
         },
         entry_points=ENTRY_POINTS,
