@@ -12,13 +12,46 @@ from orangewidget.widget import Msg
 from Orange.data import \
     Table, Domain, DiscreteVariable, StringVariable, ContinuousVariable
 from Orange.widgets import widget, gui
-from Orange.widgets.settings import \
-    DomainContextHandler, Setting, ContextSetting
+from Orange.widgets.settings import ContextHandler, Setting, ContextSetting
 from Orange.widgets.utils import itemmodels
 
 
-DEFAULT_ITEM_NAME = "Item"
-DEFAULT_VALUE_NAME = "Value"
+DEFAULT_ITEM_NAME = "item"
+DEFAULT_VALUE_NAME = "value"
+
+
+class ShoppingListContextHandler(ContextHandler):
+    # ContextHandler's methods *are supposed to* context-related add arguments
+    # pylint: disable=arguments-differ
+    def new_context(self, potential_ids):
+        context = super().new_context()
+        context.potential_ids = {var.name for var in potential_ids}
+        return context
+
+    def match(self, context, potential_ids):
+        # This handler matches idvar = None only on perfect match.
+        # Otherwise, None would match any context, so automated selection in
+        # case of a single candidate would never work.
+        names = {var.name for var in potential_ids}
+        if names == context.potential_ids:
+            return self.PERFECT_MATCH
+        if context.values["idvar"] in names:
+            return self.MATCH
+        return self.NO_MATCH
+
+    def encode_setting(self, context, setting, value):
+        if setting.name == "idvar":
+            return value.name if value is not None else None
+        return super().encode_setting(context, setting, value)
+
+    def decode_setting(self, setting, value, potential_ids):
+        if setting.name == "idvar":
+            if value is None:
+                return None
+            for var in potential_ids:
+                if var.name == value:
+                    return var
+        return super().decode_setting(setting, value, potential_ids)
 
 
 class OWShoppingList(widget.OWWidget):
@@ -33,13 +66,15 @@ class OWShoppingList(widget.OWWidget):
         data = widget.Output("Data", Table)
 
     class Warning(widget.OWWidget.Warning):
-        no_suitable_features = Msg("No suitable columns for id")
+        no_suitable_features = Msg(
+            "No columns with unique values\n"
+            "Only columns with unique valules are useful for row identifiers.")
 
     want_main_area = False
     resizing_enabled = False
 
-    settingsHandler = DomainContextHandler()
-    idvar: Union[DiscreteVariable, StringVariable] = ContextSetting(None)
+    settingsHandler = ShoppingListContextHandler()
+    idvar: Union[DiscreteVariable, StringVariable, None] = ContextSetting(None)
     only_numeric = Setting(True)
     exclude_zeros = Setting(False)
     item_var_name = Setting("")
@@ -51,8 +86,9 @@ class OWShoppingList(widget.OWWidget):
 
         self.data: Optional[Table] = None
 
-        box = gui.widgetBox(self.controlArea, "Identifier")
-        self.idvar_model = itemmodels.VariableListModel()
+        box = gui.widgetBox(self.controlArea, "Unique Row Identifier")
+        self.idvar_model = itemmodels.VariableListModel(
+            [None], placeholder="Row number")
         self.var_cb = gui.comboBox(
             box, self, "idvar", model=self.idvar_model,
             callback=self._invalidate, minimumContentsLength=16,
@@ -60,7 +96,7 @@ class OWShoppingList(widget.OWWidget):
 
         box = gui.widgetBox(self.controlArea, "Filter")
         gui.checkBox(
-            box, self, "only_numeric", "Treat only numeric columns as items",
+            box, self, "only_numeric", "Ignore non-numeric features",
             callback=self._invalidate)
         gui.checkBox(
             box, self, "exclude_zeros", "Exclude zero values",
@@ -89,19 +125,24 @@ class OWShoppingList(widget.OWWidget):
     def set_data(self, data):
         self.closeContext()
         self.Warning.clear()
-        self.idvar_model[:] = []
+        self.idvar = None
+        del self.idvar_model[1:]
         self.data = data
         if data is not None:
-            self.idvar_model[:] = (
+            self.idvar_model[1:] = (
                 var
                 for var in chain(data.domain.variables, data.domain.metas)
                 if isinstance(var, (DiscreteVariable, StringVariable))
                 and self._is_unique(var))
-            if not self.idvar_model:
+            if len(self.idvar_model) == 1:
                 self.Warning.no_suitable_features()
+            # If there is a single suitable variable, we guess it's the id
+            # If there are multiple, we default to row number and let the user
+            # choose
+            elif len(self.idvar_model) == 2:
+                self.idvar = self.idvar_model[1]
+            self.openContext(self.idvar_model[1:])
 
-        self.idvar = self.idvar_model[0] if self.idvar_model else None
-        self.openContext(data)
         self.commit()
 
     def _is_unique(self, var):
@@ -118,10 +159,10 @@ class OWShoppingList(widget.OWWidget):
 
     def commit(self):
         self.Error.clear()
-        if self.idvar is None:
-            self.Outputs.data.send(None)
-        else:
+        if self.data:
             self.Outputs.data.send(self._reshape_to_long())
+        else:
+            self.Outputs.data.send(None)
 
     def _reshape_to_long(self):
         # Get a mask with columns used for data
@@ -130,17 +171,19 @@ class OWShoppingList(widget.OWWidget):
         n_useful = len(item_names)
 
         # Get identifiers, remove rows with missing id data
-        idvalues, _ = self.data.get_column_view(self.idvar)
-        idmask = self._notnan_mask(idvalues)
-        x = self.data.X[idmask]
-        idvalues = idvalues[idmask]
-
-        # For string ids, use indices and store names
-        if self.idvar.is_string:
-            id_names = idvalues
-            idvalues = np.arange(len(idvalues))
+        id_names = ()
+        if self.idvar:
+            idvalues, _ = self.data.get_column_view(self.idvar)
+            idmask = self._notnan_mask(idvalues)
+            x = self.data.X[idmask]
+            idvalues = idvalues[idmask]
+            # For string ids, use indices and store names
+            if self.idvar.is_string:
+                id_names = idvalues
+                idvalues = np.arange(len(idvalues))
         else:
-            id_names = False
+            x = self.data.X
+            idvalues = np.arange(x.shape[0])
 
         # Prepare columns of the long list
         if sp.issparse(x):
@@ -190,9 +233,10 @@ class OWShoppingList(widget.OWWidget):
         else:
             useful_vars = np.full(len(domain.attributes), True)
 
-        ididx = domain.index(self.idvar)
-        if ididx >= 0:
-            useful_vars[ididx] = False
+        if self.idvar:
+            ididx = domain.index(self.idvar)
+            if ididx >= 0:
+                useful_vars[ididx] = False
         return useful_vars
 
     def _get_item_names(self, useful_vars):
@@ -208,7 +252,9 @@ class OWShoppingList(widget.OWWidget):
         value_var = ContinuousVariable(
             self.value_var_name or DEFAULT_VALUE_NAME)
         idvar = self.idvar
-        if self.idvar.is_string:
+        if idvar is None:
+            idvar = ContinuousVariable("row")
+        elif self.idvar.is_string:
             idvar = DiscreteVariable(idvar.name, values=tuple(idnames))
         return Domain([idvar, item_var], [value_var])
 
