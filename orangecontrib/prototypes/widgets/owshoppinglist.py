@@ -11,6 +11,7 @@ from orangewidget.widget import Msg
 
 from Orange.data import \
     Table, Domain, DiscreteVariable, StringVariable, ContinuousVariable
+from Orange.data.util import get_unique_names
 from Orange.widgets import widget, gui
 from Orange.widgets.settings import ContextHandler, Setting, ContextSetting
 from Orange.widgets.utils import itemmodels
@@ -18,6 +19,7 @@ from Orange.widgets.utils import itemmodels
 
 DEFAULT_ITEM_NAME = "item"
 DEFAULT_VALUE_NAME = "value"
+DEFAULT_NAME_FOR_ROW = "row"
 
 
 class ShoppingListContextHandler(ContextHandler):
@@ -246,16 +248,21 @@ class OWShoppingList(widget.OWWidget):
             if useful)
 
     def _prepare_domain(self, item_names, idnames=()):
-        item_var = DiscreteVariable(
-            self.item_var_name or DEFAULT_ITEM_NAME,
-            values=item_names)
-        value_var = ContinuousVariable(
-            self.value_var_name or DEFAULT_VALUE_NAME)
         idvar = self.idvar
         if idvar is None:
-            idvar = ContinuousVariable("row")
+            idvar = ContinuousVariable(DEFAULT_NAME_FOR_ROW)
         elif self.idvar.is_string:
             idvar = DiscreteVariable(idvar.name, values=tuple(idnames))
+
+        # Renames without a warning: with only three columns, any intelligent
+        # user will realize why renaming
+        item_var_name, value_var_name = get_unique_names(
+            [idvar.name],
+            [self.item_var_name or DEFAULT_ITEM_NAME,
+             self.value_var_name or DEFAULT_VALUE_NAME]
+        )
+        item_var = DiscreteVariable(item_var_name, values=item_names)
+        value_var = ContinuousVariable(value_var_name)
         return Domain([idvar, item_var], [value_var])
 
 

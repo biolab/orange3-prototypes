@@ -222,7 +222,8 @@ class TestOWShoppingListUnits(TestOWShoppingCartBase):
         def assert_useful(expected):
             self.assertEqual(
                 [var.name for
-                 var, useful in zip(domain.attributes, widget._get_useful_vars())
+                 var, useful in zip(domain.attributes,
+                                    widget._get_useful_vars())
                  if useful],
                 expected)
 
@@ -276,8 +277,39 @@ class TestOWShoppingListUnits(TestOWShoppingCartBase):
             ["age", "pretzels"], ["Ana", "Berta", "Dani"])
         idvar, itemvar = outdomain.attributes
         self.assertEqual(idvar.name, "telezka")
-        self.assertEqual(itemvar.name, owshoppinglist.DEFAULT_ITEM_NAME)
-        self.assertEqual(outdomain.class_var.name, owshoppinglist.DEFAULT_VALUE_NAME)
+        self.assertEqual(itemvar.name,
+                         owshoppinglist.DEFAULT_ITEM_NAME)
+        self.assertEqual(outdomain.class_var.name,
+                         owshoppinglist.DEFAULT_VALUE_NAME)
+
+    @data_without_commit
+    def test_prepare_domain_renames(self):
+        # Renaming is pretty generic, so we basically test that the widget
+        # calls it. We tests two scenarios, not all God-knows-how-many
+        widget = self.widget
+
+        # The user proposes a name that matches idvar's name
+        widget.idvar = None
+        widget.item_var_name = owshoppinglist.DEFAULT_NAME_FOR_ROW
+        outdomain = self.widget._prepare_domain(
+            ["age", "pretzels"], ["Ana", "Berta", "Dani"])
+        _, itemvar = outdomain.attributes
+        self.assertNotEqual(itemvar.name, owshoppinglist.DEFAULT_NAME_FOR_ROW)
+        self.assertTrue(
+            itemvar.name.startswith(owshoppinglist.DEFAULT_NAME_FOR_ROW))
+
+        # Idvar's name is the same as the default for value
+        svar = DiscreteVariable(owshoppinglist.DEFAULT_VALUE_NAME, ("a", "b"))
+        sdata = Table.from_numpy(Domain([svar], []), np.arange(5).reshape(5, 1))
+        self.send_signal(widget.Inputs.data, sdata)
+        widget.idvar = svar
+        widget.item_value_var_name = ""
+        outdomain = self.widget._prepare_domain(
+            ["age", "pretzels"], ["Ana", "Berta", "Dani"])
+        value_var_name = outdomain.class_var.name
+        self.assertNotEqual(value_var_name, owshoppinglist.DEFAULT_VALUE_NAME)
+        self.assertTrue(
+            value_var_name.startswith(owshoppinglist.DEFAULT_VALUE_NAME))
 
     @data_without_commit
     def test_prepare_domain_values(self):
