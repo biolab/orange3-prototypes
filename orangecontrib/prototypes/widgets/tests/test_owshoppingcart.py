@@ -13,7 +13,7 @@ from orangewidget.settings import ContextSetting
 from Orange.data import (
     DiscreteVariable, ContinuousVariable, StringVariable, Domain, Table
 )
-from Orange.widgets import widget
+from Orange.widgets.widget import OWWidget
 from Orange.widgets.tests.base import WidgetTest
 
 from orangecontrib.prototypes.widgets import owshoppinglist
@@ -58,7 +58,7 @@ class TestOWShoppingCartBase(WidgetTest):
         self.widget = self.create_widget(owshoppinglist.OWShoppingList)
         n = np.nan
 
-        attributes =  [
+        attributes = [
             DiscreteVariable("gender", values=("f", "m")),
             ContinuousVariable("age"),
             ContinuousVariable("pretzels"),
@@ -179,7 +179,7 @@ class TestOWShoppingListFunctional(TestOWShoppingCartBase):
 
     def test_invalidates(self):
         widget = self.widget
-        mock_return = self.data[:1]
+        mock_return = Table("heart_disease")
         widget._reshape_to_long = lambda *_: mock_return
         widget.Outputs.data.send = send = Mock()
 
@@ -198,6 +198,23 @@ class TestOWShoppingListFunctional(TestOWShoppingCartBase):
         widget.controls.idvar.activated.emit(1)
         send.assert_called_with(mock_return)
         send.reset_mock()
+
+    def test_report(self):
+        widget = self.widget
+
+        self.send_signal(widget.Inputs.data, self.data)
+        self.assertIsNone(widget.idvar)
+        self.assertIsNotNone(widget._output_desc)
+        widget.send_report()
+
+        self.send_signal(widget.Inputs.data, self.data_no_metas)
+        self.assertIsNotNone(widget.idvar)
+        self.assertIsNotNone(widget._output_desc)
+        widget.send_report()
+
+        self.send_signal(widget.Inputs.data, None)
+        self.assertIsNone(widget._output_desc)
+        widget.send_report()
 
 
 class TestOWShoppingListUnits(TestOWShoppingCartBase):
@@ -568,7 +585,7 @@ class TestContextHandler(WidgetTest):
     # can't occur in practice, but may in the future
 
     def setUp(self):
-        class MockWidget(widget.OWWidget):
+        class MockWidget(OWWidget):
             settingsHandler = owshoppinglist.ShoppingListContextHandler()
 
             idvar: Union[DiscreteVariable, StringVariable, None] \

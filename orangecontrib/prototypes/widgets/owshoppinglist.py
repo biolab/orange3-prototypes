@@ -1,11 +1,12 @@
 from itertools import chain
-from typing import Union, Optional
+from typing import Union, Optional, Dict
 
 import numpy as np
 from scipy import sparse as sp
 
 from AnyQt.QtWidgets import QFormLayout
 
+from orangewidget.report import bool_str
 from orangewidget.utils.widgetpreview import WidgetPreview
 from orangewidget.widget import Msg
 
@@ -87,6 +88,7 @@ class OWShoppingList(widget.OWWidget):
         super().__init__(*args, **kwargs)
 
         self.data: Optional[Table] = None
+        self._output_desc: Optional[Dict[str, str]] = None
 
         box = gui.widgetBox(self.controlArea, "Unique Row Identifier")
         self.idvar_model = itemmodels.VariableListModel(
@@ -162,9 +164,28 @@ class OWShoppingList(widget.OWWidget):
     def commit(self):
         self.Error.clear()
         if self.data:
-            self.Outputs.data.send(self._reshape_to_long())
+            output = self._reshape_to_long()
+            self.Outputs.data.send(output)
+            self._store_output_desc(output)
         else:
             self.Outputs.data.send(None)
+            self._output_desc = None
+
+    def send_report(self):
+        self.report_items("Settings", (
+            ("Row identifier", self.controls.idvar.currentText()),
+            ("Ignore non-numeric features", bool_str(self.only_numeric)),
+            ("Exclude zero values", bool_str(self.exclude_zeros))
+        ))
+        if self._output_desc:
+            self.report_items("Output", self._output_desc)
+
+    def _store_output_desc(self, output):
+        self._output_desc = {
+            "Item column": output.domain.attributes[1].name,
+            "Value column": output.domain.class_var.name,
+            "Number of items": len(output)
+        }
 
     def _reshape_to_long(self):
         # Get a mask with columns used for data
