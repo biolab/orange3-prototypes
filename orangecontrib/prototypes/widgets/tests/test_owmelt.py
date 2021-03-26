@@ -16,13 +16,12 @@ from Orange.data import (
 from Orange.widgets.widget import OWWidget
 from Orange.widgets.tests.base import WidgetTest
 
-from orangecontrib.prototypes.widgets import owshoppinglist
+from orangecontrib.prototypes.widgets import owmelt
 
 
 def data_without_commit(f=None, *, sparse=False):
     def wrapped(self):
-        with patch("orangecontrib.prototypes.widgets.owshoppinglist."
-                   "OWShoppingList.commit"):
+        with patch("orangecontrib.prototypes.widgets.owmelt.OWMelt.commit"):
             data = self.data
             if sparse:
                 data = Table.from_numpy(
@@ -38,7 +37,7 @@ def names(variables):
     return [var.name for var in variables]
 
 
-class TestOWShoppingCartBase(WidgetTest):
+class TestOWMeltBase(WidgetTest):
 
     # Tests use this table:
     #
@@ -55,7 +54,7 @@ class TestOWShoppingCartBase(WidgetTest):
     # -------------------------------------------------------
 
     def setUp(self):
-        self.widget = self.create_widget(owshoppinglist.OWShoppingList)
+        self.widget = self.create_widget(owmelt.OWMelt)
         n = np.nan
 
         attributes = [
@@ -85,7 +84,7 @@ class TestOWShoppingCartBase(WidgetTest):
             Domain(attributes[:-1], [], metas), x[:, :-1], None, m)
 
 
-class TestOWShoppingListFunctional(TestOWShoppingCartBase):
+class TestOWMeltFunctional(TestOWMeltBase):
     @data_without_commit
     def test_idvar_model(self):
         widget = self.widget
@@ -128,12 +127,12 @@ class TestOWShoppingListFunctional(TestOWShoppingCartBase):
 
     def test_context_disregards_none(self):
         # By default, widget selects None in case of multiple candidates
-        widget = self.create_widget(owshoppinglist.OWShoppingList)
+        widget = self.create_widget(owmelt.OWMelt)
         self.send_signal(widget.Inputs.data, self.data)
         self.assertIsNone(widget.idvar)
 
         # Start with a new context, so we don't get a perfect match to the above
-        widget = self.create_widget(owshoppinglist.OWShoppingList)
+        widget = self.create_widget(owmelt.OWMelt)
         self.send_signal(widget.Inputs.data, self.data_no_metas)
         self.assertIsNotNone(widget.idvar)
         expected = widget.idvar
@@ -217,7 +216,7 @@ class TestOWShoppingListFunctional(TestOWShoppingCartBase):
         widget.send_report()
 
 
-class TestOWShoppingListUnits(TestOWShoppingCartBase):
+class TestOWMeltUnit(TestOWMeltBase):
     @data_without_commit
     def test_is_unique(self):
         domain = self.data.domain
@@ -294,10 +293,8 @@ class TestOWShoppingListUnits(TestOWShoppingCartBase):
             ["age", "pretzels"], ["Ana", "Berta", "Dani"])
         idvar, itemvar = outdomain.attributes
         self.assertEqual(idvar.name, "telezka")
-        self.assertEqual(itemvar.name,
-                         owshoppinglist.DEFAULT_ITEM_NAME)
-        self.assertEqual(outdomain.class_var.name,
-                         owshoppinglist.DEFAULT_VALUE_NAME)
+        self.assertEqual(itemvar.name, owmelt.DEFAULT_ITEM_NAME)
+        self.assertEqual(outdomain.class_var.name, owmelt.DEFAULT_VALUE_NAME)
 
     @data_without_commit
     def test_prepare_domain_renames(self):
@@ -307,16 +304,16 @@ class TestOWShoppingListUnits(TestOWShoppingCartBase):
 
         # The user proposes a name that matches idvar's name
         widget.idvar = None
-        widget.item_var_name = owshoppinglist.DEFAULT_NAME_FOR_ROW
+        widget.item_var_name = owmelt.DEFAULT_NAME_FOR_ROW
         outdomain = self.widget._prepare_domain(
             ["age", "pretzels"], ["Ana", "Berta", "Dani"])
         _, itemvar = outdomain.attributes
-        self.assertNotEqual(itemvar.name, owshoppinglist.DEFAULT_NAME_FOR_ROW)
+        self.assertNotEqual(itemvar.name, owmelt.DEFAULT_NAME_FOR_ROW)
         self.assertTrue(
-            itemvar.name.startswith(owshoppinglist.DEFAULT_NAME_FOR_ROW))
+            itemvar.name.startswith(owmelt.DEFAULT_NAME_FOR_ROW))
 
         # Idvar's name is the same as the default for value
-        svar = DiscreteVariable(owshoppinglist.DEFAULT_VALUE_NAME, ("a", "b"))
+        svar = DiscreteVariable(owmelt.DEFAULT_VALUE_NAME, ("a", "b"))
         sdata = Table.from_numpy(Domain([svar], []), np.arange(5).reshape(5, 1))
         self.send_signal(widget.Inputs.data, sdata)
         widget.idvar = svar
@@ -324,9 +321,9 @@ class TestOWShoppingListUnits(TestOWShoppingCartBase):
         outdomain = self.widget._prepare_domain(
             ["age", "pretzels"], ["Ana", "Berta", "Dani"])
         value_var_name = outdomain.class_var.name
-        self.assertNotEqual(value_var_name, owshoppinglist.DEFAULT_VALUE_NAME)
+        self.assertNotEqual(value_var_name, owmelt.DEFAULT_VALUE_NAME)
         self.assertTrue(
-            value_var_name.startswith(owshoppinglist.DEFAULT_VALUE_NAME))
+            value_var_name.startswith(owmelt.DEFAULT_VALUE_NAME))
 
     @data_without_commit
     def test_prepare_domain_values(self):
@@ -586,7 +583,7 @@ class TestContextHandler(WidgetTest):
 
     def setUp(self):
         class MockWidget(OWWidget):
-            settingsHandler = owshoppinglist.ShoppingListContextHandler()
+            settingsHandler = owmelt.MeltContextHandler()
 
             idvar: Union[DiscreteVariable, StringVariable, None] \
                 = ContextSetting(None)
@@ -594,7 +591,7 @@ class TestContextHandler(WidgetTest):
 
         self.widget = self.create_widget(MockWidget)
 
-    base = owshoppinglist.ShoppingListContextHandler.__bases__[0]
+    base = owmelt.MeltContextHandler.__bases__[0]
 
     @patch.object(base, "decode_setting")
     def test_decode_calls_super(self, super_decode):

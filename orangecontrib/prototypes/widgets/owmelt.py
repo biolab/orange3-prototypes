@@ -23,7 +23,7 @@ DEFAULT_VALUE_NAME = "value"
 DEFAULT_NAME_FOR_ROW = "row"
 
 
-class ShoppingListContextHandler(ContextHandler):
+class MeltContextHandler(ContextHandler):
     # ContextHandler's methods *are supposed to* context-related add arguments
     # pylint: disable=arguments-differ
     def new_context(self, potential_ids):
@@ -57,10 +57,11 @@ class ShoppingListContextHandler(ContextHandler):
         return super().decode_setting(setting, value, potential_ids)
 
 
-class OWShoppingList(widget.OWWidget):
-    name = "Shopping List"
-    description = "Reshape a table to a list of item-value pairs"
+class OWMelt(widget.OWWidget):
+    name = "Melt"
+    description = "Convert wide data to narrow data, a list of item-value pairs"
     icon = "icons/ToShoppingList.svg"
+    keywords = ["shopping list", "wide", "narrow"]
 
     class Inputs:
         data = widget.Input("Data", Table)
@@ -76,7 +77,7 @@ class OWShoppingList(widget.OWWidget):
     want_main_area = False
     resizing_enabled = False
 
-    settingsHandler = ShoppingListContextHandler()
+    settingsHandler = MeltContextHandler()
     idvar: Union[DiscreteVariable, StringVariable, None] = ContextSetting(None)
     only_numeric = Setting(True)
     exclude_zeros = Setting(False)
@@ -288,4 +289,4 @@ class OWShoppingList(widget.OWWidget):
 
 
 if __name__ == "__main__":  # pragma: no cover
-    WidgetPreview(OWShoppingList).run(Table("zoo")[50:])
+    WidgetPreview(OWMelt).run(Table("zoo")[50:])
