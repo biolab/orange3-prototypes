@@ -5,10 +5,8 @@ from unittest.mock import Mock
 
 import numpy as np
 
-from orangewidget.widget import StateInfo
 from Orange.data import DiscreteVariable, ContinuousVariable, Domain, Table
 from Orange.widgets.tests.base import WidgetTest
-from Orange.widgets.utils.state_summary import format_summary_details
 
 from orangecontrib.prototypes.widgets import owunique
 
@@ -33,31 +31,18 @@ class TestOWUnique(WidgetTest):
             np.zeros((6, 2)))
 
     def test_model(self):
-        # false positive for call_args, pylint: disable=unsubscriptable-object
         w = self.widget
         data = self.table
         w._compute_unique_data = lambda *_: data
-        input_sum = self.widget.info.set_input_summary = Mock()
-        output_sum = self.widget.info.set_output_summary = Mock()
 
         self.send_signal(self.widget.Inputs.data, None)
         self.assertIsNone(self.get_output(w.Outputs.data))
-        self.assertIsInstance(input_sum.call_args[0][0], StateInfo.Empty)
-        self.assertIsInstance(output_sum.call_args[0][0], StateInfo.Empty)
-
-        input_sum.reset_mock()
-        output_sum.reset_mock()
 
         self.send_signal(self.widget.Inputs.data, data)
-        input_sum.assert_called_with(len(data), format_summary_details(data))
-        output = self.get_output(self.widget.Outputs.data)
-        output_sum.assert_called_with(len(output),
-                                      format_summary_details(output))
+        self.assertIsNotNone(self.get_output(w.Outputs.data))
 
         self.send_signal(self.widget.Inputs.data, None)
         self.assertIsNone(self.get_output(w.Outputs.data))
-        self.assertIsInstance(input_sum.call_args[0][0], StateInfo.Empty)
-        self.assertIsInstance(output_sum.call_args[0][0], StateInfo.Empty)
 
     def test_settings(self):
         w = self.widget
@@ -70,10 +55,18 @@ class TestOWUnique(WidgetTest):
         self.send_signal(w.Inputs.data, None)
         self.assertEqual(w.selected_vars, [])
 
-        domain = Domain(domain.attributes[2:], domain.class_vars, domain.metas)
+        domain = Domain(domain.attributes[1:], domain.class_vars, domain.metas)
         table = self.table.transform(domain)
         self.send_signal(w.Inputs.data, table)
         self.assertEqual(w.selected_vars, [self.domain[2]])
+        # The following assignment circumvents a bug in
+        # orangewidget.settings._apply_setting and can be removed after
+        # releasing Orange that includes changes from
+        # https://github.com/biolab/orange-widget-base/pull/147
+        w.selected_vars = w.selected_vars
+        self.assertEqual([ind.row()
+                          for ind in w.controls.selected_vars.selectedIndexes()],
+                         [1])
 
     def test_unconditional_commit(self):
         w = self.widget
