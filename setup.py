@@ -72,7 +72,8 @@ if __name__ == '__main__':
             'pandas',
         ],
         extras_require={
-            'test': ['coverage']
+            'test': ['coverage'],
+            'doc': ['sphinx', 'recommonmark', 'sphinx_rtd_theme'],
         },
         entry_points=ENTRY_POINTS,
         namespace_packages=['orangecontrib'],
