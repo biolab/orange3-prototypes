@@ -45,7 +45,7 @@ def include_documentation(local_dir, install_dir):
 
 
 if __name__ == '__main__':
-    include_documentation('doc/_build/htmlhelp', 'help/orange3-prototypes')
+    include_documentation('doc/_build/html', 'help/orange3-prototypes')
     setup(
         name="Orange3-Prototypes",
         description="Prototype Orange widgets — only for the brave.",
