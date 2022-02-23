@@ -9,7 +9,7 @@ import numpy as np
 from AnyQt.QtCore import Qt
 from AnyQt.QtGui import QStandardItem
 
-from Orange.data import Table
+from Orange.data import Table, Domain, ContinuousVariable, StringVariable
 from Orange.widgets import gui
 from Orange.widgets.utils.itemmodels import DomainModel
 from Orange.widgets.utils.signals import Input, Output
@@ -83,6 +83,9 @@ class Heuristic:
 
 
 class InteractionRank(CorrelationRank):
+	IntRole = next(gui.OrangeUserRole)
+	RemovedRole = next(gui.OrangeUserRole)
+
 	def __init__(self, *args):
 		super().__init__(*args)
 
@@ -118,6 +121,8 @@ class InteractionRank(CorrelationRank):
 			item.setToolTip("Attribute Info: {:.1f}%".format(100*score[2+i]))
 			attr_items.append(item)
 		interaction_item = QStandardItem("{:+.1f}%".format(100*score[1]))
+		interaction_item.setData(score[1], self.IntRole)
+		interaction_item.setData(score[4], self.RemovedRole)
 		interaction_item.setData(attrs, self._AttrRole)
 		interaction_item.setData(
 			self.NEGATIVE_COLOR if score[1] < 0 else self.POSITIVE_COLOR,
@@ -138,6 +143,7 @@ class OWInteractions(OWCorrelations):
 
 	class Outputs:
 		features = Output("Features", AttributeList)
+		interactions = Output("Interactions", Table)
 
 	class Warning(OWWidget.Warning):
 		not_enough_vars = Msg("At least two features are needed.")
@@ -202,11 +208,26 @@ class OWInteractions(OWCorrelations):
 	def commit(self):
 		if self.data is None or self.disc_data is None:
 			self.Outputs.features.send(None)
+			self.Outputs.interactions.send(None)
 			return
+
+		attrs = [ContinuousVariable("Interaction"), ContinuousVariable("Entropy Removed")]
+		metas = [StringVariable("Feature 1"), StringVariable("Feature 2")]
+		domain = Domain(attrs, metas=metas)
+		model = self.vizrank.rank_model
+		x = np.array([[float(model.data(model.index(row, 0), role))
+		               for role in (InteractionRank.IntRole, InteractionRank.RemovedRole)]
+		              for row in range(model.rowCount())])
+		m = np.array([[a.name for a in model.data(model.index(row, 0),
+		                                          InteractionRank._AttrRole)]
+		              for row in range(model.rowCount())], dtype=object)
+		int_table = Table(domain, x, metas=m)
+		int_table.name = "Interactions"
 
 		# data has been imputed; send original attributes
 		self.Outputs.features.send(AttributeList(
 			[self.data.domain[var.name] for var in self.selection]))
+		self.Outputs.interactions.send(int_table)
 
 
 if __name__ == "__main__":  # pragma: no cover
