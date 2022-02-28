@@ -16,7 +16,7 @@ from Orange.widgets.utils.signals import Input, Output
 from Orange.widgets.utils.widgetpreview import WidgetPreview
 from Orange.widgets.widget import OWWidget, AttributeList, Msg
 from Orange.widgets.data.owcorrelations import CorrelationRank, OWCorrelations
-from Orange.preprocess import Discretize
+from Orange.preprocess import Discretize, Remove
 from Orange.preprocess.discretize import EqualFreq
 
 
@@ -88,27 +88,29 @@ class InteractionRank(CorrelationRank):
 
 	def __init__(self, *args):
 		super().__init__(*args)
+		self.interaction = None
 
 	def initialize(self):
 		super(CorrelationRank, self).initialize()
 		data = self.master.disc_data
 		self.attrs = data and data.domain.attributes
 		self.model_proxy.setFilterKeyColumn(-1)
-		self.interaction = Interaction(data)
 		self.heuristic = None
 		self.use_heuristic = False
 		self.sel_feature_index = self.master.feature and data.domain.index(self.master.feature)
 		if data:
+			self.interaction = Interaction(data)
 			self.use_heuristic = len(data) * len(self.attrs) ** 2 > SIZE_LIMIT
 			if self.use_heuristic and not self.sel_feature_index:
 				self.heuristic = Heuristic(self.interaction.gains)
 
 	def compute_score(self, state):
 		attr1, attr2 = state
-		score = self.interaction(attr1, attr2) / self.interaction.class_h
-		gain1 = self.interaction.gains[attr1] / self.interaction.class_h
-		gain2 = self.interaction.gains[attr2] / self.interaction.class_h
-		removed = self.interaction.removed_h[attr1, attr2] / self.interaction.class_h
+		h = self.interaction.class_h
+		score = self.interaction(attr1, attr2) / h
+		gain1 = self.interaction.gains[attr1] / h
+		gain2 = self.interaction.gains[attr2] / h
+		removed = self.interaction.removed_h[attr1, attr2] / h
 		return -score, score, gain1, gain2, removed
 
 	def row_for_state(self, score, state):
@@ -187,7 +189,11 @@ class OWInteractions(OWCorrelations):
 			if len(data) < 2:
 				self.Warning.not_enough_inst()
 			else:
+				remover = Remove(Remove.RemoveConstant)
+				data = remover(data)
 				disc_data = Discretize(method=EqualFreq())(data)
+				if remover.attr_results["removed"]:
+					self.Information.removed_cons_feat()
 				if len(disc_data.domain.attributes) < 2:
 					self.Warning.not_enough_vars()
 				else:
@@ -215,12 +221,13 @@ class OWInteractions(OWCorrelations):
 		metas = [StringVariable("Feature 1"), StringVariable("Feature 2")]
 		domain = Domain(attrs, metas=metas)
 		model = self.vizrank.rank_model
-		x = np.array([[float(model.data(model.index(row, 0), role))
-		               for role in (InteractionRank.IntRole, InteractionRank.RemovedRole)]
-		              for row in range(model.rowCount())])
-		m = np.array([[a.name for a in model.data(model.index(row, 0),
-		                                          InteractionRank._AttrRole)]
-		              for row in range(model.rowCount())], dtype=object)
+		x = np.array(
+			[[float(model.data(model.index(row, 0), role))
+				for role in (InteractionRank.IntRole, InteractionRank.RemovedRole)]
+				for row in range(model.rowCount())])
+		m = np.array(
+			[[a.name for a in model.data(model.index(row, 0), InteractionRank._AttrRole)]
+				for row in range(model.rowCount())], dtype=object)
 		int_table = Table(domain, x, metas=m)
 		int_table.name = "Interactions"
 
