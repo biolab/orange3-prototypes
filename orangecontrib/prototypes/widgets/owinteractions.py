@@ -15,9 +15,9 @@ from Orange.widgets.utils.itemmodels import DomainModel
 from Orange.widgets.utils.signals import Input, Output
 from Orange.widgets.utils.widgetpreview import WidgetPreview
 from Orange.widgets.widget import OWWidget, AttributeList, Msg
-from Orange.widgets.data.owcorrelations import CorrelationRank, OWCorrelations
 from Orange.preprocess import Discretize, Remove
 from Orange.preprocess.discretize import EqualFreq
+import Orange.widgets.data.owcorrelations
 
 
 SIZE_LIMIT = 1000000
@@ -82,7 +82,7 @@ class Heuristic:
 		return states
 
 
-class InteractionRank(CorrelationRank):
+class InteractionRank(Orange.widgets.data.owcorrelations.CorrelationRank):
 	IntRole = next(gui.OrangeUserRole)
 	RemovedRole = next(gui.OrangeUserRole)
 
@@ -91,7 +91,7 @@ class InteractionRank(CorrelationRank):
 		self.interaction = None
 
 	def initialize(self):
-		super(CorrelationRank, self).initialize()
+		super(Orange.widgets.data.owcorrelations.CorrelationRank, self).initialize()
 		data = self.master.disc_data
 		self.attrs = data and data.domain.attributes
 		self.model_proxy.setFilterKeyColumn(-1)
@@ -136,9 +136,10 @@ class InteractionRank(CorrelationRank):
 		return self.master.disc_data is not None
 
 
-class OWInteractions(OWCorrelations):
+class OWInteractions(Orange.widgets.data.owcorrelations.OWCorrelations):
 	name = "Interactions"
 	description = "Compute all pairwise attribute interactions."
+	category = None
 
 	class Inputs:
 		data = Input("Data", Table)
@@ -152,7 +153,7 @@ class OWInteractions(OWCorrelations):
 		not_enough_inst = Msg("At least two instances are needed.")
 
 	def __init__(self):
-		super(OWCorrelations, self).__init__()
+		super(Orange.widgets.data.owcorrelations.OWCorrelations, self).__init__()
 		self.data = None  # type: Table
 		self.disc_data = None  # type: Table
 

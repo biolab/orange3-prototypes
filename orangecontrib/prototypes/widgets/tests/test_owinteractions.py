@@ -7,7 +7,6 @@ import numpy.testing as npt
 from AnyQt.QtCore import Qt
 
 from Orange.data import Table, Domain, ContinuousVariable, DiscreteVariable
-from Orange.tests import test_filename
 from Orange.widgets.tests.base import WidgetTest
 from Orange.widgets.tests.utils import simulate
 from Orange.widgets.visualize.owscatterplot import OWScatterPlot
