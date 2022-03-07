@@ -62,16 +62,16 @@ class Interaction:
 
 class Heuristic:
 	def __init__(self, weights):
-		self.n = len(weights)
-		self.w = weights.copy()
-		self.a = np.arange(self.n)
-		self.a = self.a[np.argsort(self.w)]
+		self.weights = weights
+		self.n_attributes = len(self.weights)
+		self.attributes = np.arange(self.n_attributes)
+		self.attributes = self.attributes[np.argsort(self.weights)]
 
 	def generate_states(self):
 		# prioritize two mid ranked attributes over highest first
-		for s in range(1, self.n * (self.n - 1) // 2):
-			for i in range(max(s - self.n + 1, 0), (s + 1) // 2):
-				yield self.a[i], self.a[s - i]
+		for s in range(1, self.n_attributes * (self.n_attributes - 1) // 2):
+			for i in range(max(s - self.n_attributes + 1, 0), (s + 1) // 2):
+				yield self.attributes[i], self.attributes[s - i]
 
 	def get_states(self, initial_state):
 		states = self.generate_states()
@@ -119,8 +119,8 @@ class InteractionRank(Orange.widgets.data.owcorrelations.CorrelationRank):
 		for i, attr in enumerate(attrs):
 			item = QStandardItem(attr.name)
 			item.setData(attrs, self._AttrRole)
-			item.setData(Qt.AlignLeft + Qt.AlignTop, Qt.TextAlignmentRole)
-			item.setToolTip("Attribute Info: {:.1f}%".format(100*score[2+i]))
+			item.setData(Qt.AlignLeft + Qt.AlignCenter, Qt.TextAlignmentRole)
+			item.setToolTip("{}\nInfo Gain: {:.1f}%".format(attr.name, 100*score[2+i]))
 			attr_items.append(item)
 		interaction_item = QStandardItem("{:+.1f}%".format(100*score[1]))
 		interaction_item.setData(score[1], self.IntRole)
@@ -151,9 +151,10 @@ class OWInteractions(Orange.widgets.data.owcorrelations.OWCorrelations):
 	class Warning(OWWidget.Warning):
 		not_enough_vars = Msg("At least two features are needed.")
 		not_enough_inst = Msg("At least two instances are needed.")
+		no_class_var = Msg("Target feature missing")
 
 	def __init__(self):
-		super(Orange.widgets.data.owcorrelations.OWCorrelations, self).__init__()
+		OWWidget.__init__(self)
 		self.data = None  # type: Table
 		self.disc_data = None  # type: Table
 
@@ -189,6 +190,8 @@ class OWInteractions(Orange.widgets.data.owcorrelations.OWCorrelations):
 		if data is not None:
 			if len(data) < 2:
 				self.Warning.not_enough_inst()
+			elif data.Y.size == 0:
+				self.Warning.no_class_var()
 			else:
 				remover = Remove(Remove.RemoveConstant)
 				data = remover(data)

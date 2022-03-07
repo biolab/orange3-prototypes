@@ -46,6 +46,14 @@ class TestOWInteractions(WidgetTest):
 		self.send_signal(self.widget.Inputs.data, None)
 		self.assertFalse(self.widget.Warning.not_enough_vars.is_shown())
 
+	def test_data_no_class(self):
+		"""Check interaction table for dataset without class variable"""
+		self.send_signal(self.widget.Inputs.data, self.data[:, :-1])
+		self.wait_until_finished()
+		self.process_events()
+		self.assertEqual(self.widget.vizrank.rank_model.columnCount(), 0)
+		self.assertTrue(self.widget.Warning.no_class_var.is_shown())
+
 	def test_input_data_one_instance(self):
 		"""Check interaction table for dataset with one instance"""
 		self.send_signal(self.widget.Inputs.data, self.data[:1])
@@ -158,22 +166,6 @@ class TestOWInteractions(WidgetTest):
 		self.assertIs(spw.attr_x, self.data.domain[2])
 		self.assertIs(spw.attr_y, self.data.domain[3])
 
-	def test_heuristic(self):
-		"""Check attribute pairs returned by heuristic"""
-		score = Interaction(self.disc_data)
-		heuristic = Heuristic(score.gains)
-		self.assertListEqual(
-			list(heuristic.get_states(None))[:10],
-			[(14, 6), (14, 10), (14, 15), (6, 10), (14, 5), (6, 15), (14, 11), (6, 5), (10, 15), (14, 4)]
-		)
-
-		states = heuristic.get_states(None)
-		_ = next(states)
-		self.assertListEqual(
-			list(heuristic.get_states(next(states)))[:9],
-			[(14, 10), (14, 15), (6, 10), (14, 5), (6, 15), (14, 11), (6, 5), (10, 15), (14, 4)]
-		)
-
 	def test_feature_combo(self):
 		"""Check content of feature selection combobox"""
 		feature_combo = self.widget.controls.feature
@@ -225,7 +217,7 @@ class TestOWInteractions(WidgetTest):
 
 	@patch("orangecontrib.prototypes.widgets.owinteractions.SIZE_LIMIT", 2000)
 	def test_select_feature_against_heuristic(self):
-		"""Never use heuristic if feature is selected"""
+		"""Check heuristic use when feature selected"""
 		feature_combo = self.widget.controls.feature
 		self.send_signal(self.widget.Inputs.data, self.data)
 		simulate.combobox_activate_index(feature_combo, 2)
@@ -249,15 +241,6 @@ class TestInteractionRank(WidgetTest):
 		self.vizrank = InteractionRank(None)
 		self.vizrank.attrs = self.attrs
 
-	def test_compute_score(self):
-		"""Check score calculation"""
-		self.vizrank.master = Mock()
-		self.vizrank.interaction = Interaction(self.data)
-		npt.assert_almost_equal(
-			self.vizrank.compute_score((0, 1)),
-			[0.1511, -0.1511, 0.3837, 0.1511, 0.3837], 4
-		)
-
 	def test_row_for_state(self):
 		"""Check row calculation"""
 		row = self.vizrank.row_for_state((-0.1511, 0.1511, 0.3837, 0.1511, 0.3837), (0, 1))
@@ -266,6 +249,60 @@ class TestInteractionRank(WidgetTest):
 		self.assertEqual(row[0].data(InteractionRank.RemovedRole), 0.3837)
 		self.assertEqual(row[1].data(Qt.DisplayRole), self.attrs[0].name)
 		self.assertEqual(row[2].data(Qt.DisplayRole), self.attrs[1].name)
+
+
+class TestInteractionScorer(unittest.TestCase):
+	def test_compute_score(self):
+		"""Check score calculation"""
+		x = np.array([[1, 1], [0, 1], [1, 1], [0, 0]])
+		y = np.array([0, 1, 1, 1])
+		domain = Domain([DiscreteVariable(str(i)) for i in range(2)], DiscreteVariable("3"))
+		data = Table(domain, x, y)
+		self.interaction = Interaction(data)
+		npt.assert_almost_equal(self.interaction(0, 1), -0.1226, 4)
+		npt.assert_almost_equal(self.interaction.class_h, 0.8113, 4)
+		npt.assert_almost_equal(self.interaction.attr_h[0], 1., 4)
+		npt.assert_almost_equal(self.interaction.attr_h[1], 0.8113, 4)
+		npt.assert_almost_equal(self.interaction.gains[0], 0.3113, 4)
+		npt.assert_almost_equal(self.interaction.gains[1], 0.1226, 4)
+		npt.assert_almost_equal(self.interaction.removed_h[0, 1], 0.3113, 4)
+
+	def test_nans(self):
+		"""Check score calculation with sparse data"""
+		x = np.array([[1, 1], [0, 1], [1, 1], [0, 0], [1, np.nan], [np.nan, 0], [np.nan, np.nan]])
+		y = np.array([0, 1, 1, 1, 0, 0, 1])
+		domain = Domain([DiscreteVariable(str(i)) for i in range(2)], DiscreteVariable("3"))
+		data = Table(domain, x, y)
+		self.interaction = Interaction(data)
+		npt.assert_almost_equal(self.interaction(0, 1), 0.0167, 4)
+		npt.assert_almost_equal(self.interaction.class_h, 0.9852, 4)
+		npt.assert_almost_equal(self.interaction.attr_h[0], 0.9710, 4)
+		npt.assert_almost_equal(self.interaction.attr_h[1], 0.9710, 4)
+		npt.assert_almost_equal(self.interaction.gains[0], 0.4343, 4)
+		npt.assert_almost_equal(self.interaction.gains[1], 0.0343, 4)
+		npt.assert_almost_equal(self.interaction.removed_h[0, 1], 0.4852, 4)
+
+
+class TestHeuristic(unittest.TestCase):
+	@classmethod
+	def setUpClass(cls):
+		cls.zoo = Table("zoo")
+
+	def test_heuristic(self):
+		"""Check attribute pairs returned by heuristic"""
+		score = Interaction(self.zoo)
+		heuristic = Heuristic(score.gains)
+		self.assertListEqual(
+			list(heuristic.get_states(None))[:10],
+			[(14, 6), (14, 10), (14, 15), (6, 10), (14, 5), (6, 15), (14, 11), (6, 5), (10, 15), (14, 4)]
+		)
+
+		states = heuristic.get_states(None)
+		_ = next(states)
+		self.assertListEqual(
+			list(heuristic.get_states(next(states)))[:9],
+			[(14, 10), (14, 15), (6, 10), (14, 5), (6, 15), (14, 11), (6, 5), (10, 15), (14, 4)]
+		)
 
 
 if __name__ == "__main__":
