@@ -11,7 +11,8 @@ from Orange.widgets.tests.base import WidgetTest
 from Orange.widgets.tests.utils import simulate
 from Orange.widgets.visualize.owscatterplot import OWScatterPlot
 from Orange.widgets.widget import AttributeList
-from orangecontrib.prototypes.widgets.owinteractions import OWInteractions, Heuristic, Interaction, InteractionRank
+from orangecontrib.prototypes.widgets.owinteractions import \
+	OWInteractions, Heuristic, HeuristicType, Interaction, InteractionRank
 
 
 class TestOWInteractions(WidgetTest):
@@ -117,7 +118,7 @@ class TestOWInteractions(WidgetTest):
 		self.assertIsInstance(interactions, Table)
 		self.assertEqual(len(interactions), n_attrs*(n_attrs-1)/2)
 		self.assertEqual(len(interactions.domain.metas), 2)
-		self.assertListEqual(["Interaction", "Entropy Removed"], [m.name for m in interactions.domain.attributes])
+		self.assertListEqual(["Interaction"], [m.name for m in interactions.domain.attributes])
 
 	def test_input_changed(self):
 		"""Check whether changing input emits commit"""
@@ -165,6 +166,21 @@ class TestOWInteractions(WidgetTest):
 		self.send_signal(spw.Inputs.features, features, widget=spw)
 		self.assertIs(spw.attr_x, self.data.domain[2])
 		self.assertIs(spw.attr_y, self.data.domain[3])
+
+	@patch("orangecontrib.prototypes.widgets.owinteractions.SIZE_LIMIT", 2000)
+	def test_heuristic_type(self):
+		h_type = self.widget.controls.heuristic_type
+		self.send_signal(self.widget.Inputs.data, self.disc_data)
+		self.wait_until_finished()
+		self.process_events()
+		infogain = list(self.widget.vizrank.heuristic.get_states(None))
+
+		simulate.combobox_activate_item(h_type, "Random Search")
+		self.wait_until_finished()
+		self.process_events()
+		random = list(self.widget.vizrank.heuristic.get_states(None))
+
+		self.assertFalse(infogain == random, msg="Double check results, there is a 1 in 15! chance heuristics are equal.")
 
 	def test_feature_combo(self):
 		"""Check content of feature selection combobox"""
@@ -243,10 +259,10 @@ class TestInteractionRank(WidgetTest):
 
 	def test_row_for_state(self):
 		"""Check row calculation"""
-		row = self.vizrank.row_for_state((-0.1511, 0.1511, 0.3837, 0.1511, 0.3837), (0, 1))
-		self.assertEqual(row[0].data(Qt.DisplayRole), "+15.1%")
+		row = self.vizrank.row_for_state((-0.1511, 0.1511, 0.3837, 0.1511), (0, 1))
+		self.assertEqual(row[0].data(Qt.DisplayRole), "I: +15.1%  T: 68.6%")
 		self.assertEqual(row[0].data(InteractionRank.IntRole), 0.1511)
-		self.assertEqual(row[0].data(InteractionRank.RemovedRole), 0.3837)
+		self.assertListEqual(row[0].data(InteractionRank.GainRole), [0.3837, 0.1511])
 		self.assertEqual(row[1].data(Qt.DisplayRole), self.attrs[0].name)
 		self.assertEqual(row[2].data(Qt.DisplayRole), self.attrs[1].name)
 
@@ -291,17 +307,17 @@ class TestHeuristic(unittest.TestCase):
 	def test_heuristic(self):
 		"""Check attribute pairs returned by heuristic"""
 		score = Interaction(self.zoo)
-		heuristic = Heuristic(score.gains)
+		heuristic = Heuristic(score.gains, heuristic_type=HeuristicType.INFOGAIN)
 		self.assertListEqual(
-			list(heuristic.get_states(None))[:10],
-			[(14, 6), (14, 10), (14, 15), (6, 10), (14, 5), (6, 15), (14, 11), (6, 5), (10, 15), (14, 4)]
+			list(heuristic.get_states(None))[:9],
+			[(14, 6), (14, 10), (14, 15), (6, 10), (14, 5), (6, 15), (14, 11), (6, 5), (10, 15)]
 		)
 
 		states = heuristic.get_states(None)
 		_ = next(states)
 		self.assertListEqual(
-			list(heuristic.get_states(next(states)))[:9],
-			[(14, 10), (14, 15), (6, 10), (14, 5), (6, 15), (14, 11), (6, 5), (10, 15), (14, 4)]
+			list(heuristic.get_states(next(states)))[:8],
+			[(14, 10), (14, 15), (6, 10), (14, 5), (6, 15), (14, 11), (6, 5), (10, 15)]
 		)
 
 
