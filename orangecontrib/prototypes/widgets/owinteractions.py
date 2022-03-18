@@ -140,6 +140,7 @@ class OWInteractions(Orange.widgets.data.owcorrelations.OWCorrelations):
 	name = "Interactions"
 	description = "Compute all pairwise attribute interactions."
 	category = None
+	icon = "icons/Interactions.svg"
 
 	class Inputs:
 		data = Input("Data", Table)
