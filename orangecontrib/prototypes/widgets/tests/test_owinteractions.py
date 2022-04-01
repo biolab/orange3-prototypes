@@ -28,13 +28,13 @@ class TestOWInteractions(WidgetTest):
 	def test_input_data(self):
 		"""Check interaction table"""
 		self.send_signal(self.widget.Inputs.data, None)
-		self.assertEqual(self.widget.vizrank.rank_model.columnCount(), 0)
+		self.assertEqual(self.widget.vizrank.rank_model.columnCount(), 4)
 		self.assertEqual(self.widget.vizrank.rank_model.rowCount(), 0)
 		self.send_signal(self.widget.Inputs.data, self.data)
 		self.wait_until_finished()
 		n_attrs = len(self.data.domain.attributes)
 		self.process_events()
-		self.assertEqual(self.widget.vizrank.rank_model.columnCount(), 3)
+		self.assertEqual(self.widget.vizrank.rank_model.columnCount(), 4)
 		self.assertEqual(self.widget.vizrank.rank_model.rowCount(), n_attrs*(n_attrs-1)/2)
 
 	def test_input_data_one_feature(self):
@@ -42,7 +42,7 @@ class TestOWInteractions(WidgetTest):
 		self.send_signal(self.widget.Inputs.data, self.data[:, [0, 4]])
 		self.wait_until_finished()
 		self.process_events()
-		self.assertEqual(self.widget.vizrank.rank_model.columnCount(), 0)
+		self.assertEqual(self.widget.vizrank.rank_model.columnCount(), 4)
 		self.assertTrue(self.widget.Warning.not_enough_vars.is_shown())
 		self.send_signal(self.widget.Inputs.data, None)
 		self.assertFalse(self.widget.Warning.not_enough_vars.is_shown())
@@ -52,7 +52,7 @@ class TestOWInteractions(WidgetTest):
 		self.send_signal(self.widget.Inputs.data, self.data[:, :-1])
 		self.wait_until_finished()
 		self.process_events()
-		self.assertEqual(self.widget.vizrank.rank_model.columnCount(), 0)
+		self.assertEqual(self.widget.vizrank.rank_model.columnCount(), 4)
 		self.assertTrue(self.widget.Warning.no_class_var.is_shown())
 
 	def test_input_data_one_instance(self):
@@ -60,7 +60,7 @@ class TestOWInteractions(WidgetTest):
 		self.send_signal(self.widget.Inputs.data, self.data[:1])
 		self.wait_until_finished()
 		self.process_events()
-		self.assertEqual(self.widget.vizrank.rank_model.columnCount(), 0)
+		self.assertEqual(self.widget.vizrank.rank_model.columnCount(), 4)
 		self.assertFalse(self.widget.Information.removed_cons_feat.is_shown())
 		self.assertTrue(self.widget.Warning.not_enough_inst.is_shown())
 		self.send_signal(self.widget.Inputs.data, None)
@@ -92,7 +92,7 @@ class TestOWInteractions(WidgetTest):
 		self.send_signal(self.widget.Inputs.data, Table(domain_cont, x, y))
 		self.wait_until_finished()
 		self.process_events()
-		self.assertEqual(self.widget.vizrank.rank_model.columnCount(), 0)
+		self.assertEqual(self.widget.vizrank.rank_model.columnCount(), 4)
 		self.assertTrue(self.widget.Warning.not_enough_vars.is_shown())
 		self.assertTrue(self.widget.Information.removed_cons_feat.is_shown())
 
@@ -259,12 +259,13 @@ class TestInteractionRank(WidgetTest):
 
 	def test_row_for_state(self):
 		"""Check row calculation"""
-		row = self.vizrank.row_for_state((-0.1511, 0.1511, 0.3837, 0.1511), (0, 1))
-		self.assertEqual(row[0].data(Qt.DisplayRole), "I: +15.1%  T: 68.6%")
+		row = self.vizrank.row_for_state((0.1511, 0.3837, 0.1511), (0, 1))
+		self.assertEqual(row[0].data(Qt.DisplayRole), "+15.1%")
 		self.assertEqual(row[0].data(InteractionRank.IntRole), 0.1511)
 		self.assertListEqual(row[0].data(InteractionRank.GainRole), [0.3837, 0.1511])
-		self.assertEqual(row[1].data(Qt.DisplayRole), self.attrs[0].name)
-		self.assertEqual(row[2].data(Qt.DisplayRole), self.attrs[1].name)
+		self.assertEqual(row[1].data(Qt.DisplayRole), "68.6%")
+		self.assertEqual(row[2].data(Qt.DisplayRole), self.attrs[0].name)
+		self.assertEqual(row[3].data(Qt.DisplayRole), self.attrs[1].name)
 
 
 class TestInteractionScorer(unittest.TestCase):

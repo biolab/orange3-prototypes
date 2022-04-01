@@ -51,12 +51,15 @@ class Interaction:
 		self.attr_h = np.zeros(self.n_attrs)
 		self.gains = np.zeros(self.n_attrs)
 		self.removed_h = np.zeros((self.n_attrs, self.n_attrs))
+
 		# Precompute information gain of each attribute for faster overall
-		# computation and to create heuristic.
+		# computation and to create heuristic. Only removes necessary NaN values
+		# to keep as much data as possible and keep entropies and information gains
+		# invariant of third attribute.
+		# In certain situations this can cause unexpected results i.e. negative
+		# information gains or negative interactions lower than individual
+		# attribute information.
 		self.compute_gains()
-		# Only removes necessary NaN values to ensure consistency in results.
-		# In certian situations this can cause negative information gains or
-		# negative interactions lower than inividual attribute information.
 
 	@staticmethod
 	def distribution(ar):
@@ -210,6 +213,8 @@ class InteractionRank(Orange.widgets.data.owcorrelations.CorrelationRank):
 		data = self.master.disc_data
 		self.attrs = data and data.domain.attributes
 		self.model_proxy.setFilterKeyColumn(-1)
+		self.rank_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+		self.rank_model.setHorizontalHeaderLabels(["Interaction", "Info Gain", "Feature 1", "Feature 2"])
 		self.heuristic = None
 		self.use_heuristic = False
 		self.sel_feature_index = self.master.feature and data.domain.index(self.master.feature)
@@ -226,7 +231,7 @@ class InteractionRank(Orange.widgets.data.owcorrelations.CorrelationRank):
 		score = self.interaction(attr1, attr2) / h
 		gain1 = self.interaction.gains[attr1] / h
 		gain2 = self.interaction.gains[attr2] / h
-		return -score, score, gain1, gain2
+		return score, gain1, gain2
 
 	def row_for_state(self, score, state):
 		attrs = sorted((self.attrs[x] for x in state), key=attrgetter("name"))
@@ -236,12 +241,12 @@ class InteractionRank(Orange.widgets.data.owcorrelations.CorrelationRank):
 			item.setToolTip(attr.name)
 			attr_items.append(item)
 		score_items = [
-			QStandardItem("{:+.1f}%".format(100 * score[1])),
-			QStandardItem("{:.1f}%".format(100 * sum(score[1:])))
+			QStandardItem("{:+.1f}%".format(100 * score[0])),
+			QStandardItem("{:.1f}%".format(100 * sum(score)))
 		]
-		score_items[0].setData(score[1], self.IntRole)
+		score_items[0].setData(score[0], self.IntRole)
 		# arrange bars to match columns
-		gains = [x[1] for x in sorted(enumerate(score[2:4]), key=lambda x: self.attrs[state[x[0]]].name)]
+		gains = [x[1] for x in sorted(enumerate(score[1:]), key=lambda x: self.attrs[state[x[0]]].name)]
 		score_items[0].setData(gains, self.GainRole)
 		score_items[0].setToolTip("{}: {:+.1f}%\n{}: {:+.1f}%".format(attrs[0], 100*gains[0], attrs[1], 100*gains[1]))
 		for item in score_items + attr_items:
@@ -251,12 +256,6 @@ class InteractionRank(Orange.widgets.data.owcorrelations.CorrelationRank):
 
 	def check_preconditions(self):
 		return self.master.disc_data is not None
-
-	def stopped(self):
-		self.threadStopped.emit()
-		# todo: call setSectionResizeMode() and setHorizontalHeaderLabels() earlier and fix override
-		self.rank_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
-		self.rank_model.setHorizontalHeaderLabels(["Interaction", "Info Gain", "Feature 1", "Feature 2"])
 
 
 class OWInteractions(Orange.widgets.data.owcorrelations.OWCorrelations):
@@ -299,7 +298,7 @@ class OWInteractions(Orange.widgets.data.owcorrelations.OWCorrelations):
 			placeholder="(All combinations)")
 		gui.comboBox(
 			box, self, "feature", callback=self._feature_combo_changed,
-			model=self.feature_model
+			model=self.feature_model, searchable=True
 		)
 
 		self.vizrank, _ = InteractionRank.add_vizrank(
