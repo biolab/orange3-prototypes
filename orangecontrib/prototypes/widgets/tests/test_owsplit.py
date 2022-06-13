@@ -1,4 +1,7 @@
 # pylint: disable=missing-docstring,unsubscriptable-object
+import os
+import unittest
+
 import numpy as np
 
 from Orange.data import Table, StringVariable, Domain
@@ -10,7 +13,8 @@ from orangecontrib.prototypes.widgets.owsplit import OWSplit
 class TestOWSplit(WidgetTest):
     def setUp(self):
         self.widget = self.create_widget(OWSplit)
-        self.data = Table.from_file("orange-in-education.tab")
+        test_path = os.path.dirname(os.path.abspath(__file__))
+        self.data = Table.from_file(os.path.join(test_path, "orange-in-education.tab"))
         self._create_simple_corpus()
 
     def _set_attr(self, attr, widget=None):
@@ -84,3 +88,7 @@ class TestOWSplit(WidgetTest):
         # new columns will be ["?", "bar", "baz ", "foo (1)"]
         self.assertEqual(len(self.get_output(self.widget.Outputs.data).domain),
                          5)
+
+
+if __name__ == "__main__":
+    unittest.main()
