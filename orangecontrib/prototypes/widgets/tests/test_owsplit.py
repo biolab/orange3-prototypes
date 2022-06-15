@@ -14,7 +14,8 @@ class TestOWSplit(WidgetTest):
     def setUp(self):
         self.widget = self.create_widget(OWSplit)
         test_path = os.path.dirname(os.path.abspath(__file__))
-        self.data = Table.from_file(os.path.join(test_path, "orange-in-education.tab"))
+        self.data = Table.from_file(
+            os.path.join(test_path, "orange-in-education.tab"))
         self._create_simple_corpus()
 
     def _set_attr(self, attr, widget=None):
@@ -52,6 +53,19 @@ class TestOWSplit(WidgetTest):
         output = self.get_output(self.widget.Outputs.data)
         self.assertEqual(len(output.domain.attributes),
                          len(self.data.domain.attributes) + 3)
+        self.assertTrue("in-class, in hands-on workshops" in output.domain
+                        and "in-class, in lectures" in output.domain and
+                        "outside the classroom" in output.domain)
+        np.testing.assert_array_equal(output[:10, "in-class, in hands-on "
+                                                  "workshops"],
+                                      np.array([0, 0, 1, 0, 1, 1, 0, 1, 0, 0]
+                                               ).reshape(-1, 1))
+        np.testing.assert_array_equal(output[:10, "in-class, in lectures"],
+                                      np.array([0, 1, 0, 0, 1, 0, 1, 1, 1, 0]
+                                               ).reshape(-1, 1))
+        np.testing.assert_array_equal(output[:10, "outside the classroom"],
+                                      np.array([1, 0, 1, 1, 1, 0, 0, 1, 1, 1]
+                                               ).reshape(-1, 1))
 
     def test_empty_data(self):
         """Do not crash on empty data"""

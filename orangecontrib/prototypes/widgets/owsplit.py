@@ -20,8 +20,15 @@ class SplitColumn:
 
         column = self.get_string_values(data, self.attr)
         values = [s.split(self.delimiter) for s in column]
-        self.new_values = sorted({val if val else "?" for vals in values for
-                                  val in vals})
+        self.new_values = tuple(sorted({val if val else "?" for vals in
+                                        values for val in vals}))
+
+    def __eq__(self, other):
+        return self.attr == other.attr and self.delimiter == \
+               other.delimiter and self.new_values == other.new_values
+
+    def __hash__(self):
+        return hash((self.attr, self.delimiter, self.new_values))
 
     def __call__(self, data):
         column = self.get_string_values(data, self.attr)
@@ -44,6 +51,13 @@ class OneHotStrings(SharedComputeValue):
     def __init__(self, fn, new_feature):
         super().__init__(fn)
         self.new_feature = new_feature
+
+    def __eq__(self, other):
+        return self.compute_shared == other.compute_shared \
+           and self.new_feature == other.new_feature
+
+    def __hash__(self):
+        return hash((self.compute_shared, self.new_feature))
 
     def compute(self, data, shared_data):
         indices = shared_data[self.new_feature]
