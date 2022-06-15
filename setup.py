@@ -60,7 +60,7 @@ if __name__ == '__main__':
         long_description_content_type='text/markdown',
         packages=find_packages(),
         package_data={
-            "orangecontrib.prototypes.widgets": ["icons/*.svg"]
+            "orangecontrib.prototypes.widgets": ["icons/*.svg", "tests/*.tab"]
         },
         install_requires=[
             'Orange3>=3.28',
