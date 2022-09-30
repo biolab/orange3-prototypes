@@ -12,7 +12,8 @@ from Orange.widgets.tests.utils import simulate
 from Orange.widgets.visualize.owscatterplot import OWScatterPlot
 from Orange.widgets.widget import AttributeList
 from orangecontrib.prototypes.widgets.owinteractions import \
-	OWInteractions, Heuristic, HeuristicType, Interaction, InteractionRank
+	OWInteractions, Heuristic, HeuristicType, InteractionRank
+from orangecontrib.prototypes.interactions import Interaction
 
 
 class TestOWInteractions(WidgetTest):
@@ -278,11 +279,8 @@ class TestInteractionScorer(unittest.TestCase):
 		self.interaction = Interaction(data)
 		npt.assert_almost_equal(self.interaction(0, 1), -0.1226, 4)
 		npt.assert_almost_equal(self.interaction.class_h, 0.8113, 4)
-		npt.assert_almost_equal(self.interaction.attr_h[0], 1., 4)
-		npt.assert_almost_equal(self.interaction.attr_h[1], 0.8113, 4)
 		npt.assert_almost_equal(self.interaction.gains[0], 0.3113, 4)
 		npt.assert_almost_equal(self.interaction.gains[1], 0.1226, 4)
-		npt.assert_almost_equal(self.interaction.removed_h[0, 1], 0.3113, 4)
 
 	def test_nans(self):
 		"""Check score calculation with sparse data"""
@@ -293,11 +291,8 @@ class TestInteractionScorer(unittest.TestCase):
 		self.interaction = Interaction(data)
 		npt.assert_almost_equal(self.interaction(0, 1), 0.0167, 4)
 		npt.assert_almost_equal(self.interaction.class_h, 0.9852, 4)
-		npt.assert_almost_equal(self.interaction.attr_h[0], 0.9710, 4)
-		npt.assert_almost_equal(self.interaction.attr_h[1], 0.9710, 4)
 		npt.assert_almost_equal(self.interaction.gains[0], 0.4343, 4)
 		npt.assert_almost_equal(self.interaction.gains[1], 0.0343, 4)
-		npt.assert_almost_equal(self.interaction.removed_h[0, 1], 0.4852, 4)
 
 
 class TestHeuristic(unittest.TestCase):
