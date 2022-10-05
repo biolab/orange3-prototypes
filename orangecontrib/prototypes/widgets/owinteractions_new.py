@@ -337,6 +337,10 @@ class OWInteractions(OWWidget, ConcurrentWidgetMixin):
             self.progressBarFinished()
             self.filter.setEnabled(True)
 
+    def _select_first_if_none(self):
+        if not self.rank_table.selectedIndexes():
+            self.rank_table.selectRow(0)
+
     def on_selection_changed(self, selected):
         self.selection = [self.model.data(ind) for ind in selected.indexes()[-2:]]
         self.commit()
@@ -366,7 +370,7 @@ class OWInteractions(OWWidget, ConcurrentWidgetMixin):
     def iterate_states(self, initial_state):
         if self.feature is not None:
             return self._iterate_by_feature(initial_state)
-        if self.heuristic is not None:
+        if self.n_attrs > 3 and self.heuristic is not None:
             return self.heuristic.get_states(initial_state)
         return self._iterate_all(initial_state)
 
@@ -400,6 +404,7 @@ class OWInteractions(OWWidget, ConcurrentWidgetMixin):
         self.button.setText("Finished")
         self.button.setEnabled(False)
         self.filter.setEnabled(True)
+        self._select_first_if_none()
 
     def send_report(self):
         self.report_table("Interactions", self.rank_table)
