@@ -19,8 +19,9 @@ class ArrayTableModel(PyTableModel):
     Other, unlisted methods aren't guaranteed to work and should be used with care.
 
     Also requires access to private members of ``AbstractSortTableModel`` directly;
-    ``__sortInd`` is used for sorting and potential filtering, and ``__init__`` because the
-    parent implementation immediately wraps a list, which this model does not use.
+    ``__sortInd`` is needed to append new unsorted data, and ``__init__`` is used
+    because the parent implementation immediately wraps a list, which this model
+    does not have.
     """
     def __init__(self, *args, **kwargs):
         super(PyTableModel, self).__init__(*args, **kwargs)
@@ -31,8 +32,12 @@ class ArrayTableModel(PyTableModel):
 
         self._data = None  # type: np.ndarray
         self._columns = 0
-        self._rows = 0
-        self._max_display_rows = self._max_data_rows = MAX_ROWS
+        self._rows = 0  # current number of rows containing data
+        self._max_view_rows = MAX_ROWS  # maximum number of rows the model/view will display
+        self._max_data_rows = MAX_ROWS  # maximum allowed size for the `_data` array
+        # ``__len__`` returns _rows: amount of existing data in the model
+        # ``rowCount`` returns the lowest of `_rows` and `_max_view_rows`:
+        # how large the model/view thinks it is
 
     def sortInd(self):
         return self._AbstractSortTableModel__sortInd
@@ -53,7 +58,7 @@ class ArrayTableModel(PyTableModel):
         self.setSortIndices(indices)
 
     def rowCount(self, parent=QModelIndex()):
-        return 0 if parent.isValid() else min(self._rows, self._max_display_rows)
+        return 0 if parent.isValid() else min(self._rows, self._max_view_rows)
 
     def columnCount(self, parent=QModelIndex()):
         return 0 if parent.isValid() else self._columns
@@ -91,10 +96,10 @@ class ArrayTableModel(PyTableModel):
         if n_rows == 0:
             return
         n_data = len(self._data)
-        insert = self._rows < self._max_display_rows
+        insert = self._rows < self._max_view_rows
 
         if insert:
-            self.beginInsertRows(QModelIndex(), self._rows, min(self._max_display_rows, self._rows + n_rows) - 1)
+            self.beginInsertRows(QModelIndex(), self._rows, min(self._max_view_rows, self._rows + n_rows) - 1)
 
         if self._rows + n_rows >= n_data:
             n_data = min(max(n_data + n_rows, 2 * n_data), self._max_data_rows)

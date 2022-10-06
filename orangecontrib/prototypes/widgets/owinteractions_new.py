@@ -278,7 +278,7 @@ class OWInteractions(OWWidget, ConcurrentWidgetMixin):
     def set_data(self, data):
         self.closeContext()
         self.clear_messages()
-        self.selection = []
+        self.selection = {}
         self.data = data
         self.pp_data = None
         self.n_attrs = 0
@@ -333,24 +333,40 @@ class OWInteractions(OWWidget, ConcurrentWidgetMixin):
         if not self.keep_running:
             self.button.setText("Pause")
             self.button.repaint()
-            self.progressBarInit()
             self.filter.setEnabled(False)
+            self.progressBarInit()
             self.start(run, self.compute_score, self.row_for_state,
                        self.iterate_states, self.saved_state,
                        self.progress, self.state_count())
         else:
             self.button.setText("Continue")
             self.button.repaint()
-            self.cancel()
-            self.progressBarFinished()
             self.filter.setEnabled(True)
+            self.cancel()
+            self._stopped()
 
-    def _select_first_if_none(self):
+    def _stopped(self):
+        self.progressBarFinished()
+        self._select_default()
+
+    def _select_default(self):
+        n_rows = self.model.rowCount()
+        if not n_rows:
+            return
+
+        if self.selection:
+            for i in range(n_rows):
+                names = {self.model.data(self.model.index(i, 2)),
+                         self.model.data(self.model.index(i, 3))}
+                if names == self.selection:
+                    self.rank_table.selectRow(i)
+                    break
+
         if not self.rank_table.selectedIndexes():
             self.rank_table.selectRow(0)
 
     def on_selection_changed(self, selected):
-        self.selection = [self.model.data(ind) for ind in selected.indexes()[-2:]]
+        self.selection = {self.model.data(ind) for ind in selected.indexes()[-2:]}
         self.commit()
 
     def on_filter_changed(self, text):
@@ -396,9 +412,9 @@ class OWInteractions(OWWidget, ConcurrentWidgetMixin):
                 yield self.feature_index, j
 
     def state_count(self):
-        if self.feature is None:
+        if self.feature_index is None:
             return self.n_attrs * (self.n_attrs - 1) // 2
-        return self.n_attrs
+        return self.n_attrs - 1
 
     def on_partial_result(self, result):
         add_to_model, latest_state = result
@@ -412,7 +428,9 @@ class OWInteractions(OWWidget, ConcurrentWidgetMixin):
         self.button.setText("Finished")
         self.button.setEnabled(False)
         self.filter.setEnabled(True)
-        self._select_first_if_none()
+        self.keep_running = False
+        self.saved_state = None
+        self._stopped()
 
     def send_report(self):
         self.report_table("Interactions", self.rank_table)
