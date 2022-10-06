@@ -5,9 +5,9 @@ from typing import Callable, Optional, Iterable
 import numpy as np
 
 from AnyQt.QtGui import QColor, QPainter, QPen
-from AnyQt.QtCore import QModelIndex, Qt, QLineF
+from AnyQt.QtCore import QModelIndex, Qt, QLineF, QSortFilterProxyModel
 from AnyQt.QtWidgets import QTableView, QHeaderView, \
-    QStyleOptionViewItem, QApplication, QStyle
+    QStyleOptionViewItem, QApplication, QStyle, QLineEdit
 
 from Orange.data import Table, Variable
 from Orange.preprocess import Discretize, Remove
@@ -185,6 +185,13 @@ class InteractionItemDelegate(gui.TableBarItem):
         self.drawViewItemText(style, painter, opt, textrect)
 
 
+class FilterProxy(QSortFilterProxyModel):
+    scorer = None
+
+    def sort(self, *args, **kwargs):
+        self.sourceModel().sort(*args, **kwargs)
+
+
 class OWInteractions(OWWidget, ConcurrentWidgetMixin):
     name = "Interactions New"
     description = "Compute all pairwise attribute interactions."
@@ -199,8 +206,6 @@ class OWInteractions(OWWidget, ConcurrentWidgetMixin):
 
     settingsHandler = DomainContextHandler()
     selection = ContextSetting([])
-    filter_text: str
-    filter_text = ContextSetting("")
     feature: Variable
     feature = ContextSetting(None)
     heuristic_type: int
@@ -244,15 +249,17 @@ class OWInteractions(OWWidget, ConcurrentWidgetMixin):
                      callback=self.on_feature_combo_changed,
                      model=self.feature_model, searchable=True)
 
-        self.filter = gui.lineEdit(self.controlArea, self, "filter_text",
-                                   callback=self.on_filter_changed,
-                                   callbackOnType=True)
+        self.filter = QLineEdit()
         self.filter.setPlaceholderText("Filter ...")
+        self.filter.textChanged.connect(self.on_filter_changed)
+        self.controlArea.layout().addWidget(self.filter)
 
         self.model = RankModel()
-        self.model.setHorizontalHeaderLabels((
-            "Interaction", "Information Gain", "Feature 1", "Feature 2"
-        ))
+        self.model.setHorizontalHeaderLabels(["Interaction", "Information Gain",
+                                              "Feature 1", "Feature 2"])
+        self.proxy = FilterProxy(filterCaseSensitivity=Qt.CaseInsensitive)
+        self.proxy.setSourceModel(self.model)
+        self.proxy.setFilterKeyColumn(-1)
         self.rank_table = view = QTableView(selectionBehavior=QTableView.SelectRows,
                                             selectionMode=QTableView.SingleSelection,
                                             showGrid=False,
@@ -260,7 +267,7 @@ class OWInteractions(OWWidget, ConcurrentWidgetMixin):
         view.setSortingEnabled(True)
         view.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         view.setItemDelegate(InteractionItemDelegate())
-        view.setModel(self.model)
+        view.setModel(self.proxy)
         view.selectionModel().selectionChanged.connect(self.on_selection_changed)
         self.controlArea.layout().addWidget(view)
 
@@ -292,7 +299,8 @@ class OWInteractions(OWWidget, ConcurrentWidgetMixin):
                     self.n_attrs = len(pp_data.domain.attributes)
                     self.scorer = InteractionScorer(pp_data)
                     self.heuristic = Heuristic(self.scorer.information_gain, self.heuristic_type)
-                    self.model.set_domain(pp_data.domain, scorer=self.scorer)
+                    self.model.set_domain(pp_data.domain)
+                    self.proxy.scorer = self.scorer
         self.feature_model.set_domain(self.pp_data and self.pp_data.domain)
         self.openContext(self.pp_data)
         self.initialize()
@@ -308,6 +316,7 @@ class OWInteractions(OWWidget, ConcurrentWidgetMixin):
         self.model.clear()
         self.filter.setText("")
         self.button.setText("Start")
+        self.button.setEnabled(self.pp_data is not None)
         if self.pp_data is not None:
             self.toggle()
 
@@ -325,7 +334,6 @@ class OWInteractions(OWWidget, ConcurrentWidgetMixin):
             self.button.setText("Pause")
             self.button.repaint()
             self.progressBarInit()
-            self.filter.setText("")
             self.filter.setEnabled(False)
             self.start(run, self.compute_score, self.row_for_state,
                        self.iterate_states, self.saved_state,
@@ -345,8 +353,8 @@ class OWInteractions(OWWidget, ConcurrentWidgetMixin):
         self.selection = [self.model.data(ind) for ind in selected.indexes()[-2:]]
         self.commit()
 
-    def on_filter_changed(self):
-        self.model.filter(self.filter_text)
+    def on_filter_changed(self, text):
+        self.proxy.setFilterFixedString(text)
 
     def on_feature_combo_changed(self):
         self.feature_index = self.feature and self.pp_data.domain.index(self.feature)
