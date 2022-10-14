@@ -41,11 +41,11 @@ def entropy(ar):
     return -np.sum(p * np.log2(p))
 
 
-class Interaction:
+class InteractionScorer:
     def __init__(self, data):
         self.data = data
-        self.class_h = 0
-        self.gains = np.zeros(data.X.shape[1])
+        self.class_entropy = 0
+        self.information_gain = np.zeros(data.X.shape[1])
 
         self.precompute()
 
@@ -61,16 +61,19 @@ class Interaction:
         well as negative interactions with greater magnitude than the
         combined information gain.
         """
-        self.class_h = entropy(self.data.Y)
-        for attr in range(self.gains.size):
-            self.gains[attr] = self.class_h \
+        self.class_entropy = entropy(self.data.Y)
+        for attr in range(self.information_gain.size):
+            self.information_gain[attr] = self.class_entropy \
                                + entropy(self.data.X[:, attr]) \
                                - entropy(np.column_stack((self.data.X[:, attr], self.data.Y)))
 
     def __call__(self, attr1, attr2):
         attrs = np.column_stack((self.data.X[:, attr1], self.data.X[:, attr2]))
-        return self.class_h \
-               - self.gains[attr1] \
-               - self.gains[attr2] \
+        return self.class_entropy \
+               - self.information_gain[attr1] \
+               - self.information_gain[attr2] \
                + entropy(attrs) \
                - entropy(np.column_stack((attrs, self.data.Y)))
+
+    def normalize(self, score):
+        return score / self.class_entropy

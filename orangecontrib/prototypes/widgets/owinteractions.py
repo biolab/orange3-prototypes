@@ -25,7 +25,7 @@ from Orange.widgets.visualize.utils import VizRankDialogAttrPair
 from Orange.preprocess import Discretize, Remove
 import Orange.widgets.data.owcorrelations
 
-from orangecontrib.prototypes.interactions import Interaction
+from orangecontrib.prototypes.interactions import InteractionScorer
 
 
 SIZE_LIMIT = 1000000
@@ -149,7 +149,7 @@ class InteractionRank(Orange.widgets.data.owcorrelations.CorrelationRank):
 
 	def __init__(self, *args):
 		VizRankDialogAttrPair.__init__(self, *args)
-		self.interaction = None
+		self.scorer = None
 		self.heuristic = None
 		self.use_heuristic = False
 		self.sel_feature_index = None
@@ -175,19 +175,17 @@ class InteractionRank(Orange.widgets.data.owcorrelations.CorrelationRank):
 		self.use_heuristic = False
 		self.sel_feature_index = self.master.feature and data.domain.index(self.master.feature)
 		if data:
-			if self.interaction is None or self.interaction.data != data:
-				self.interaction = Interaction(data)
+			if self.scorer is None or self.scorer.data != data:
+				self.scorer = InteractionScorer(data)
 			self.use_heuristic = len(data) * len(self.attrs) ** 2 > SIZE_LIMIT
 			if self.use_heuristic and not self.sel_feature_index:
-				self.heuristic = Heuristic(self.interaction.gains, self.master.heuristic_type)
+				self.heuristic = Heuristic(self.scorer.information_gain, self.master.heuristic_type)
 
 	def compute_score(self, state):
-		attr1, attr2 = state
-		h = self.interaction.class_h
-		score = self.interaction(attr1, attr2) / h
-		gain1 = self.interaction.gains[attr1] / h
-		gain2 = self.interaction.gains[attr2] / h
-		return score, gain1, gain2
+		scores = (self.scorer(*state),
+		          self.scorer.information_gain[state[0]],
+		          self.scorer.information_gain[state[1]])
+		return tuple(self.scorer.normalize(score) for score in scores)
 
 	def row_for_state(self, score, state):
 		attrs = sorted((self.attrs[x] for x in state), key=attrgetter("name"))

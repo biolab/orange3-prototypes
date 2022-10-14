@@ -13,7 +13,7 @@ from Orange.widgets.visualize.owscatterplot import OWScatterPlot
 from Orange.widgets.widget import AttributeList
 from orangecontrib.prototypes.widgets.owinteractions import \
 	OWInteractions, Heuristic, HeuristicType, InteractionRank
-from orangecontrib.prototypes.interactions import Interaction
+from orangecontrib.prototypes.interactions import InteractionScorer
 
 
 class TestOWInteractions(WidgetTest):
@@ -276,11 +276,11 @@ class TestInteractionScorer(unittest.TestCase):
 		y = np.array([0, 1, 1, 1])
 		domain = Domain([DiscreteVariable(str(i)) for i in range(2)], DiscreteVariable("3"))
 		data = Table(domain, x, y)
-		self.interaction = Interaction(data)
-		npt.assert_almost_equal(self.interaction(0, 1), -0.1226, 4)
-		npt.assert_almost_equal(self.interaction.class_h, 0.8113, 4)
-		npt.assert_almost_equal(self.interaction.gains[0], 0.3113, 4)
-		npt.assert_almost_equal(self.interaction.gains[1], 0.1226, 4)
+		self.scorer = InteractionScorer(data)
+		npt.assert_almost_equal(self.scorer(0, 1), -0.1226, 4)
+		npt.assert_almost_equal(self.scorer.class_entropy, 0.8113, 4)
+		npt.assert_almost_equal(self.scorer.information_gain[0], 0.3113, 4)
+		npt.assert_almost_equal(self.scorer.information_gain[1], 0.1226, 4)
 
 	def test_nans(self):
 		"""Check score calculation with sparse data"""
@@ -288,11 +288,11 @@ class TestInteractionScorer(unittest.TestCase):
 		y = np.array([0, 1, 1, 1, 0, 0, 1])
 		domain = Domain([DiscreteVariable(str(i)) for i in range(2)], DiscreteVariable("3"))
 		data = Table(domain, x, y)
-		self.interaction = Interaction(data)
-		npt.assert_almost_equal(self.interaction(0, 1), 0.0167, 4)
-		npt.assert_almost_equal(self.interaction.class_h, 0.9852, 4)
-		npt.assert_almost_equal(self.interaction.gains[0], 0.4343, 4)
-		npt.assert_almost_equal(self.interaction.gains[1], 0.0343, 4)
+		self.scorer = InteractionScorer(data)
+		npt.assert_almost_equal(self.scorer(0, 1), 0.0167, 4)
+		npt.assert_almost_equal(self.scorer.class_entropy, 0.9852, 4)
+		npt.assert_almost_equal(self.scorer.information_gain[0], 0.4343, 4)
+		npt.assert_almost_equal(self.scorer.information_gain[1], 0.0343, 4)
 
 
 class TestHeuristic(unittest.TestCase):
@@ -302,8 +302,8 @@ class TestHeuristic(unittest.TestCase):
 
 	def test_heuristic(self):
 		"""Check attribute pairs returned by heuristic"""
-		score = Interaction(self.zoo)
-		heuristic = Heuristic(score.gains, heuristic_type=HeuristicType.INFOGAIN)
+		scorer = InteractionScorer(self.zoo)
+		heuristic = Heuristic(scorer.information_gain, heuristic_type=HeuristicType.INFOGAIN)
 		self.assertListEqual(
 			list(heuristic.get_states(None))[:9],
 			[(14, 6), (14, 10), (14, 15), (6, 10), (14, 5), (6, 15), (14, 11), (6, 5), (10, 15)]
