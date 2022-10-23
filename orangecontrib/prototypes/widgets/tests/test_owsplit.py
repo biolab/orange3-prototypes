@@ -34,7 +34,7 @@ class TestOWSplit(WidgetTest):
             [
                 ["foo,"],
                 ["bar,baz "],
-                ["foo,bar"],
+                ["foo, bar"],
                 [""],
             ]
         )

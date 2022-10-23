@@ -19,7 +19,8 @@ class SplitColumn:
         self.delimiter = delimiter
 
         column = self.get_string_values(data, self.attr)
-        values = [s.split(self.delimiter) for s in column]
+        values = [[t.strip() for t in s.split(self.delimiter)]
+                  for s in column]
         self.new_values = tuple(sorted({val if val else "?" for vals in
                                         values for val in vals}))
 
@@ -32,9 +33,10 @@ class SplitColumn:
 
     def __call__(self, data):
         column = self.get_string_values(data, self.attr)
-        values = [set(s.split(self.delimiter)) for s in column]
-        shared_data = {v: [i for i, xs in enumerate(values) if v in xs] for v
-                       in self.new_values}
+        values = [{t.strip() for t in s.split(self.delimiter)}
+                  for s in column]
+        shared_data = {v: [i for i, xs in enumerate(values) if v in xs]
+                       for v in self.new_values}
         return shared_data
 
     @staticmethod
