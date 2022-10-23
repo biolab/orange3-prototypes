@@ -99,9 +99,10 @@ class TestOWSplit(WidgetTest):
         variable name."""
         self.widget.delimiter = ","
         self.send_signal(self.widget.Inputs.data, self.small_table)
-        # new columns will be ["?", "bar", "baz ", "foo (1)"]
-        self.assertEqual(len(self.get_output(self.widget.Outputs.data).domain),
-                         5)
+        out = self.get_output(self.widget.Outputs.data)
+        self.assertEqual(
+            {var.name for var in out.domain.attributes},
+            {"bar", "baz", "foo (1)"})
 
 
 if __name__ == "__main__":

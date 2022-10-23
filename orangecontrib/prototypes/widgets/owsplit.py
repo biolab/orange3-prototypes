@@ -19,7 +19,7 @@ class SplitColumn:
         self.delimiter = delimiter
 
         column = self.get_string_values(data, self.attr)
-        values = [[t.strip() for t in s.split(self.delimiter)]
+        values = [[x for x in (t.strip() for t in s.split(self.delimiter)) if x]
                   for s in column]
         self.new_values = tuple(sorted({val if val else "?" for vals in
                                         values for val in vals}))
