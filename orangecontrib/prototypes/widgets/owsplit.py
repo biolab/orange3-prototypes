@@ -40,7 +40,7 @@ class SplitColumn:
     @staticmethod
     def get_string_values(data, var):
         # turn discrete to string variable
-        column = data.get_column_view(var)[0]
+        column = data.get_column(var)
         if var.is_discrete:
             return [var.str_val(x) for x in column]
         return column

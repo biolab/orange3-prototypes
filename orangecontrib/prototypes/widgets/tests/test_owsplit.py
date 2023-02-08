@@ -88,7 +88,7 @@ class TestOWSplit(WidgetTest):
         """Test splitting when delimiter doesn't exist"""
         self.widget.delimiter = "|"
         self.send_signal(self.widget.Inputs.data, self.data)
-        new_cols = set(self.data.get_column_view("Country")[0])
+        new_cols = set(self.data.get_column("Country"))
         self.assertFalse(any(self.widget.delimiter in v for v in new_cols))
         self.assertEqual(len(self.get_output(
             self.widget.Outputs.data).domain.attributes),

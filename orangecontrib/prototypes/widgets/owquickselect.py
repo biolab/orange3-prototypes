@@ -111,7 +111,7 @@ class OWQuickSelect(widget.OWWidget):
             annotated = matching = unmatched = None
             self.n_matched = None
         else:
-            column = self.data.get_column_view(self.variable)[0]
+            column = self.data.get_column(self.variable)
             valind = self.variable.values.index(self.value)
             mask = column == valind
             annotated = create_annotated_table(self.data, np.flatnonzero(mask))
