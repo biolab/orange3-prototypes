@@ -39,7 +39,8 @@ class ArrayTableModel(PyTableModel):
         # ``rowCount`` returns the lowest of `_rows` and `_max_view_rows`:
         # how large the model/view thinks it is
 
-    def sortInd(self):
+    @property
+    def __sortInd(self):
         return self._AbstractSortTableModel__sortInd
 
     def sortColumnData(self, column):
@@ -49,7 +50,7 @@ class ArrayTableModel(PyTableModel):
         data = self.sortColumnData(self.sortColumn())
         new_ind = np.arange(sorted_rows, self._rows)
         order = 1 if self.sortOrder() == Qt.AscendingOrder else -1
-        sorter = self.sortInd()[::order]
+        sorter = self.__sortInd[::order]
         new_sorter = np.argsort(data[sorted_rows:])
         loc = np.searchsorted(data[:sorted_rows],
                               data[sorted_rows:][new_sorter],
@@ -88,18 +89,21 @@ class ArrayTableModel(PyTableModel):
         self.resetSorting()
         self.endResetModel()
 
-    def append(self, rows: list[list[float]]):
+    def extend(self, rows: list[list[float]]):
         if not isinstance(self._data, np.ndarray):
-            return self.initialize(rows)
+            self.initialize(rows)
+            return
 
         n_rows = len(rows)
         if n_rows == 0:
             return
+
         n_data = len(self._data)
         insert = self._rows < self._max_view_rows
 
         if insert:
-            self.beginInsertRows(QModelIndex(), self._rows, min(self._max_view_rows, self._rows + n_rows) - 1)
+            self.beginInsertRows(QModelIndex(), self._rows,
+                                 min(self._max_view_rows, self._rows + n_rows) - 1)
 
         if self._rows + n_rows >= n_data:
             n_data = min(max(n_data + n_rows, 2 * n_data), self._max_data_rows)
@@ -126,11 +130,9 @@ class RankModel(ArrayTableModel):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.domain = None  # type: Domain
         self.domain_model = DomainModel(DomainModel.ATTRIBUTES)
 
     def set_domain(self, domain: Domain):
-        self.domain = domain
         self.domain_model.set_domain(domain)
         n_attrs = len(domain.attributes)
         self._max_data_rows = n_attrs * (n_attrs - 1) // 2
@@ -143,16 +145,16 @@ class RankModel(ArrayTableModel):
 
     def data(self, index: QModelIndex, role=Qt.DisplayRole):
         if not index.isValid():
-            return
+            return None
 
         column = index.column()
-
         if column >= self.columnCount() - 2 and role != Qt.EditRole:
+            # use domain model for all data (except editrole) in last two columns
             try:
                 row = self.mapToSourceRows(index.row())
                 value = self.domain_model.index(int(self._data[row, column]))
                 return self.domain_model.data(value, role)
             except IndexError:
-                return
+                return None
 
         return super().data(index, role)

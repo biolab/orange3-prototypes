@@ -1,7 +1,7 @@
 import numpy as np
 
 
-def get_row_ids(ar):
+def hash_rows(ar):
     row_ids = ar[:, 0].copy()
     # Assuming the data has been discretized into fewer
     # than 10000 bins and that `ar` has up to 3 columns,
@@ -30,7 +30,7 @@ def distribution(ar):
         # implementation doesn't release the GIL. The simplest
         # solution seems to be generating unique numbers/ids
         # based on the contents of each row.
-        ar = get_row_ids(ar)
+        ar = hash_rows(ar)
 
     _, counts = np.unique(ar, return_counts=True)
     return counts / ar.shape[0]
@@ -47,9 +47,9 @@ class InteractionScorer:
         self.class_entropy = 0
         self.information_gain = np.zeros(data.X.shape[1])
 
-        self.precompute()
+        self.preprocess()
 
-    def precompute(self):
+    def preprocess(self):
         """
         Precompute information gain of each attribute to speed up
         computation and to create heuristic.
@@ -68,12 +68,12 @@ class InteractionScorer:
                                - entropy(np.column_stack((self.data.X[:, attr], self.data.Y)))
 
     def __call__(self, attr1, attr2):
-        attrs = np.column_stack((self.data.X[:, attr1], self.data.X[:, attr2]))
+        attrs = self.data.X[:, (attr1, attr2)]
         return self.class_entropy \
-               - self.information_gain[attr1] \
-               - self.information_gain[attr2] \
-               + entropy(attrs) \
-               - entropy(np.column_stack((attrs, self.data.Y)))
+            - self.information_gain[attr1] \
+            - self.information_gain[attr2] \
+            + entropy(attrs) \
+            - entropy(np.column_stack((attrs, self.data.Y)))
 
     def normalize(self, score):
         return score / self.class_entropy

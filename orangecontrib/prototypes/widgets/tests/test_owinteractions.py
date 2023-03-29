@@ -265,7 +265,7 @@ class TestHeuristic(unittest.TestCase):
         """Check attribute pairs returned by heuristic"""
         scorer = InteractionScorer(self.zoo)
         heuristic = Heuristic(scorer.information_gain,
-                              type=Heuristic.INFO_GAIN)
+                              Heuristic.INFO_GAIN)
         self.assertListEqual(list(heuristic.get_states(None))[:9],
                              [(14, 6), (14, 10), (14, 15), (6, 10),
                               (14, 5), (6, 15), (14, 11), (6, 5), (10, 15)])

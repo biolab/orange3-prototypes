@@ -9,7 +9,10 @@ from AnyQt.QtCore import QModelIndex, Qt, QLineF, QSortFilterProxyModel
 from AnyQt.QtWidgets import QTableView, QHeaderView, \
     QStyleOptionViewItem, QApplication, QStyle, QLineEdit
 
-from Orange.data import Table, Variable
+from orangecontrib.prototypes.ranktablemodel import RankModel
+from orangecontrib.prototypes.interactions import InteractionScorer
+
+from Orange.data import Table, Domain, Variable
 from Orange.preprocess import Discretize, Remove
 from Orange.widgets import gui
 from Orange.widgets.widget import OWWidget, AttributeList, Msg
@@ -19,31 +22,23 @@ from Orange.widgets.utils.concurrent import ConcurrentWidgetMixin, TaskState
 from Orange.widgets.utils.itemmodels import DomainModel
 from Orange.widgets.settings import Setting, ContextSetting, DomainContextHandler
 
-from orangecontrib.prototypes.ranktablemodel import RankModel
-from orangecontrib.prototypes.interactions import InteractionScorer
-
 
 class ModelQueue:
-    """
-    Another queueing object, similar to ``queue.Queue``.
-    The main difference is that ``get()`` returns all its
-    contents at the same time, instead of one by one.
-    """
     def __init__(self):
-        self.lock = Lock()
-        self.model = []
-        self.state = None
+        self.mutex = Lock()
+        self.queue = []
+        self.latest_state = None
 
     def put(self, row, state):
-        with self.lock:
-            self.model.append(row)
-            self.state = state
+        with self.mutex:
+            self.queue.append(row)
+            self.latest_state = state
 
     def get(self):
-        with self.lock:
-            model, self.model = self.model, []
-            state, self.state = self.state, None
-        return model, state
+        with self.mutex:
+            queue, self.queue = self.queue, []
+            state, self.latest_state = self.latest_state, None
+        return queue, state
 
 
 def run(compute_score: Callable, row_for_state: Callable,
@@ -52,8 +47,8 @@ def run(compute_score: Callable, row_for_state: Callable,
     """
     Replaces ``run_vizrank``, with some minor adjustments.
         - ``ModelQueue`` replaces ``queue.Queue``
-        - `row_for_state` parameter added
-        - `scores` parameter removed
+        - `row_for_state` can be called here, assuming we are not adding `Qt` objects to the model
+        - `scores` removed
     """
     task.set_status("Getting combinations...")
     task.set_progress_value(0.1)
@@ -103,16 +98,16 @@ def run(compute_score: Callable, row_for_state: Callable,
 
 class Heuristic:
     RANDOM, INFO_GAIN = 0, 1
-    type = {RANDOM: "Random Search",
-            INFO_GAIN: "Information Gain Heuristic"}
+    mode = {RANDOM: "Random Search",
+            INFO_GAIN: "Low Information Gain First"}
 
-    def __init__(self, weights, type=None):
+    def __init__(self, weights, mode=RANDOM):
         self.n_attributes = len(weights)
         self.attributes = np.arange(self.n_attributes)
-        if type == self.RANDOM:
-            np.random.shuffle(self.attributes)
-        if type == self.INFO_GAIN:
+        if mode == Heuristic.INFO_GAIN:
             self.attributes = self.attributes[np.argsort(weights)]
+        else:
+            np.random.shuffle(self.attributes)
 
     def generate_states(self):
         # prioritize two mid ranked attributes over highest first
@@ -196,7 +191,6 @@ class OWInteractions(OWWidget, ConcurrentWidgetMixin):
     name = "Interactions"
     description = "Compute all pairwise attribute interactions."
     icon = "icons/Interactions.svg"
-    category = "Unsupervised"
 
     class Inputs:
         data = Input("Data", Table)
@@ -208,8 +202,8 @@ class OWInteractions(OWWidget, ConcurrentWidgetMixin):
     selection = ContextSetting([])
     feature: Variable
     feature = ContextSetting(None)
-    heuristic_type: int
-    heuristic_type = Setting(0)
+    heuristic_mode: int
+    heuristic_mode = Setting(0)
 
     want_main_area = False
     want_control_area = True
@@ -230,16 +224,16 @@ class OWInteractions(OWWidget, ConcurrentWidgetMixin):
         self.saved_state = None
         self.progress = 0
 
-        self.data = None  # type: Table
-        self.pp_data = None  # type: Table
+        self.original_domain: Domain = ...
+        self.data: Table = ...
         self.n_attrs = 0
 
         self.scorer = None
         self.heuristic = None
         self.feature_index = None
 
-        gui.comboBox(self.controlArea, self, "heuristic_type",
-                     items=Heuristic.type.values(),
+        gui.comboBox(self.controlArea, self, "heuristic_mode",
+                     items=Heuristic.mode.values(),
                      callback=self.on_heuristic_combo_changed,)
 
         self.feature_model = DomainModel(order=DomainModel.ATTRIBUTES,
@@ -279,8 +273,8 @@ class OWInteractions(OWWidget, ConcurrentWidgetMixin):
         self.closeContext()
         self.clear_messages()
         self.selection = {}
-        self.data = data
-        self.pp_data = None
+        self.original_domain = data and data.domain
+        self.data = None
         self.n_attrs = 0
         if data is not None:
             if len(data) < 2:
@@ -289,20 +283,20 @@ class OWInteractions(OWWidget, ConcurrentWidgetMixin):
                 self.Warning.no_class_var()
             else:
                 remover = Remove(Remove.RemoveConstant)
-                pp_data = Discretize()(remover(data))
+                data = Discretize()(remover(data))
                 if remover.attr_results["removed"]:
                     self.Information.removed_cons_feat()
-                if len(pp_data.domain.attributes) < 2:
+                if len(data.domain.attributes) < 2:
                     self.Warning.not_enough_vars()
                 else:
-                    self.pp_data = pp_data
-                    self.n_attrs = len(pp_data.domain.attributes)
-                    self.scorer = InteractionScorer(pp_data)
-                    self.heuristic = Heuristic(self.scorer.information_gain, self.heuristic_type)
-                    self.model.set_domain(pp_data.domain)
+                    self.data = data
+                    self.n_attrs = len(data.domain.attributes)
+                    self.scorer = InteractionScorer(data)
+                    self.heuristic = Heuristic(self.scorer.information_gain, self.heuristic_mode)
+                    self.model.set_domain(data.domain)
                     self.proxy.scorer = self.scorer
-        self.feature_model.set_domain(self.pp_data and self.pp_data.domain)
-        self.openContext(self.pp_data)
+        self.feature_model.set_domain(self.data and self.data.domain)
+        self.openContext(self.data)
         self.initialize()
 
     def initialize(self):
@@ -316,17 +310,17 @@ class OWInteractions(OWWidget, ConcurrentWidgetMixin):
         self.model.clear()
         self.filter.setText("")
         self.button.setText("Start")
-        self.button.setEnabled(self.pp_data is not None)
-        if self.pp_data is not None:
+        self.button.setEnabled(self.data is not None)
+        if self.data is not None:
             self.toggle()
 
     def commit(self):
-        if self.data is None:
+        if self.original_domain is None:
             self.Outputs.features.send(None)
             return
 
         self.Outputs.features.send(AttributeList(
-            [self.data.domain[attr] for attr in self.selection]))
+            [self.original_domain[attr] for attr in self.selection]))
 
     def toggle(self):
         self.keep_running = not self.keep_running
@@ -373,18 +367,19 @@ class OWInteractions(OWWidget, ConcurrentWidgetMixin):
         self.proxy.setFilterFixedString(text)
 
     def on_feature_combo_changed(self):
-        self.feature_index = self.feature and self.pp_data.domain.index(self.feature)
+        self.feature_index = self.feature and self.data.domain.index(self.feature)
         self.initialize()
 
     def on_heuristic_combo_changed(self):
-        if self.pp_data is not None:
-            self.heuristic = Heuristic(self.scorer.information_gain, self.heuristic_type)
+        if self.data is not None:
+            self.heuristic = Heuristic(self.scorer.information_gain, self.heuristic_mode)
         self.initialize()
 
     def compute_score(self, state):
-        scores = (self.scorer(*state),
-                  self.scorer.information_gain[state[0]],
-                  self.scorer.information_gain[state[1]])
+        attr1, attr2 = state
+        scores = (self.scorer(attr1, attr2),
+                  self.scorer.information_gain[attr1],
+                  self.scorer.information_gain[attr2])
         return tuple(self.scorer.normalize(score) for score in scores)
 
     @staticmethod
@@ -420,7 +415,7 @@ class OWInteractions(OWWidget, ConcurrentWidgetMixin):
         add_to_model, latest_state = result
         if add_to_model:
             self.saved_state = latest_state
-            self.model.append(add_to_model)
+            self.model.extend(add_to_model)
             self.progress = len(self.model)
             self.progressBarSet(self.progress * 100 // self.state_count())
 
