@@ -9,6 +9,7 @@ import tiktoken
 
 from Orange.data import Table, StringVariable
 from Orange.widgets import gui
+from Orange.widgets.credentials import CredentialManager
 from Orange.widgets.utils.itemmodels import DomainModel
 from Orange.widgets.settings import Setting, DomainContextHandler, \
     ContextSetting
@@ -52,7 +53,7 @@ class OWChatGPT(OWWidget):
     keywords = ["text", "gpt"]
 
     settingsHandler = DomainContextHandler()
-    access_key = Setting("")  # TODO
+    access_key = ""
     model_index = Setting(0)
     text_var = ContextSetting(None)
     prompt_start = Setting("")
@@ -76,12 +77,16 @@ class OWChatGPT(OWWidget):
         self.__start_text_edit: QTextEdit = None
         self.__end_text_edit: QTextEdit = None
         self.__answer_text_edit: QPlainTextEdit = None
+
+        self.__cm = CredentialManager("Ask")
+        self.access_key = self.__cm.access_key or ""
+
         self.setup_gui()
 
     def setup_gui(self):
         box = gui.vBox(self.controlArea, "Chat GPT")
         edit: QLineEdit = gui.lineEdit(box, self, "access_key", "Access key:",
-                                       callback=self.commit.deferred)
+                                       callback=self.__on_access_key_changed)
         edit.setEchoMode(QLineEdit.Password)
         gui.comboBox(box, self, "model_index", label="Model:",
                      items=MODELS, callback=self.commit.deferred)
@@ -111,6 +116,10 @@ class OWChatGPT(OWWidget):
         box = gui.vBox(self.mainArea, "Answer")
         self.__answer_text_edit = QPlainTextEdit(readOnly=True)
         box.layout().addWidget(self.__answer_text_edit)
+
+    def __on_access_key_changed(self):
+        self.__cm.access_key = self.access_key
+        self.commit.deferred()
 
     def __on_start_text_edit_changed(self):
         prompt_start = self.__start_text_edit.toPlainText()
