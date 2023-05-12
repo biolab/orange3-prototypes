@@ -9,6 +9,7 @@ import tiktoken
 
 from Orange.data import Table, StringVariable
 from Orange.widgets import gui
+from Orange.widgets.credentials import CredentialManager
 from Orange.widgets.utils.itemmodels import DomainModel
 from Orange.widgets.settings import Setting, DomainContextHandler, \
     ContextSetting
@@ -45,11 +46,11 @@ class TextEdit(QTextEdit):
 
 
 class OWChatGPT(OWWidget):
-    name = "Chat GPT"
-    description = "Chat GPT."
+    name = "Ask"
+    description = "Ask AI language model a question."
     icon = "icons/chatgpt.svg"
     priority = 10
-    keywords = ["text", "gpt"]
+    keywords = ["text", "chat"]
 
     settingsHandler = DomainContextHandler()
     access_key = Setting("")  # TODO
