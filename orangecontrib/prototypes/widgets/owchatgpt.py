@@ -32,7 +32,10 @@ def run_gpt(
     content = f"{prompt_start}\n{text}.\n{prompt_end}"
     response = openai.ChatCompletion.create(
         model=model,
-        messages=[{"role": "user", "content": content}]
+        messages=[
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": content},
+        ]
     )
     return response.choices[0].message.content
 
