@@ -1,8 +1,9 @@
 from typing import Optional
 
-from AnyQt.QtCore import Signal
-from AnyQt.QtGui import QFocusEvent
-from AnyQt.QtWidgets import QPlainTextEdit, QLineEdit, QTextEdit
+from AnyQt.QtCore import QEvent, Qt, QObject, QSize
+from AnyQt.QtGui import QIcon
+from AnyQt.QtWidgets import QPlainTextEdit, QLineEdit, QTextEdit, \
+    QToolButton, QSizePolicy
 
 import openai
 import tiktoken
@@ -40,14 +41,6 @@ def run_gpt(
     return response.choices[0].message.content
 
 
-class TextEdit(QTextEdit):
-    sigEditFinished = Signal()
-
-    def focusOutEvent(self, ev: QFocusEvent):
-        self.sigEditFinished.emit()
-        super().focusOutEvent(ev)
-
-
 class OWChatGPT(OWWidget):
     name = "Ask"
     description = "Ask AI language model a question."
@@ -61,7 +54,6 @@ class OWChatGPT(OWWidget):
     text_var = ContextSetting(None)
     prompt_start = Setting("")
     prompt_end = Setting("")
-    auto_apply = Setting(True)
 
     class Inputs:
         data = Input("Data", Table)
@@ -85,56 +77,82 @@ class OWChatGPT(OWWidget):
         self.access_key = self.__cm.access_key or ""
 
         self.setup_gui()
+        self.setFocus()
 
     def setup_gui(self):
-        box = gui.vBox(self.controlArea, "Chat GPT")
-        edit: QLineEdit = gui.lineEdit(box, self, "access_key", "Access key:",
-                                       callback=self.__on_access_key_changed)
+        box = gui.vBox(self.controlArea, "Model")
+        edit = gui.lineEdit(box, self, "access_key", "API Key:",
+                            orientation=Qt.Horizontal,
+                            callback=self.__on_access_key_changed)
         edit.setEchoMode(QLineEdit.Password)
         gui.comboBox(box, self, "model_index", label="Model:",
-                     items=MODELS, callback=self.commit.deferred)
+                     orientation=Qt.Horizontal, items=MODELS)
 
-        gui.comboBox(self.controlArea, self, "text_var", "Options",
-                     "Text field:", model=self.__text_var_model,
-                     callback=self.commit.deferred)
+        gui.comboBox(self.controlArea, self, "text_var", "Data",
+                     "Text variable:", model=self.__text_var_model,
+                     orientation=Qt.Horizontal)
 
-        box = gui.vBox(self.controlArea, "Prompt")
-        gui.label(box, self, "Start:")
-        self.__start_text_edit = TextEdit(tabChangesFocus=True)
+        box = gui.hBox(self.controlArea, "Prompt")
+        vbox = gui.vBox(box)
+        vbox.setContentsMargins(0, 0, 0, 0)
+        self.__start_text_edit = QTextEdit(tabChangesFocus=True)
         self.__start_text_edit.setText(self.prompt_start)
-        self.__start_text_edit.sigEditFinished.connect(
-            self.__on_start_text_edit_changed)
-        box.layout().addWidget(self.__start_text_edit)
-        gui.label(box, self, "End:")
-        self.__end_text_edit = TextEdit(tabChangesFocus=True)
+        self.__start_text_edit.setMinimumSize(200, 70)
+        self.__start_text_edit.setSizePolicy(QSizePolicy.Expanding,
+                                             QSizePolicy.Expanding)
+        self.__start_text_edit.textChanged.connect(
+            self.__on_start_text_changed)
+        self.__start_text_edit.installEventFilter(self)
+        self.setFocusProxy(self.__start_text_edit)
+
+        self.__end_text_edit = QTextEdit(tabChangesFocus=True)
         self.__end_text_edit.setText(self.prompt_end)
-        self.__end_text_edit.sigEditFinished.connect(
-            self.__on_end_text_edit_changed)
-        box.layout().addWidget(self.__end_text_edit)
+        self.__end_text_edit.setMinimumSize(200, 70)
+        self.__end_text_edit.setSizePolicy(QSizePolicy.Expanding,
+                                           QSizePolicy.Expanding)
+        self.__end_text_edit.textChanged.connect(self.__on_end_text_changed)
+        self.__end_text_edit.installEventFilter(self)
+
+        gui.label(vbox, self, "Start:")
+        vbox.layout().addWidget(self.__start_text_edit)
+        gui.label(vbox, self, "End:")
+        vbox.layout().addWidget(self.__end_text_edit)
+
+        vbox = gui.vBox(box)
+        vbox.setContentsMargins(0, 0, 0, 0)
+        style = self.style()
+        icon = QIcon(style.standardIcon(style.SP_CommandLink))
+        button = QToolButton()
+        button.setIcon(icon)
+        button.clicked.connect(self.__on_button_clicked)
+        gui.rubber(vbox)
+        vbox.layout().addWidget(button)
 
         gui.rubber(self.controlArea)
-
-        gui.auto_apply(self.buttonsArea, self, "auto_apply")
 
         box = gui.vBox(self.mainArea, "Answer")
         self.__answer_text_edit = QPlainTextEdit(readOnly=True)
         box.layout().addWidget(self.__answer_text_edit)
 
+    def __on_start_text_changed(self):
+        self.prompt_start = self.__start_text_edit.toPlainText()
+
+    def __on_end_text_changed(self):
+        self.prompt_end = self.__end_text_edit.toPlainText()
+
     def __on_access_key_changed(self):
         self.__cm.access_key = self.access_key
-        self.commit.deferred()
 
-    def __on_start_text_edit_changed(self):
-        prompt_start = self.__start_text_edit.toPlainText()
-        if self.prompt_start != prompt_start:
-            self.prompt_start = prompt_start
-            self.commit.deferred()
+    def __on_button_clicked(self):
+        self.ask()
 
-    def __on_end_text_edit_changed(self):
-        prompt_end = self.__end_text_edit.toPlainText()
-        if self.prompt_end != prompt_end:
-            self.prompt_end = prompt_end
-            self.commit.deferred()
+    def eventFilter(self, obj: QObject, ev: QEvent) -> bool:
+        if ev.type() == QEvent.KeyPress:
+            if ev.key() == Qt.Key_Return:
+                if ev.modifiers() != Qt.ShiftModifier:
+                    self.ask()
+                    return True
+        return False
 
     @Inputs.data
     def set_data(self, data: Table):
@@ -147,10 +165,8 @@ class OWChatGPT(OWWidget):
         if data and not self.__text_var_model:
             self.Warning.missing_str_var()
         self.openContext(data)
-        self.commit.now()
 
-    @gui.deferred
-    def commit(self):
+    def ask(self):
         self.Warning.missing_key.clear()
         if self.access_key == "":
             self.Warning.missing_key()
@@ -170,6 +186,9 @@ class OWChatGPT(OWWidget):
             answer = ""
             self.Error.unknown_error(ex)
         return answer
+
+    def sizeHint(self):
+        return QSize(800, 450)
 
 
 if __name__ == "__main__":
