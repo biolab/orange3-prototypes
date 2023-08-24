@@ -49,8 +49,8 @@ class TextEdit(QTextEdit):
 
 
 class OWChatGPT(OWWidget):
-    name = "Chat GPT"
-    description = "Chat GPT."
+    name = "ChatGPT Summarize"
+    description = "Summarize content using a ChatGPT."
     icon = "icons/chatgpt.svg"
     priority = 10
     keywords = ["text", "gpt"]
