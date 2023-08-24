@@ -1,6 +1,6 @@
 from typing import Optional
 
-from AnyQt.QtCore import Signal
+from AnyQt.QtCore import Signal, Qt
 from AnyQt.QtGui import QFocusEvent
 from AnyQt.QtWidgets import QPlainTextEdit, QLineEdit, QTextEdit
 
@@ -87,16 +87,18 @@ class OWChatGPT(OWWidget):
         self.setup_gui()
 
     def setup_gui(self):
-        box = gui.vBox(self.controlArea, "Chat GPT")
-        edit: QLineEdit = gui.lineEdit(box, self, "access_key", "Access key:",
+        box = gui.vBox(self.controlArea, "Model")
+        edit: QLineEdit = gui.lineEdit(box, self, "access_key", "API Key:",
+                                       orientation=Qt.Horizontal,
                                        callback=self.__on_access_key_changed)
         edit.setEchoMode(QLineEdit.Password)
         gui.comboBox(box, self, "model_index", label="Model:",
+                     orientation=Qt.Horizontal,
                      items=MODELS, callback=self.commit.deferred)
 
-        gui.comboBox(self.controlArea, self, "text_var", "Options",
-                     "Text field:", model=self.__text_var_model,
-                     callback=self.commit.deferred)
+        gui.comboBox(self.controlArea, self, "text_var", "Data",
+                     "Text variable:", model=self.__text_var_model,
+                     orientation=Qt.Horizontal, callback=self.commit.deferred)
 
         box = gui.vBox(self.controlArea, "Prompt")
         gui.label(box, self, "Start:")
