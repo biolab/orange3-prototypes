@@ -1,6 +1,6 @@
 from typing import Optional
 
-from AnyQt.QtCore import Signal
+from AnyQt.QtCore import Signal, Qt
 from AnyQt.QtGui import QFocusEvent
 from AnyQt.QtWidgets import QPlainTextEdit, QLineEdit, QTextEdit
 
@@ -9,6 +9,7 @@ import tiktoken
 
 from Orange.data import Table, StringVariable
 from Orange.widgets import gui
+from Orange.widgets.credentials import CredentialManager
 from Orange.widgets.utils.itemmodels import DomainModel
 from Orange.widgets.settings import Setting, DomainContextHandler, \
     ContextSetting
@@ -31,7 +32,10 @@ def run_gpt(
     content = f"{prompt_start}\n{text}.\n{prompt_end}"
     response = openai.ChatCompletion.create(
         model=model,
-        messages=[{"role": "user", "content": content}]
+        messages=[
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": content},
+        ]
     )
     return response.choices[0].message.content
 
@@ -45,14 +49,14 @@ class TextEdit(QTextEdit):
 
 
 class OWChatGPT(OWWidget):
-    name = "Chat GPT"
-    description = "Chat GPT."
+    name = "ChatGPT Summarize"
+    description = "Summarize content using a ChatGPT."
     icon = "icons/chatgpt.svg"
     priority = 10
     keywords = ["text", "gpt"]
 
     settingsHandler = DomainContextHandler()
-    access_key = Setting("")  # TODO
+    access_key = ""
     model_index = Setting(0)
     text_var = ContextSetting(None)
     prompt_start = Setting("")
@@ -76,19 +80,25 @@ class OWChatGPT(OWWidget):
         self.__start_text_edit: QTextEdit = None
         self.__end_text_edit: QTextEdit = None
         self.__answer_text_edit: QPlainTextEdit = None
+
+        self.__cm = CredentialManager("Ask")
+        self.access_key = self.__cm.access_key or ""
+
         self.setup_gui()
 
     def setup_gui(self):
-        box = gui.vBox(self.controlArea, "Chat GPT")
-        edit: QLineEdit = gui.lineEdit(box, self, "access_key", "Access key:",
-                                       callback=self.commit.deferred)
+        box = gui.vBox(self.controlArea, "Model")
+        edit: QLineEdit = gui.lineEdit(box, self, "access_key", "API Key:",
+                                       orientation=Qt.Horizontal,
+                                       callback=self.__on_access_key_changed)
         edit.setEchoMode(QLineEdit.Password)
         gui.comboBox(box, self, "model_index", label="Model:",
+                     orientation=Qt.Horizontal,
                      items=MODELS, callback=self.commit.deferred)
 
-        gui.comboBox(self.controlArea, self, "text_var", "Options",
-                     "Text field:", model=self.__text_var_model,
-                     callback=self.commit.deferred)
+        gui.comboBox(self.controlArea, self, "text_var", "Data",
+                     "Text variable:", model=self.__text_var_model,
+                     orientation=Qt.Horizontal, callback=self.commit.deferred)
 
         box = gui.vBox(self.controlArea, "Prompt")
         gui.label(box, self, "Start:")
@@ -111,6 +121,10 @@ class OWChatGPT(OWWidget):
         box = gui.vBox(self.mainArea, "Answer")
         self.__answer_text_edit = QPlainTextEdit(readOnly=True)
         box.layout().addWidget(self.__answer_text_edit)
+
+    def __on_access_key_changed(self):
+        self.__cm.access_key = self.access_key
+        self.commit.deferred()
 
     def __on_start_text_edit_changed(self):
         prompt_start = self.__start_text_edit.toPlainText()
