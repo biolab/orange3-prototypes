@@ -62,7 +62,8 @@ class OWChatGPTConstructor(OWWidget):
     text_var = ContextSetting(None)
     prompt_start = Setting("")
     prompt_end = Setting("")
-    auto_apply = Setting(True)
+    cache = Setting({})
+    auto_apply = Setting(False)
 
     want_main_area = False
 
@@ -150,7 +151,7 @@ class OWChatGPTConstructor(OWWidget):
         if data and not self.__text_var_model:
             self.Warning.missing_str_var()
         self.openContext(data)
-        self.commit.now()
+        self.commit.deferred()
 
     @gui.deferred
     def commit(self):
@@ -176,12 +177,19 @@ class OWChatGPTConstructor(OWWidget):
         texts = self.__data.get_column(self.text_var)
         answers = []
         for text in texts:
-            try:
-                answer = run_gpt(self.access_key, MODELS[self.model_index],
-                                 text, self.prompt_start, self.prompt_end)
-            except Exception as ex:
-                answer = ex
-                self.Error.unknown_error(ex)
+            args = (text.strip(),
+                    self.prompt_start.strip(),
+                    self.prompt_end.strip())
+            if args in self.cache:
+                answer = self.cache[args]
+            else:
+                try:
+                    answer = run_gpt(self.access_key, MODELS[self.model_index],
+                                     *args)
+                    self.cache[args] = answer
+                except Exception as ex:
+                    answer = ex
+                    self.Error.unknown_error(ex)
             answers.append(answer)
         return answers
 
