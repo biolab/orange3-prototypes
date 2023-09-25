@@ -1,6 +1,7 @@
+from typing import List
+
 from Orange.data import Table, StringVariable
 from Orange.data.util import get_unique_names
-from Orange.widgets import gui
 from Orange.widgets.settings import Setting
 from Orange.widgets.widget import Output
 
@@ -25,27 +26,28 @@ class OWChatGPTConstructor(OWChatGPTBase):
         super().set_data(data)
         self.commit.deferred()
 
-    @gui.deferred
-    def commit(self):
-        super().commit()
-
-        answers = self._get_answers()
+    def on_done(self, answers: List[str]):
         data = self._data
-        if data is not None:
+        if len(answers) > 0:
             name = get_unique_names(data.domain, "Text")
             var = StringVariable(name)
             data = data.add_column(var, answers, to_metas=True)
-
         self.Outputs.data.send(data)
 
-    def _get_answers(self) -> str:
-        self.Error.unknown_error.clear()
+    def ask_gpt(self, state) -> List:
         if not self._data or not self.text_var or not self.access_key:
-            return ""
+            return []
+
+        state.set_status("Thinking...")
 
         texts = self._data.get_column(self.text_var)
         answers = []
-        for text in texts:
+        for i, text in enumerate(texts):
+
+            state.set_progress_value(i / len(texts) * 100)
+            if state.is_interruption_requested():
+                raise Exception
+
             args = (text.strip(),
                     self.prompt_start.strip(),
                     self.prompt_end.strip())
@@ -58,7 +60,6 @@ class OWChatGPTConstructor(OWChatGPTBase):
                     self.cache[args] = answer
                 except Exception as ex:
                     answer = ex
-                    self.Error.unknown_error(ex)
             answers.append(answer)
         return answers
 
