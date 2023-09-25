@@ -30,25 +30,23 @@ class OWChatGPT(OWChatGPTBase):
         super().set_data(data)
         self.commit.now()
 
-    @gui.deferred
-    def commit(self):
-        super().commit()
-        self.__answer_text_edit.setPlainText(self._get_answer())
+    def on_done(self, answer: str):
+        self.__answer_text_edit.setPlainText(answer)
 
-    def _get_answer(self) -> str:
-        self.Error.unknown_error.clear()
+    def ask_gpt(self, state) -> str:
         if not self._data or not self.text_var or not self.access_key:
             return ""
 
         texts = self._data.get_column(self.text_var)
         text = "\n".join(texts)
-        try:
-            answer = run_gpt(self.access_key, MODELS[self.model_index],
-                             text, self.prompt_start, self.prompt_end)
-        except Exception as ex:
-            answer = ""
-            self.Error.unknown_error(ex)
-        return answer
+
+        state.set_progress_value(4)
+        state.set_status("Thinking...")
+        if state.is_interruption_requested():
+            raise Exception
+
+        return run_gpt(self.access_key, MODELS[self.model_index],
+                       text, self.prompt_start, self.prompt_end)
 
 
 if __name__ == "__main__":
