@@ -91,6 +91,7 @@ class OWTextToColumns(OWWidget):
     icon = "icons/TextToColumns.svg"
     keywords = ["split"]
     priority = 700
+    replaces = ["orangecontrib.prototypes.widgets.owsplit.OWSplit"]
 
     class Inputs:
         data = Input("Data", Table)
