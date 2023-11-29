@@ -68,7 +68,7 @@ if __name__ == '__main__':
             'scipy>=1.9.0',
             'scikit-learn>=1.0.1',
             'pyqtgraph',
-            'AnyQt>=0.0.8',
+            'AnyQt>=0.1.0',
             'pandas>=1.3.0',
             'openai',
             'tiktoken',
