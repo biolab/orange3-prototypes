@@ -1,20 +1,3 @@
-Copyright (c) 2021 Bioinformatics Laboratory, University of Ljubljana,
-  Faculty of Computer and Information Science
-
-All rights reserved.
-
-THIS SOFTWARE IS PROVIDED "AS IS", WITHOUT ANY WARRANTY WHATSOEVER.
-
-If you use or redistribute this software, you are permitted to do so
-under the terms of GNU [GPL-3.0]+ license.
-
-[GPL-3.0]: https://www.gnu.org/licenses/gpl-3.0.en.html
-
----
-
-Portions of this software incorporate code from the "FasterRisk" project by Jiachang Liu, which are used under the BSD 3-Clause License. Specifically, this applies to the code located in the `orangecontrib/prototypes/modeling/fasterrisk`.
-
-The following is the BSD 3-Clause License under which the FasterRisk code is licensed:
 
 
 BSD 3-Clause License
@@ -46,3 +29,4 @@ SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
 CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
