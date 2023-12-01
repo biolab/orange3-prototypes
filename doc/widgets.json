@@ -1,0 +1,29 @@
+[
+    [
+     "Prototypes",
+     [
+      {
+       "text": "Scoring Sheet",
+       "doc": "widgets/scoring-sheet.md",
+       "icon": "../orangecontrib/prototypes/widgets/icons/ScoringSheet.svg",
+       "keywords": [
+        "prototypes",
+        "explain",
+        "model",
+        "scoring sheet"
+       ]
+      },
+      {
+       "text": "Scroing Sheet Viewer",
+       "doc": "widgets/scoring-sheet-viewer.md",
+       "icon": "../orangecontrib/prototypes/widgets/icons/ScoringSheetViewer.svg",
+       "keywords": [
+        "prototypes",
+        "explain",
+        "visualization",
+        "scoring sheet viewer"
+       ]
+      }
+     ]
+    ]
+   ]
