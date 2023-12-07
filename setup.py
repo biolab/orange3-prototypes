@@ -70,7 +70,7 @@ if __name__ == '__main__':
             'pyqtgraph',
             'AnyQt>=0.1.0',
             'pandas>=1.3.0',
-            'openai',
+            'openai>=1',
             'tiktoken',
         ],
         extras_require={
