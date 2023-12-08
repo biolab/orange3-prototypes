@@ -26,12 +26,12 @@ def run_gpt(
         prompt_start: str,
         prompt_end: str
 ) -> str:
-    openai.api_key = api_key
+    client = openai.OpenAI(api_key=api_key)
     enc = tiktoken.encoding_for_model(model)
 
     text = enc.decode(enc.encode(text)[:3500])
     content = f"{prompt_start}\n{text}.\n{prompt_end}"
-    response = openai.ChatCompletion.create(
+    response = client.chat.completions.create(
         model=model,
         messages=[
             {"role": "system", "content": "You are a helpful assistant."},
