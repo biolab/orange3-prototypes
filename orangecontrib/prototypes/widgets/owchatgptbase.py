@@ -36,7 +36,8 @@ def run_gpt(
         messages=[
             {"role": "system", "content": "You are a helpful assistant."},
             {"role": "user", "content": content},
-        ]
+        ],
+        temperature=0
     )
     return response.choices[0].message.content
 

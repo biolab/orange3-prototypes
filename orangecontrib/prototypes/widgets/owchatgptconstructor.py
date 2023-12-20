@@ -48,15 +48,15 @@ class OWChatGPTConstructor(OWChatGPTBase):
             if state.is_interruption_requested():
                 raise Exception
 
-            args = (text.strip(),
+            args = (MODELS[self.model_index],
+                    text.strip(),
                     self.prompt_start.strip(),
                     self.prompt_end.strip())
             if args in self.cache:
                 answer = self.cache[args]
             else:
                 try:
-                    answer = run_gpt(self.access_key, MODELS[self.model_index],
-                                     *args)
+                    answer = run_gpt(self.access_key, *args)
                     self.cache[args] = answer
                 except Exception as ex:
                     answer = ex
