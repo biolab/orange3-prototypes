@@ -47,6 +47,17 @@ class TestComputation(unittest.TestCase):
         np.testing.assert_equal(shared["f o"], [0, 1])
         np.testing.assert_equal(shared["o"], [2])
 
+    def test_no_known_values(self):
+        sc = SplitColumn(self.data, self.data.domain.metas[0], ",")
+        data = Table.from_numpy(
+            self.data.domain, np.zeros((3, 1)), None,
+            np.array([["x"] * 2] * 3))
+        shared = sc(data)
+        for attr in ("a", "bbb", "d"):
+            self.assertEqual(shared[attr].size, 0)
+            oh = OneHotStrings(sc, attr)
+            np.testing.assert_equal(oh(data), [0, 0, 0])
+
     def test_one_hot_strings(self):
         attr = self.data.domain.metas[0]
         sc = SplitColumn(self.data, attr, ",")

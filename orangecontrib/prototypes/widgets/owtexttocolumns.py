@@ -31,7 +31,8 @@ class SplitColumn:
         column = data.get_column(self.attr)
         values = [{ss.strip() for ss in s.split(self.delimiter)}
                   for s in column]
-        return {v: np.array([i for i, xs in enumerate(values) if v in xs])
+        return {v: np.array([i for i, xs in enumerate(values) if v in xs],
+                            dtype=int)
                 for v in self.new_values}
 
     def __eq__(self, other):
