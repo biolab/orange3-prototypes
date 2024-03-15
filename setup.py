@@ -4,7 +4,7 @@ from os import walk, path
 
 from setuptools import setup, find_packages
 
-VERSION = '0.21.1'
+VERSION = '0.21.2'
 
 ENTRY_POINTS = {
     'orange3.addon': (
