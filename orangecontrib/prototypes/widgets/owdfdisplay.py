@@ -16,15 +16,15 @@ from functools import lru_cache, singledispatch, reduce
 from typing import Optional, Tuple, List, Dict, Callable, Any, Iterable, \
     Sequence, Mapping, MutableMapping
 
-from PyQt5.QtCore import (
+from AnyQt.QtCore import (
     Qt, QSize, QAbstractItemModel, QAbstractTableModel, QModelIndex,
     QObject
 )
 
-from PyQt5.QtGui import (
+from AnyQt.QtGui import (
     QIcon, QColor, QPainter, QStaticText, QTransform
 )
-from PyQt5.QtWidgets import (
+from AnyQt.QtWidgets import (
     QTableView, QStyle, QStyledItemDelegate, QStyleOptionViewItem, QVBoxLayout,
     QApplication,
 )
@@ -38,7 +38,7 @@ import Orange.data
 
 from Orange.widgets import widget
 from Orange.widgets.utils import itemmodels
-from Orange.widgets.data.owtable import BlockSelectionModel
+from Orange.widgets.utils.itemselectionmodel import BlockSelectionModel
 from Orange.widgets.utils.textimport import StampIconEngine
 
 
@@ -251,10 +251,10 @@ class OWDataFrameDisplay(widget.OWWidget):
     name = "Data Frame Display"
 
     class Inputs:
-        data = widget.Input("Data Frame", DisplayData,)
+        data = widget.Input("Data Frame", DisplayData, auto_summary=False)
 
     class Outputs:
-        data = widget.Output("Data Frame", DisplayData,)
+        data = widget.Output("Data Frame", DisplayData, auto_summary=False)
 
     want_basic_layout = False
 
@@ -506,7 +506,7 @@ class DataDelegate(QStyledItemDelegate):
             text_pos_y = trect.center().y() - tsize.height() / 2
 
         painter.setFont(opt.font)
-        painter.drawStaticText(text_pos_x, text_pos_y, st)
+        painter.drawStaticText(round(text_pos_x), round(text_pos_y), st)
 
     def __static_text_elided_cache(
             self, option: QStyleOptionViewItem, width: int) -> QStaticText:
