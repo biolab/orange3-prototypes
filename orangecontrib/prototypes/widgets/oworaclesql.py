@@ -5,7 +5,7 @@ from AnyQt.QtWidgets import QSizePolicy, QPlainTextEdit, QLineEdit
 from Orange.widgets import gui, settings
 from Orange.widgets.widget import OWWidget, Msg, Output
 from Orange.data import Table, Domain, ContinuousVariable, DiscreteVariable, TimeVariable
-from PyQt5.QtCore import QTimer
+from AnyQt.QtCore import QTimer
 
 try:
     import cx_Oracle
