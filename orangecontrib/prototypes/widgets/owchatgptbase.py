@@ -16,8 +16,8 @@ from Orange.widgets.settings import Setting, DomainContextHandler, \
     ContextSetting
 from Orange.widgets.widget import OWWidget, Input, Msg
 
-MODELS = ["gpt-3.5-turbo", "gpt-4",'o3-mini','o1-mini','gpt-4o-mini']
-
+MODELS = ["gpt-3.5-turbo", "gpt-4", "o3-mini", "o1-mini", "gpt-4o-mini"]
+OLD_MODELS = {"gpt-3.5-turbo", "gpt-4"}
 
 def run_gpt(
         api_key: str,
@@ -27,17 +27,33 @@ def run_gpt(
         prompt_end: str
 ) -> str:
     client = openai.OpenAI(api_key=api_key)
-    enc = tiktoken.get_encoding("o200k_base")  
+
+    if model in OLD_MODELS:
+        enc = tiktoken.encoding_for_model(model)
+        messages = [
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": f"{prompt_start}\n{text}.\n{prompt_end}"},
+        ]
+        response = client.chat.completions.create(
+            model=model,
+            messages=messages,
+            temperature=0  # Apenas para modelos antigos
+        )
+    else:
+        enc = tiktoken.get_encoding("o200k_base")
+        messages = [
+            {"role": "user", "content": f"You are a helpful assistant.{prompt_start}\n{text}.\n{prompt_end}"}
+        ]
+        response = client.chat.completions.create(
+            model=model,
+            messages=messages
+        )
+
 
     text = enc.decode(enc.encode(text)[:3500])
-    content = f"{prompt_start}\n{text}.\n{prompt_end}"
-    response = client.chat.completions.create(
-        model=model,
-        messages=[{"role": "user", "content": content}],
-    )
-    
     return response.choices[0].message.content
 
+    
 
 class TextEdit(QTextEdit):
     sigEditFinished = Signal()
