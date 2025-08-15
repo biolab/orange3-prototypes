@@ -22,14 +22,46 @@ def patch_file_dlg(filename):
                         return_value=(path, None))
 
 
+def _grep_and_check(filename_or_method):
+    def wrap(method):
+        def wrapped(self):
+            widget = self.widget
+            if filename is not None:
+                widget.last_path = lambda: filename
+                widget.open_file()
+            widget.set_out_view = Mock()
+            widget.commit.deferred = Mock()
+            widget.commit.now = Mock()
+
+            def tester(expected, now=False):
+                self.assertEqual(widget.selected_lines, expected)
+                self.assertCalledAgain(widget.set_out_view)
+                if now:
+                    self.assertCalledAgain(widget.commit.now)
+                else:
+                    self.assertCalledAgain(widget.commit.deferred)
+
+            method(self, tester)
+
+        return wrapped
+    if isinstance(filename_or_method, str):
+        filename = filename_or_method
+        return wrap
+    else:
+        filename = None
+        return wrap(filename_or_method)
+
+
+curdir = os.path.split(__file__)[0]
+test_base = "test_owgrep_file.txt"
+test_file = os.path.join(curdir, test_base)
+
+
 class TestOWGrep(WidgetTest):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.curdir = os.path.split(__file__)[0]
-        cls.test_base = "test_owgrep_file.txt"
-        cls.test_file = os.path.join(cls.curdir, cls.test_base)
-        with open(cls.test_file) as f:
+        with open(test_file) as f:
             cls.test_content = f.read().rstrip()
 
     def setUp(self):
@@ -50,8 +82,8 @@ class TestOWGrep(WidgetTest):
         widget.block_length = 2
         widget.recent_paths = [
             RecentPath(__file__, *os.path.split(__file__)),
-            RecentPath(os.path.join(self.curdir, self.test_base),
-                       self.curdir, self.test_base)]
+            RecentPath(os.path.join(curdir, test_base),
+                       curdir, test_base)]
 
         widget.select_file(1)
         table = self.get_output(widget.Outputs.data)
@@ -63,8 +95,8 @@ class TestOWGrep(WidgetTest):
             owgrep.OWGrep,
             stored_settings=dict(
                 recent_paths=[
-                    RecentPath(os.path.join(self.curdir, self.test_base),
-                               self.curdir, self.test_base)],
+                    RecentPath(os.path.join(curdir, test_base),
+                               curdir, test_base)],
                 pattern="ef",
                 has_header_row=True, skip_lines=3, block_length=2))
         table = self.get_output(widget.Outputs.data, widget)
@@ -172,9 +204,9 @@ class TestOWGrep(WidgetTest):
         widget = self.widget
         widget.grep_lines = Mock()
 
-        widget.last_path = Mock(return_value=self.test_file)
+        widget.last_path = Mock(return_value=test_file)
         widget.open_file()
-        self.assertEqual(widget.current_file, self.test_file)
+        self.assertEqual(widget.current_file, test_file)
         self.assertEqual(widget.in_view.toPlainText(), self.test_content)
         self.assertFalse(widget.Error.file_not_found.is_shown())
         self.assertCalledAgain(widget.grep_lines)
@@ -186,9 +218,9 @@ class TestOWGrep(WidgetTest):
         self.assertTrue(widget.Error.file_not_found.is_shown())
         self.assertCalledAgain(widget.grep_lines)
 
-        widget.last_path = Mock(return_value=self.test_file)
+        widget.last_path = Mock(return_value=test_file)
         widget.open_file()
-        self.assertEqual(widget.current_file, self.test_file)
+        self.assertEqual(widget.current_file, test_file)
         self.assertFalse(widget.Error.file_not_found.is_shown())
         self.assertCalledAgain(widget.grep_lines)
 
@@ -204,145 +236,143 @@ class TestOWGrep(WidgetTest):
         self.assertTrue(widget.Error.file_not_found.is_shown())
         self.assertCalledAgain(widget.grep_lines)
 
-    def _grep_and_check(self, expected):
-        widget = self.widget
-        widget.set_out_view = Mock()
-        widget.commit = Mock()
-        widget.grep_lines()
-        self.assertEqual(widget.selected_lines, expected)
-        self.assertTrue(widget.set_out_view.called)
-        self.assertTrue(widget.commit.called)
-
-    def test_grep_lines_no_file(self):
+    @_grep_and_check
+    def test_grep_lines_no_file(self, tester):
         widget = self.widget
         widget.pattern = "ef"
         widget.block_length = 1
         widget.skip_lines = 0
 
-        widget.current_file = self.test_file
-        self._grep_and_check(["def", "def"])
+        widget.last_path = lambda: test_file
+        widget.open_file()
+        tester(["def", "def"], now=True)
 
-        widget.current_file = None
-        self._grep_and_check([])
+        widget.last_path = lambda: None
+        widget.open_file()
+        tester([], now=True)
 
-    def test_grep_lines_no_pattern(self):
+    @_grep_and_check(test_file)
+    def test_grep_lines_no_pattern(self, tester):
         widget = self.widget
-        widget.current_file = self.test_file
         widget.block_length = 1
         widget.skip_lines = 0
-        widget.commit = Mock()
 
         widget.pattern = "ef"
-        self._grep_and_check(["def", "def"])
-        self.assertCalledAgain(widget.commit)
+        widget.controls.pattern.returnPressed.emit()
+        tester(["def", "def"])
 
         widget.pattern = ""
-        self._grep_and_check([])
+        widget.controls.pattern.returnPressed.emit()
+        tester([])
         self.assertFalse(widget.Warning.no_lines.is_shown())
-        self.assertCalledAgain(widget.commit)
 
         widget.pattern = "foo"
-        self._grep_and_check([])
+        widget.controls.pattern.returnPressed.emit()
+        tester([])
         self.assertTrue(widget.Warning.no_lines.is_shown())
-        self.assertCalledAgain(widget.commit)
 
         widget.pattern = ""
-        self._grep_and_check([])
+        widget.controls.pattern.returnPressed.emit()
+        tester([])
         self.assertFalse(widget.Warning.no_lines.is_shown())
-        self.assertCalledAgain(widget.commit)
 
-    def test_grep_lines_skip_and_length(self):
+    @_grep_and_check(test_file)
+    def test_grep_lines_skip_and_length(self, tester):
         widget = self.widget
-        widget.current_file = self.test_file
 
         widget.pattern = "ef"
         widget.block_length = 1
-        widget.skip_lines = 3
-        self._grep_and_check(["a b c", "d e f"])
+        widget.controls.skip_lines.setValue(3)
+        tester(["a b c", "d e f"])
 
         widget.pattern = "ef"
         widget.skip_lines = 3
-        widget.block_length = 2
-        self._grep_and_check(["a b c", "1 2.123 blue", "d e f", "3.1 1 red"])
+        widget.controls.block_length.setValue(2)
+        tester(["a b c", "1 2.123 blue", "d e f", "3.1 1 red"])
 
         widget.pattern = "long"
         widget.skip_lines = 0
-        widget.block_length = 1
-        self._grep_and_check(["a longer line", "another long line"])
+        widget.controls.block_length.setValue(1)
+        tester(["a longer line", "another long line"])
 
         widget.pattern = "long"
         widget.skip_lines = 0
-        widget.block_length = 2
-        self._grep_and_check(
+        widget.controls.block_length.setValue(2)
+        tester(
             ["a longer line", "---", "another long line", "---"])
 
         widget.pattern = "long"
         widget.skip_lines = 1
-        widget.block_length = 1
-        self._grep_and_check(["---", "---"])
+        widget.controls.block_length.setValue(1)
+        tester(["---", "---"])
 
-    def test_grep_lines_regular_expression(self):
+    @_grep_and_check(test_file)
+    def test_grep_lines_regular_expression(self, tester):
         widget = self.widget
-        widget.current_file = self.test_file
         widget.skip_lines = 0
         widget.block_length = 1
         widget.pattern = "long.*li"
 
-        widget.regular_expression = False
-        self._grep_and_check([])
-
         widget.regular_expression = True
-        self._grep_and_check(["a longer line", "another long line"])
+        widget.controls.regular_expression.click()  # now False
 
-    def test_grep_lines_case_sensitive(self):
+        tester([])
+
+        widget.controls.regular_expression.click()  # now True
+        tester(["a longer line", "another long line"])
+
+    @_grep_and_check(test_file)
+    def test_grep_lines_case_sensitive(self, tester):
         widget = self.widget
-        widget.current_file = self.test_file
         widget.skip_lines = 0
         widget.block_length = 1
         widget.pattern = "lONg"
-
-        widget.regular_expression = True
-        widget.case_sensitive = False
-        self._grep_and_check(["a longer line", "another long line"])
-
-        widget.regular_expression = False
-        widget.case_sensitive = False
-        self._grep_and_check(["a longer line", "another long line"])
+        widget.controls.pattern.returnPressed.emit()
 
         widget.regular_expression = True
         widget.case_sensitive = True
-        self._grep_and_check([])
+        widget.controls.case_sensitive.click()  # now False
+        tester(["a longer line", "another long line"])
 
-        widget.regular_expression = False
-        widget.case_sensitive = True
-        self._grep_and_check([])
+        widget.controls.regular_expression.click()  # now False
+        tester(["a longer line", "another long line"])
 
-    def test_grep_lines_eof(self):
+        widget.controls.case_sensitive.click()  # now True
+        widget.controls.regular_expression.click()  # now True
+        tester([])
+
+        widget.controls.regular_expression.click()  # now False
+        tester([])
+
+    @_grep_and_check(test_file)
+    def test_grep_lines_eof(self, tester):
         widget = self.widget
-        widget.current_file = self.test_file
 
         widget.pattern = "ef"
         widget.skip_lines = 3
-        widget.block_length = 4
-        self._grep_and_check(
+        widget.controls.block_length.setValue(4)
+        tester(
             ["a b c", "1 2.123 blue", "2.4 1.1 red", "2.5 1.235 red",
              "d e f", "3.1 1 red", "1.3 ? blue"])
 
-    def test_grep_nothing_found(self):
+    @_grep_and_check(test_file)
+    def test_grep_nothing_found(self, tester):
         widget = self.widget
-        widget.current_file = self.test_file
         widget.skip_lines = 0
         widget.block_length = 1
 
         widget.pattern = "def"
-        self._grep_and_check(["def", "def"])
+        widget.controls.pattern.returnPressed.emit()
+        tester(["def", "def"])
 
         widget.pattern = "foo"
-        self._grep_and_check([])
+        widget.controls.pattern.returnPressed.emit()
+        tester([])
         self.assertTrue(widget.Warning.no_lines.is_shown())
 
         widget.pattern = "def"
-        self._grep_and_check(["def", "def"])
+        widget.controls.pattern.returnPressed.emit()
+        tester(["def", "def"])
         self.assertFalse(widget.Warning.no_lines.is_shown())
 
     def test_set_out_view(self):
@@ -432,7 +462,9 @@ class TestOWGrep(WidgetTest):
         widget = self.widget
         widget.selected_lines = \
             ["1 2.123 1.1", "2.4 1.1 1", "3.1 1 2", "1.3 1 3", "2.5 1.235 2"]
-        expected = np.array(np.mat("; ".join(widget.selected_lines)))
+        expected = np.array(
+            [[float(x) for x in line.split()]
+             for line in widget.selected_lines])
 
         widget.has_header_row = True
         widget.block_length = 5
@@ -456,14 +488,14 @@ class TestOWGrep(WidgetTest):
 
     def test_header_changed_callback(self):
         widget = self.widget
-        widget.commit = Mock()
+        widget.commit.deferred = Mock()
         widget.set_out_view = Mock()
         widget.controls.has_header_row.setChecked(True)
         widget.controls.has_header_row.setChecked(False)
-        self.assertCalledAgain(widget.commit)
+        self.assertCalledAgain(widget.commit.deferred)
         self.assertCalledAgain(widget.set_out_view)
         widget.controls.has_header_row.setChecked(True)
-        self.assertCalledAgain(widget.commit)
+        self.assertCalledAgain(widget.commit.deferred)
         self.assertCalledAgain(widget.set_out_view)
 
 
