@@ -8,19 +8,29 @@ from Orange.data import Table, StringVariable, Domain, DiscreteVariable
 from Orange.widgets.tests.base import WidgetTest
 
 from orangecontrib.prototypes.widgets.owtexttocolumns import \
-    OWTextToColumns, SplitColumn, get_substrings, OneHotStrings, OneHotDiscrete
+    OWTextToColumns, SplitColumnOneHot, get_substrings, OneHotStrings, \
+    DiscreteEncoding, SplitColumnCounts, CountStrings
 
 
 class TestComputation(unittest.TestCase):
     def setUp(self):
-        domain = Domain([DiscreteVariable("x", values=("a c d", "bb d"))], None,
-                        [StringVariable("foo"), StringVariable("bar")])
+        domain = Domain(
+            [
+                DiscreteVariable("x", values=("a c d c bb bb bb", "bb d"))
+            ],
+            None,
+            [
+                StringVariable("foo"),
+                StringVariable("bar")
+            ])
         self.data = Table.from_numpy(
             domain,
-            np.array([1, 0, np.nan])[:, None], None,
-            [["a,bbb,d", "e;f o"], ["", "f o"], ["bbb,d", "e;a;o"]]
+            np.array([[1], [0], [np.nan]]), None,
+            [["a,bbb,d,a,a", "e;f o"], ["", "f o"], ["bbb,d,bbb", "e;a;o"]]
         )
 
+
+class TestSplitColumn(TestComputation):
     def test_get_string_values(self):
         np.testing.assert_equal(
             set(get_substrings({"a bc", "d,e", "", "f,a t", "t"}, " ")),
@@ -29,8 +39,8 @@ class TestComputation(unittest.TestCase):
             set(get_substrings({"a bc", "d,e", "", "f,a t", "t"}, ",")),
             {"a bc", "d", "e", "f", "a t", "t"})
 
-    def test_split_column(self):
-        sc = SplitColumn(self.data, self.data.domain.metas[0], ",")
+    def test_split_column_one_hot(self):
+        sc = SplitColumnOneHot(self.data, self.data.domain.metas[0], ",")
         shared = sc(self.data)
         self.assertEqual(set(sc.new_values), {"a", "bbb", "d"})
         self.assertEqual(set(shared), set(sc.new_values))
@@ -38,7 +48,7 @@ class TestComputation(unittest.TestCase):
         np.testing.assert_equal(shared["bbb"], [0, 2])
         np.testing.assert_equal(shared["d"], [0, 2])
 
-        sc = SplitColumn(self.data, self.data.domain.metas[1], ";")
+        sc = SplitColumnOneHot(self.data, self.data.domain.metas[1], ";")
         shared = sc(self.data)
         self.assertEqual(set(sc.new_values), {"a", "e", "f o", "o"})
         self.assertEqual(set(shared), set(sc.new_values))
@@ -47,8 +57,17 @@ class TestComputation(unittest.TestCase):
         np.testing.assert_equal(shared["f o"], [0, 1])
         np.testing.assert_equal(shared["o"], [2])
 
+    def test_split_column_counts(self):
+        sc = SplitColumnCounts(self.data, self.data.domain.metas[0], ",")
+        shared = sc(self.data)
+        self.assertEqual(set(sc.new_values), {"a", "bbb", "d"})
+        self.assertEqual(set(shared), set(sc.new_values))
+        np.testing.assert_equal(shared["a"], [3, 0, 0])
+        np.testing.assert_equal(shared["bbb"], [1, 0, 2])
+        np.testing.assert_equal(shared["d"], [1, 0, 1])
+
     def test_no_known_values(self):
-        sc = SplitColumn(self.data, self.data.domain.metas[0], ",")
+        sc = SplitColumnOneHot(self.data, self.data.domain.metas[0], ",")
         data = Table.from_numpy(
             self.data.domain, np.zeros((3, 1)), None,
             np.array([["x"] * 2] * 3))
@@ -58,9 +77,10 @@ class TestComputation(unittest.TestCase):
             oh = OneHotStrings(sc, attr)
             np.testing.assert_equal(oh(data), [0, 0, 0])
 
+class TestStringEncoding(TestComputation):
     def test_one_hot_strings(self):
         attr = self.data.domain.metas[0]
-        sc = SplitColumn(self.data, attr, ",")
+        sc = SplitColumnOneHot(self.data, attr, ",")
 
         oh = OneHotStrings(sc, "a")
         np.testing.assert_equal(oh(self.data), [1, 0, 0])
@@ -74,32 +94,59 @@ class TestComputation(unittest.TestCase):
             np.array(["bbb,x,y", "", "bbb", "bbb,a", "foo"])[:, None])
         np.testing.assert_equal(oh(data), [1, 0, 1, 1, 0])
 
+    def test_count_strings(self):
+        attr = self.data.domain.metas[0]
+        sc = SplitColumnCounts(self.data, attr, ",")
+
+        oh = CountStrings(sc, "a")
+        np.testing.assert_equal(oh(self.data), [3, 0, 0])
+
+        oh = CountStrings(sc, "bbb")
+        np.testing.assert_equal(oh(self.data), [1, 0, 2])
+
+        oh = CountStrings(sc, "d")
+        np.testing.assert_equal(oh(self.data), [1, 0, 1])
+
+
+class TestDiscreteEncoding(TestComputation):
     def test_one_hot_discrete(self):
         attr = self.data.domain.attributes[0]
 
-        oh = OneHotDiscrete(attr, " ", "a")
+        oh = DiscreteEncoding(attr, " ", True, "a")
         np.testing.assert_equal(oh(self.data), [0, 1, np.nan])
 
-        oh = OneHotDiscrete(attr, " ", "d")
+        oh = DiscreteEncoding(attr, " ", True, "d")
         np.testing.assert_equal(oh(self.data), [1, 1, np.nan])
 
         data = Table.from_numpy(
             Domain([attr], None),
             np.array([1, 0, 1, 0, np.nan])[:, None])
 
-        oh = OneHotDiscrete(attr, " ", "a")
+        oh = DiscreteEncoding(attr, " ", True, "a")
         np.testing.assert_equal(oh(data), [0, 1, 0, 1, np.nan])
 
-        oh = OneHotDiscrete(attr, " ", "d")
+        oh = DiscreteEncoding(attr, " ", True, "d")
         np.testing.assert_equal(oh(data), [1, 1, 1, 1, np.nan])
+
+    def test_discrete_counts(self):
+        attr = self.data.domain.attributes[0]
+
+        oh = DiscreteEncoding(attr, " ", False, "a")
+        np.testing.assert_equal(oh(self.data), [0, 1, np.nan])
+        oh = DiscreteEncoding(attr, " ", False, "bb")
+        np.testing.assert_equal(oh(self.data), [1, 3, np.nan])
+        with self.data.unlocked():
+            self.data.X[2, 0] = 0
+        np.testing.assert_equal(oh(self.data), [1, 3, 3])
 
     def test_discrete_metas(self):
         attr = DiscreteVariable("x", values=("a c d", "bb d"))
         domain = Domain([], None, [attr])
         data = Table.from_numpy(domain, np.zeros((3, 0)), None,
                                 np.array([1, 0, np.nan])[:, None])
-        oh = OneHotDiscrete(attr, " ", "a")
+        oh = DiscreteEncoding(attr, " ", True, "a")
         np.testing.assert_equal(oh(data), [0, 1, np.nan])
+
 
 
 class TestOWTextToColumns(WidgetTest):
@@ -124,8 +171,8 @@ class TestOWTextToColumns(WidgetTest):
         metas = np.array(
             [
                 ["foo,"],
-                ["bar,baz "],
-                ["foo,bar"],
+                ["bar,baz , bar, bar"],
+                ["foo,bar, foo"],
                 [""],
             ]
         )
@@ -198,22 +245,101 @@ class TestOWTextToColumns(WidgetTest):
                                  [0, 0, 0]])
 
     def test_output_discrete(self):
-        self.widget.delimiter = " "
-        attr = DiscreteVariable("x", values=("bar foo", "bar baz", "crux"))
+        w = self.widget
+        w.delimiter = " "
+        w.output_type = w.Categorical01
+
+        attr = DiscreteVariable(
+            "x",
+            values=("bar foo bar bar foo foo foo", "bar baz", "crux crux"))
         data = Table.from_numpy(
             Domain([attr], None),
             np.array([1, 1, 0, 1, 2, np.nan])[:, None], None)
-        self.send_signal(self.widget.Inputs.data, data)
-        out = self.get_output(self.widget.Outputs.data)
+
+        counts = np.array([[1, 1, 0, 0],
+                           [1, 1, 0, 0],
+                           [3, 0, 0, 4],
+                           [1, 1, 0, 0],
+                           [0, 0, 2, 0],
+                           [np.nan, np.nan, np.nan, np.nan]])
+        exp_hot = np.hstack((data.X, np.vstack((counts[:-1] > 0, [[np.nan] * 4]))))
+
+        self.send_signal(w.Inputs.data, data)
+        out = self.get_output(w.Outputs.data)
         self.assertEqual([attr.name for attr in out.domain.attributes],
                          ["x", "bar", "baz", "crux", "foo"])
-        np.testing.assert_equal(out.X,
-                                [[1, 1, 1, 0, 0],
-                                 [1, 1, 1, 0, 0],
-                                 [0, 1, 0, 0, 1],
-                                 [1, 1, 1, 0, 0],
-                                 [2, 0, 0, 1, 0],
-                                 [np.nan, np.nan, np.nan, np.nan, np.nan]])
+        for attr in out.domain.attributes[1:]:
+            self.assertTrue(attr.is_discrete)
+            self.assertEqual(attr.values, ("0", "1"))
+        np.testing.assert_equal(out.X, exp_hot)
+
+        w.controls.output_type.buttons[w.NoYes].click()
+        out = self.get_output(w.Outputs.data)
+        self.assertEqual([attr.name for attr in out.domain.attributes],
+                         ["x", "bar", "baz", "crux", "foo"])
+        for attr in out.domain.attributes[1:]:
+            self.assertTrue(attr.is_discrete)
+            self.assertEqual(attr.values, ("No", "Yes"))
+        np.testing.assert_equal(out.X, exp_hot)
+
+        w.controls.output_type.buttons[w.Numerical01].click()
+        out = self.get_output(w.Outputs.data)
+        self.assertEqual([attr.name for attr in out.domain.attributes],
+                         ["x", "bar", "baz", "crux", "foo"])
+        for attr in out.domain.attributes[1:]:
+            self.assertTrue(attr.is_continuous)
+        np.testing.assert_equal(out.X, exp_hot)
+
+        w.controls.output_type.buttons[w.Counts].click()
+        out = self.get_output(w.Outputs.data)
+        self.assertEqual([attr.name for attr in out.domain.attributes],
+                         ["x", "bar", "baz", "crux", "foo"])
+        for attr in out.domain.attributes[1:]:
+            self.assertTrue(attr.is_continuous)
+        np.testing.assert_equal(
+            out.X,
+            np.hstack((data.X, np.vstack((counts[:-1], [[np.nan] * 4])))))
+
+    def test_output_types_string(self):
+        w = self.widget
+        w.delimiter = ","
+        w.output_type = w.Categorical01
+
+        self.send_signal(w.Inputs.data, self.small_table)
+        counts = np.array([[0, 0, 1], [3, 1, 0], [1, 0, 2], [0, 0, 0]])
+
+        out = self.get_output(w.Outputs.data)
+        self.assertEqual([attr.name for attr in out.domain.attributes],
+                         ["bar", "baz", "foo (1)"])
+        for attr in out.domain.attributes:
+            self.assertTrue(attr.is_discrete)
+            self.assertEqual(attr.values, ("0", "1"))
+        np.testing.assert_equal(out.X, counts > 0)
+
+        w.controls.output_type.buttons[w.NoYes].click()
+        out = self.get_output(w.Outputs.data)
+        self.assertEqual([attr.name for attr in out.domain.attributes],
+                         ["bar", "baz", "foo (1)"])
+        for attr in out.domain.attributes:
+            self.assertTrue(attr.is_discrete)
+            self.assertEqual(attr.values, ("No", "Yes"))
+        np.testing.assert_equal(out.X, counts > 0)
+
+        w.controls.output_type.buttons[w.Numerical01].click()
+        out = self.get_output(w.Outputs.data)
+        self.assertEqual([attr.name for attr in out.domain.attributes],
+                         ["bar", "baz", "foo (1)"])
+        for attr in out.domain.attributes:
+            self.assertTrue(attr.is_continuous)
+        np.testing.assert_equal(out.X, counts > 0)
+
+        w.controls.output_type.buttons[w.Counts].click()
+        out = self.get_output(w.Outputs.data)
+        self.assertEqual([attr.name for attr in out.domain.attributes],
+                         ["bar", "baz", "foo (1)"])
+        for attr in out.domain.attributes:
+            self.assertTrue(attr.is_continuous)
+        np.testing.assert_equal(out.X, counts)
 
 
 if __name__ == "__main__":

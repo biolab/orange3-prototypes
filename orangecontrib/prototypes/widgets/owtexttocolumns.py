@@ -9,7 +9,8 @@ from Orange.widgets.settings import ContextSetting, DomainContextHandler
 from Orange.widgets.widget import OWWidget, Msg, Output, Input
 from Orange.widgets.utils.itemmodels import DomainModel
 from Orange.widgets.utils.widgetpreview import WidgetPreview
-from Orange.data import Table, Domain, DiscreteVariable, StringVariable
+from Orange.data import \
+    Table, Domain, DiscreteVariable, StringVariable, ContinuousVariable
 from Orange.data.util import SharedComputeValue, get_unique_names
 
 from orangewidget.settings import Setting
@@ -20,20 +21,12 @@ def get_substrings(values, delimiter):
                   - {""})
 
 
-class SplitColumn:
+class SplitColumnBase:
     def __init__(self, data, attr, delimiter):
         self.attr = attr
         self.delimiter = delimiter
         column = set(data.get_column(self.attr))
         self.new_values = tuple(get_substrings(column, self.delimiter))
-
-    def __call__(self, data):
-        column = data.get_column(self.attr)
-        values = [{ss.strip() for ss in s.split(self.delimiter)}
-                  for s in column]
-        return {v: np.array([i for i, xs in enumerate(values) if v in xs],
-                            dtype=int)
-                for v in self.new_values}
 
     def __eq__(self, other):
         return self.attr == other.attr \
@@ -44,16 +37,33 @@ class SplitColumn:
         return hash((self.attr, self.delimiter, self.new_values))
 
 
-class OneHotStrings(SharedComputeValue):
+class SplitColumnOneHot(SplitColumnBase):
+    InheritEq = True
+
+    def __call__(self, data):
+        column = data.get_column(self.attr)
+        values = [{ss.strip() for ss in s.split(self.delimiter)}
+                  for s in column]
+        return {v: np.array([i for i, xs in enumerate(values) if v in xs],
+                            dtype=int)
+                for v in self.new_values}
+
+
+class SplitColumnCounts(SplitColumnBase):
+    InheritEq = True
+
+    def __call__(self, data):
+        column = data.get_column(self.attr)
+        values = [[ss.strip() for ss in s.split(self.delimiter)]
+                  for s in column]
+        return {v: np.array([xs.count(v) for xs in values], dtype=float)
+                for v in self.new_values}
+
+
+class StringEncodingBase(SharedComputeValue):
     def __init__(self, fn, new_feature):
         super().__init__(fn)
         self.new_feature = new_feature
-
-    def compute(self, data, shared_data):
-        indices = shared_data[self.new_feature]
-        col = np.zeros(len(data))
-        col[indices] = 1
-        return col
 
     def __eq__(self, other):
         return super().__eq__(other) and self.new_feature == other.new_feature
@@ -62,28 +72,50 @@ class OneHotStrings(SharedComputeValue):
         return super().__hash__() ^ hash(self.new_feature)
 
 
-class OneHotDiscrete:
-    def __init__(self, variable, delimiter, value):
+class OneHotStrings(StringEncodingBase):
+    InheritEq = True
+
+    def compute(self, data, shared_data):
+        indices = shared_data[self.new_feature]
+        col = np.zeros(len(data))
+        col[indices] = 1
+        return col
+
+
+class CountStrings(StringEncodingBase):
+    InheritEq = True
+
+    def compute(self, data, shared_data):
+        return shared_data[self.new_feature]
+
+
+class DiscreteEncoding:
+    def __init__(self, variable, delimiter, onehot, value):
         self.variable = variable
-        self.value = value
         self.delimiter = delimiter
+        self.onehot = onehot
+        self.value = value
 
     def __call__(self, data):
         column = data.get_column(self.variable).astype(float)
         col = np.zeros(len(column))
         col[np.isnan(column)] = np.nan
         for val_idx, value in enumerate(self.variable.values):
-            if self.value in value.split(self.delimiter):
-                col[column == val_idx] = 1
+            parts = value.split(self.delimiter)
+            if self.onehot:
+                col[column == val_idx] = int(self.value in parts)
+            else:
+                col[column == val_idx] = parts.count(self.value)
         return col
 
     def __eq__(self, other):
         return self.variable == other.variable \
                and self.value == other.value \
-               and self.delimiter == other.delimiter
+               and self.delimiter == other.delimiter \
+               and self.onehot == other.onehot
 
     def __hash__(self):
-        return hash((self.variable, self.value, self.delimiter))
+        return hash((self.variable, self.value, self.delimiter, self.onehot))
 
 
 class OWTextToColumns(OWWidget):
@@ -106,9 +138,18 @@ class OWTextToColumns(OWWidget):
     want_main_area = False
     resizing_enabled = False
 
+    NoYes, Categorical01, Numerical01, Counts = range(4)
+    OutputLabels = (
+        "No / Yes",
+        "0 / 1 (as categorical)",
+        "0 / 1 (as numbers)",
+        "Counts"
+    )
+
     settingsHandler = DomainContextHandler()
     attribute = ContextSetting(None)
     delimiter = ContextSetting(";")
+    output_type = ContextSetting(NoYes)
     auto_apply = Setting(True)
 
     def __init__(self):
@@ -123,8 +164,14 @@ class OWTextToColumns(OWWidget):
                      model=DomainModel(valid_types=(StringVariable,
                                                     DiscreteVariable)))
         gui.lineEdit(
-            variable_select_box, self, "delimiter",
-            orientation=Qt.Horizontal, callback=self.apply.deferred)
+                variable_select_box, self, "delimiter", "Delimiter: ",
+                orientation=Qt.Horizontal, callback=self.apply.deferred,
+                controlWidth=20).box.layout().addStretch(1)
+
+        gui.radioButtonsInBox(
+            self.controlArea, self, "output_type", self.OutputLabels,
+            box="Output",
+            callback=self.apply.deferred)
 
         gui.auto_apply(self.buttonsArea, self, commit=self.apply)
 
@@ -150,26 +197,43 @@ class OWTextToColumns(OWWidget):
             self.Outputs.data.send(None)
             return
         var = self.data.domain[self.attribute]
-
-        if var.is_discrete:
-            values = get_substrings(var.values, self.delimiter)
-            computer = partial(OneHotDiscrete, var, self.delimiter)
-        else:
-            sc = SplitColumn(self.data, var, self.delimiter)
-            values = sc.new_values
-            computer = partial(OneHotStrings, sc)
-        names = get_unique_names(self.data.domain, values, equal_numbers=False)
-
-        new_columns = tuple(DiscreteVariable(
-            name, values=("0", "1"), compute_value=computer(value)
-        ) for value, name in zip(values, names))
-
+        values, computer = self._get_compute_value(var)
+        new_columns = self._get_new_columns(values, computer)
         new_domain = Domain(
             self.data.domain.attributes + new_columns,
             self.data.domain.class_vars, self.data.domain.metas
         )
         extended_data = self.data.transform(new_domain)
         self.Outputs.data.send(extended_data)
+
+    def _get_compute_value(self, var):
+        if var.is_discrete:
+            values = get_substrings(var.values, self.delimiter)
+            computer = partial(
+                DiscreteEncoding,
+                var, self.delimiter, self.output_type != self.Counts)
+        else:
+            if self.output_type == self.Counts:
+                sc = SplitColumnCounts(self.data, var, self.delimiter)
+                computer = partial(CountStrings, sc)
+            else:
+                sc = SplitColumnOneHot(self.data, var, self.delimiter)
+                computer = partial(OneHotStrings, sc)
+            values = sc.new_values
+        return values, computer
+
+    def _get_new_columns(self, values, computer):
+        names = get_unique_names(self.data.domain, values, equal_numbers=False)
+        if self.output_type in (self.Numerical01, self.Counts):
+            return tuple(
+                ContinuousVariable(name, compute_value=computer(value))
+                for value, name in zip(values, names))
+        else:
+            varvalues = ("0", "1") if self.output_type == self.Categorical01 \
+                        else ("No", "Yes")
+            return tuple(DiscreteVariable(
+                name, varvalues, compute_value=computer(value)
+            ) for value, name in zip(values, names))
 
 
 if __name__ == "__main__":  # pragma: no cover
