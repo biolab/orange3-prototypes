@@ -4,7 +4,8 @@ from AnyQt.QtWidgets import QFormLayout, QSizePolicy
 from Orange.data import Table, DiscreteVariable
 from Orange.widgets import widget, gui, settings
 from Orange.widgets.utils.annotated_data import ANNOTATED_DATA_SIGNAL_NAME, \
-    create_annotated_table
+    lazy_annotated_table
+from Orange.widgets.utils.signals import LazyValue
 from Orange.widgets.utils.itemmodels import DomainModel
 from Orange.widgets.utils.state_summary import format_summary_details
 from Orange.widgets.utils.widgetpreview import WidgetPreview
@@ -69,8 +70,6 @@ class OWQuickSelect(widget.OWWidget):
         self.closeContext()
         self.data = data
         self.Error.no_categorical.clear()
-        # TODO: Check that contexts are retrieved properly, also when removing
-        # and re-adding a connection
 
         if data:
             self.var_model.set_domain(data.domain)
@@ -114,10 +113,15 @@ class OWQuickSelect(widget.OWWidget):
             column = self.data.get_column(self.variable)
             valind = self.variable.values.index(self.value)
             mask = column == valind
-            annotated = create_annotated_table(self.data, np.flatnonzero(mask))
-            matching = self.data[mask]
-            unmatched = self.data[~mask]
-            self.n_matched = len(matching)
+            annotated = lazy_annotated_table(self.data, np.flatnonzero(mask))
+            self.n_matched = int(np.sum(mask))
+            # Don't use `mask` in lambdas because it wastes memory
+            matching = LazyValue[Table](
+                lambda: self.data[self.data.get_column(self.variable) == valind],
+                domain=self.data.domain, length=self.n_matched)
+            unmatched = LazyValue[Table](
+                lambda: self.data[self.data.get_column(self.variable) != valind],
+                domain=self.data.domain, length=len(self.data) - self.n_matched)
 
         self.Outputs.matching.send(matching)
         self.Outputs.unmatched.send(unmatched)
