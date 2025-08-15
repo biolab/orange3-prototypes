@@ -432,7 +432,9 @@ class TestOWGrep(WidgetTest):
         widget = self.widget
         widget.selected_lines = \
             ["1 2.123 1.1", "2.4 1.1 1", "3.1 1 2", "1.3 1 3", "2.5 1.235 2"]
-        expected = np.array(np.mat("; ".join(widget.selected_lines)))
+        expected = np.array(
+            [[float(x) for x in line.split()]
+             for line in widget.selected_lines])
 
         widget.has_header_row = True
         widget.block_length = 5
