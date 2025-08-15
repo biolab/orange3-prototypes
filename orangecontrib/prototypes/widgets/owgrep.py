@@ -26,15 +26,16 @@ class NameContextHandler(ContextHandler):
                (os.path.splitext(name)[1] == os.path.splitext(context.name)[1])
 
 # The data flows through the widget as follows:
-# - open_file set current_file (+ in_view) and calls grep_lines;
+# - open_file set current_file (+ in_view) and calls grep_lines and commit.now;
 # - grep_lines greps into selected_lines and calls set_out_view and commit
 # - set_out_view shows the grepped lines, with headers in bold
-# - commit constructs a table from selected_lines and outputs it
 #
 # Callbacks enter this at the following points:
 # - combo with recent files and the button open call open_file
-# - all pattern-related controls except the checkbox for header call grep_lines
-# - the checkbox for header calls set_out_view and commit, without re-grepping
+# - all pattern-related controls except the checkbox for header
+#   call grep_lines and commit.deferred
+# - the checkbox for header calls set_out_view and commit.deferred,
+#   without re-grepping
 
 class OWGrep(OWWidget, RecentPathsWComboMixin):
     name = "Grep"
@@ -114,21 +115,21 @@ class OWGrep(OWWidget, RecentPathsWComboMixin):
 
         box = gui.widgetBox(self.controlArea, box="Pattern")
         lineedit = gui.lineEdit(box, self, "pattern")
-        lineedit.returnPressed.connect(self.grep_lines)
+        lineedit.returnPressed.connect(self.settings_changed)
         gui.checkBox(
             box, self, "case_sensitive", label="Case sensitive",
-            callback=self.grep_lines)
+            callback=self.settings_changed)
         gui.checkBox(
             box, self, "regular_expression", label="Regular expression",
-            callback=self.grep_lines)
+            callback=self.settings_changed)
 
         box = gui.widgetBox(self.controlArea, box="Format")
         gui.spin(
             box, self, "skip_lines", 0, 10, label="Skipped lines: ",
-            callback=self.grep_lines)
+            callback=self.settings_changed)
         gui.spin(
             box, self, "block_length", 1, 100000, label="Block length: ",
-            callback=self.grep_lines)
+            callback=self.settings_changed)
         gui.checkBox(
             box, self, "has_header_row", label="Block(s) start with header row",
             tooltip="Only the header at the first block will be used.",
@@ -193,8 +194,9 @@ class OWGrep(OWWidget, RecentPathsWComboMixin):
         Open the file returned by `last_path`.
 
         Sets `current_file`, shows its contents in `in_view` and calls
-        `grep_lines`. This happens even if `current_file` is empty, in which
-        case everything is cleared.
+        `grep_lines` and commit.now().
+        This happens even if `current_file` is empty, in which case everything
+        is cleared.
         """
         self.Error.file_not_found.clear()
         self.current_file = self.last_path()
@@ -208,6 +210,11 @@ class OWGrep(OWWidget, RecentPathsWComboMixin):
                     text = f.read()
         self.in_view.setHtml(self.out_css + "<div>{}</div>".format(text))
         self.grep_lines()
+        self.commit.now()
+
+    def settings_changed(self):
+        self.grep_lines()
+        self.commit.deferred()
 
     def grep_lines(self):
         """
@@ -245,7 +252,6 @@ class OWGrep(OWWidget, RecentPathsWComboMixin):
                     pass
             self.Warning.no_lines(shown=not self.selected_lines)
         self.set_out_view()
-        self.commit()
 
     def set_out_view(self):
         """
@@ -273,8 +279,9 @@ class OWGrep(OWWidget, RecentPathsWComboMixin):
         Calls `set_out_view` to update the view (headers are shown in bold)
         and `commit`."""
         self.set_out_view()
-        self.commit()
+        self.commit.deferred()
 
+    @gui.deferred
     def commit(self):
         """Output the data table.
 
