@@ -7,8 +7,8 @@ import numpy as np
 from Orange.data import Table, StringVariable, Domain, DiscreteVariable
 from Orange.widgets.tests.base import WidgetTest
 
-from orangecontrib.prototypes.widgets.owtexttocolumns import \
-    OWTextToColumns, SplitColumnOneHot, get_substrings, OneHotStrings, \
+from orangecontrib.prototypes.widgets.owsplit import \
+    OWSplit, SplitColumnOneHot, get_substrings, OneHotStrings, \
     DiscreteEncoding, SplitColumnCounts, CountStrings
 
 
@@ -149,9 +149,9 @@ class TestDiscreteEncoding(TestComputation):
 
 
 
-class TestOWTextToColumns(WidgetTest):
+class TestOWSplit(WidgetTest):
     def setUp(self):
-        self.widget = self.create_widget(OWTextToColumns)
+        self.widget = self.create_widget(OWSplit)
         test_path = os.path.dirname(os.path.abspath(__file__))
         self.data = Table.from_file(os.path.join(test_path, "orange-in-education.tab"))
         self._create_simple_corpus()

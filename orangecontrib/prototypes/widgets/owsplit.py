@@ -118,11 +118,13 @@ class DiscreteEncoding:
         return hash((self.variable, self.value, self.delimiter, self.onehot))
 
 
-class OWTextToColumns(OWWidget):
-    name = "Text to Columns"
+class OWSplit(OWWidget):
+    name = "Split"
     description = "Split text or categorical variables into binary indicators"
-    icon = "icons/TextToColumns.svg"
-    keywords = ["split"]
+    icon = "icons/Split.svg"
+    keywords = ["text to columns", "word encoding", "questionnaire", "survey",
+                "term", "word presence", "word counts", "categorical encoding",
+                "indicator variables"]
     priority = 700
     replaces = ["orangecontrib.prototypes.widgets.owsplit.OWSplit"]
 
@@ -232,5 +234,4 @@ class OWTextToColumns(OWWidget):
 
 
 if __name__ == "__main__":  # pragma: no cover
-    WidgetPreview(OWTextToColumns).run(Table.from_file(
-        "tests/orange-in-education.tab"))
+    WidgetPreview(OWSplit).run(Table.from_file("tests/orange-in-education.tab"))
