@@ -138,18 +138,13 @@ class OWTextToColumns(OWWidget):
     want_main_area = False
     resizing_enabled = False
 
-    NoYes, Categorical01, Numerical01, Counts = range(4)
-    OutputLabels = (
-        "No / Yes",
-        "0 / 1 (as categorical)",
-        "0 / 1 (as numbers)",
-        "Counts"
-    )
+    Categorical, Numerical, Counts = range(3)
+    OutputLabels = ("Categorical (No, Yes)", "Numerical (0, 1)", "Counts")
 
     settingsHandler = DomainContextHandler()
     attribute = ContextSetting(None)
     delimiter = ContextSetting(";")
-    output_type = ContextSetting(NoYes)
+    output_type = ContextSetting(Categorical)
     auto_apply = Setting(True)
 
     def __init__(self):
@@ -170,7 +165,7 @@ class OWTextToColumns(OWWidget):
 
         gui.radioButtonsInBox(
             self.controlArea, self, "output_type", self.OutputLabels,
-            box="Output",
+            box="Output Values",
             callback=self.apply.deferred)
 
         gui.auto_apply(self.buttonsArea, self, commit=self.apply)
@@ -224,16 +219,16 @@ class OWTextToColumns(OWWidget):
 
     def _get_new_columns(self, values, computer):
         names = get_unique_names(self.data.domain, values, equal_numbers=False)
-        if self.output_type in (self.Numerical01, self.Counts):
+        if self.output_type == self.Categorical:
             return tuple(
-                ContinuousVariable(name, compute_value=computer(value))
+                DiscreteVariable(
+                    name, ("No", "Yes"), compute_value=computer(value))
                 for value, name in zip(values, names))
         else:
-            varvalues = ("0", "1") if self.output_type == self.Categorical01 \
-                        else ("No", "Yes")
-            return tuple(DiscreteVariable(
-                name, varvalues, compute_value=computer(value)
-            ) for value, name in zip(values, names))
+            return tuple(
+                ContinuousVariable(
+                    name, compute_value=computer(value))
+                for value, name in zip(values, names))
 
 
 if __name__ == "__main__":  # pragma: no cover

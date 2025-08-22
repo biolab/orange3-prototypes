@@ -247,7 +247,7 @@ class TestOWTextToColumns(WidgetTest):
     def test_output_discrete(self):
         w = self.widget
         w.delimiter = " "
-        w.output_type = w.Categorical01
+        w.output_type = w.Categorical
 
         attr = DiscreteVariable(
             "x",
@@ -270,19 +270,10 @@ class TestOWTextToColumns(WidgetTest):
                          ["x", "bar", "baz", "crux", "foo"])
         for attr in out.domain.attributes[1:]:
             self.assertTrue(attr.is_discrete)
-            self.assertEqual(attr.values, ("0", "1"))
-        np.testing.assert_equal(out.X, exp_hot)
-
-        w.controls.output_type.buttons[w.NoYes].click()
-        out = self.get_output(w.Outputs.data)
-        self.assertEqual([attr.name for attr in out.domain.attributes],
-                         ["x", "bar", "baz", "crux", "foo"])
-        for attr in out.domain.attributes[1:]:
-            self.assertTrue(attr.is_discrete)
             self.assertEqual(attr.values, ("No", "Yes"))
         np.testing.assert_equal(out.X, exp_hot)
 
-        w.controls.output_type.buttons[w.Numerical01].click()
+        w.controls.output_type.buttons[w.Numerical].click()
         out = self.get_output(w.Outputs.data)
         self.assertEqual([attr.name for attr in out.domain.attributes],
                          ["x", "bar", "baz", "crux", "foo"])
@@ -303,7 +294,7 @@ class TestOWTextToColumns(WidgetTest):
     def test_output_types_string(self):
         w = self.widget
         w.delimiter = ","
-        w.output_type = w.Categorical01
+        w.output_type = w.Categorical
 
         self.send_signal(w.Inputs.data, self.small_table)
         counts = np.array([[0, 0, 1], [3, 1, 0], [1, 0, 2], [0, 0, 0]])
@@ -313,19 +304,10 @@ class TestOWTextToColumns(WidgetTest):
                          ["bar", "baz", "foo (1)"])
         for attr in out.domain.attributes:
             self.assertTrue(attr.is_discrete)
-            self.assertEqual(attr.values, ("0", "1"))
-        np.testing.assert_equal(out.X, counts > 0)
-
-        w.controls.output_type.buttons[w.NoYes].click()
-        out = self.get_output(w.Outputs.data)
-        self.assertEqual([attr.name for attr in out.domain.attributes],
-                         ["bar", "baz", "foo (1)"])
-        for attr in out.domain.attributes:
-            self.assertTrue(attr.is_discrete)
             self.assertEqual(attr.values, ("No", "Yes"))
         np.testing.assert_equal(out.X, counts > 0)
 
-        w.controls.output_type.buttons[w.Numerical01].click()
+        w.controls.output_type.buttons[w.Numerical].click()
         out = self.get_output(w.Outputs.data)
         self.assertEqual([attr.name for attr in out.domain.attributes],
                          ["bar", "baz", "foo (1)"])
