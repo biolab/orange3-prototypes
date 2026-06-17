@@ -1,34 +1,29 @@
 from itertools import chain
 from contextlib import contextmanager
 
-import typing
-from typing import Any, List, Tuple, Dict, Optional, Set, Union
-
+from typing import List, Optional, Union
+import heapq
 import numpy as np
 
 from AnyQt.QtWidgets import (
     QGraphicsWidget, QGraphicsScene, QGridLayout, QSizePolicy,
     QAction, QComboBox, QGraphicsGridLayout, QGraphicsSceneMouseEvent, QLabel
 )
-from AnyQt.QtGui import (QPen, QFont, QKeySequence, QPainterPath, QColor,
-    QFontMetrics)
+from AnyQt.QtGui import QPen, QFont, QKeySequence, QPainterPath, QFontMetrics
 from AnyQt.QtCore import (
-    Qt, QObject, QSize, QPointF, QRectF, QLineF, QEvent, QModelIndex
+    Qt, QObject, QSize, QPointF, QRectF, QLineF, QEvent
 )
 from AnyQt.QtCore import pyqtSignal as Signal, pyqtSlot as Slot
 
 from Orange.widgets.utils.localization import pl
-from orangewidget.utils.itemmodels import PyListModel
 from orangewidget.utils.signals import LazyValue
 
 import Orange.data
 from Orange.data.domain import filter_visible
-from Orange.data import Domain, DiscreteVariable, ContinuousVariable, \
+from Orange.data import DiscreteVariable, ContinuousVariable, \
     StringVariable, Table
 import Orange.misc
-from Orange.clustering.hierarchical import \
-    postorder, preorder, Tree, tree_from_linkage, dist_matrix_linkage, \
-    leaves, prune, top_clusters
+from Orange.clustering.hierarchical import preorder, leaves, prune
 from Orange.data.util import get_unique_names
 
 from Orange.widgets import widget, gui, settings
@@ -44,27 +39,20 @@ from Orange.widgets.widget import Input, Output, Msg
 
 from Orange.widgets.utils.stickygraphicsview import StickyGraphicsView
 from Orange.widgets.utils.graphicsview import GraphicsWidgetView
-from Orange.widgets.utils.graphicstextlist import TextListView
-from Orange.widgets.utils.dendrogram import DendrogramWidget
 
-__all__ = ["OWHierarchicalClustering"]
+from orangecontrib.prototypes.neighbor_joining import (
+    neighbor_joining_core, reorder_children
+)
+from orangecontrib.prototypes.neighbor_joining_adapter import (
+    treenode_to_orange_tree
+)
+from orangecontrib.prototypes.dendrogram_nj import DendrogramWidget
+
+__all__ = ["OWNeighborJoining"]
 
 
-LINKAGE = ["Single", "Average", "Weighted", "Complete", "Ward"]
-LINKAGE_ARGS = ["single", "average", "weighted", "complete", "ward"]
-DEFAULT_LINKAGE = "Ward"
-
-
-def make_pen(brush=Qt.black, width=1, style=Qt.SolidLine,
-             cap_style=Qt.SquareCap, join_style=Qt.BevelJoin,
-             cosmetic=False):
-    pen = QPen(brush)
-    pen.setWidth(width)
-    pen.setStyle(style)
-    pen.setCapStyle(cap_style)
-    pen.setJoinStyle(join_style)
-    pen.setCosmetic(cosmetic)
-    return pen
+MAX_ITEMS = 1000
+MAX_PRUNED_LABEL_WIDTH = 200
 
 
 @contextmanager
@@ -75,90 +63,6 @@ def blocked(obj):
         yield obj
     finally:
         obj.blockSignals(old)
-
-
-class SaveStateSettingsHandler(settings.SettingsHandler):
-    """
-    A settings handler that delegates session data store/restore to the
-    OWWidget instance.
-
-    The OWWidget subclass must implement `save_state() -> Dict[str, Any]` and
-    `set_restore_state(state: Dict[str, Any])` methods.
-    """
-    def initialize(self, instance, data=None):
-        super().initialize(instance, data)
-        if data is not None and "__session_state_data" in data:
-            session_data = data["__session_state_data"]
-            instance.set_restore_state(session_data)
-
-    def pack_data(self, widget):
-        # type: (widget.OWWidget) -> dict
-        res = super().pack_data(widget)
-        state = widget.save_state()
-        if state:
-            assert "__session_state_data" not in res
-            res["__session_state_data"] = state
-        return res
-
-
-class _DomainContextHandler(settings.DomainContextHandler,
-                            SaveStateSettingsHandler):
-    pass
-
-
-if typing.TYPE_CHECKING:
-    #: Encoded selection state for persistent storage.
-    #: This is a list of tuples of leaf indices in the selection and
-    #: a (N, 3) linkage matrix for validation (the 4-th column from scipy
-    #: is omitted).
-    SelectionState = Tuple[List[Tuple[int]], List[Tuple[int, int, float]]]
-
-
-class SelectedLabelsModel(PyListModel):
-    def __init__(self):
-        super().__init__([])
-        self.subset = set()
-        self.__font = QFont()
-        self.__colors = None
-
-    def rowCount(self, parent=QModelIndex()):
-        count = super().rowCount()
-        if self.__colors is not None:
-            count = max(count, len(self.__colors))
-        return count
-
-    def _emit_data_changed(self):
-        self.dataChanged.emit(self.index(0, 0), self.index(len(self) - 1, 0))
-
-    def set_subset(self, subset):
-        self.subset = set(subset)
-        self._emit_data_changed()
-
-    def set_colors(self, colors):
-        self.__colors = colors
-        self._emit_data_changed()
-
-    def setFont(self, font):
-        self.__font = font
-        self._emit_data_changed()
-
-    def data(self, index, role=Qt.DisplayRole):
-        if role == Qt.FontRole:
-            font = QFont(self.__font)
-            font.setBold(index.row() in self.subset)
-            return font
-        if role == Qt.BackgroundRole:
-            if self.__colors is not None:
-                if index.row() < len(self.__colors):
-                    return self.__colors[index.row()]
-                else:
-                    return QColor()
-            elif not any(self) and self.subset:  # no labels, no color, but subset
-                return QColor(0, 0, 0)
-        if role == Qt.UserRole and self.subset:
-            return index.row() in self.subset
-
-        return super().data(index, role)
 
 
 class GraphicsView(GraphicsWidgetView, StickyGraphicsView):
@@ -177,16 +81,17 @@ class GraphicsView(GraphicsWidgetView, StickyGraphicsView):
         return ret
 
 
-class OWHierarchicalClustering(widget.OWWidget):
-    name = "Hierarchical Clustering"
-    description = "Display a dendrogram of a hierarchical clustering " \
+class OWNeighborJoining(widget.OWWidget):
+    name = "Neighbor Joining"
+    description = "Display a dendrogram of a neighbor joining " \
                   "constructed from the input distance matrix."
     icon = "icons/HierarchicalClustering.svg"
     priority = 2100
-    keywords = "hierarchical clustering"
+    keywords = "neighbor joining"
 
     class Inputs:
         distances = Input("Distances", Orange.misc.DistMatrix)
+        data = Input("Data", Orange.data.Table)
         subset = Input("Data Subset", Orange.data.Table, explicit=True)
 
     class Outputs:
@@ -194,10 +99,8 @@ class OWHierarchicalClustering(widget.OWWidget):
         annotated_data = Output(ANNOTATED_DATA_SIGNAL_NAME, Orange.data.Table)
 
     settings_version = 2
-    settingsHandler = _DomainContextHandler()
+    settingsHandler = settings.DomainContextHandler()
 
-    #: Selected linkage
-    linkage = settings.Setting(LINKAGE.index(DEFAULT_LINKAGE))
     #: Index of the selected annotation item (variable, ...)
     annotation = settings.ContextSetting("Enumeration")
     #: Out-of-context setting for the case when the "Name" option is available
@@ -233,6 +136,13 @@ class OWHierarchicalClustering(widget.OWWidget):
         empty_matrix = Msg("Distance matrix is empty.")
         not_finite_distances = Msg("Some distances are infinite")
         not_symmetric = widget.Msg("Distance matrix is not symmetric.")
+        no_numeric_features = Msg("No numeric features for distance computation.")
+        too_many_items = Msg(
+            "Neighbor Joining is too slow for this many items "
+            "({n}; maximum is {max_n})."
+        )
+        distance_computation_error = Msg("Error computing distances: {error}")
+        tree_construction_error = Msg("Error constructing neighbor joining tree: {error}")
 
     class Warning(widget.OWWidget.Warning):
         subset_on_no_table = \
@@ -247,25 +157,32 @@ class OWHierarchicalClustering(widget.OWWidget):
             Msg("Variables with too many values may "
                 "degrade the performance of downstream widgets.")
 
-    #: Stored (manual) selection state (from a saved workflow) to restore.
-    __pending_selection_restore = None  # type: Optional[SelectionState]
+    def _set_valid_matrix(self, matrix):
+        self.matrix = None
+        if len(matrix) < 2:
+            self.Error.empty_matrix()
+        elif len(matrix) > MAX_ITEMS:
+            self.Error.too_many_items(n=len(matrix), max_n=MAX_ITEMS)
+        elif not matrix.is_symmetric():
+            self.Error.not_symmetric()
+        elif not np.all(np.isfinite(matrix)):
+            self.Error.not_finite_distances()
+        else:
+            self.matrix = matrix
 
     def __init__(self):
         super().__init__()
 
         self.matrix = None
+        self.data = None
         self.items = None
         self.subset = None
         self.subset_rows = set()
-        self.linkmatrix = None
         self.root = None
         self._displayed_root = None
         self.cutoff_height = 0.0
 
         spin_width = QFontMetrics(self.font()).horizontalAdvance("M" * 7)
-        gui.comboBox(
-            self.controlArea, self, "linkage", items=LINKAGE, box="Linkage",
-            callback=self._invalidate_clustering)
 
         model = itemmodels.VariableListModel(placeholder="None")
         model[:] = self.basic_annotations
@@ -434,20 +351,19 @@ class OWHierarchicalClustering(widget.OWWidget):
         self._main_graphics.setLayout(scenelayout)
         self.scene.addItem(self._main_graphics)
         self.view.setCentralWidget(self._main_graphics)
-        self.scene.addItem(self._main_graphics)
 
-        self.dendrogram = DendrogramWidget(pen_width=2)
+        self.dendrogram = DendrogramWidget(pen_width=2, leaf_heights=True)
         self.dendrogram.setSizePolicy(QSizePolicy.MinimumExpanding,
                                       QSizePolicy.MinimumExpanding)
         self.dendrogram.selectionChanged.connect(self._invalidate_output)
         self.dendrogram.selectionEdited.connect(self._selection_edited)
 
-        self.labels = TextListView(elideMode=Qt.ElideRight)
-        self.label_model = SelectedLabelsModel()
-        self.labels.setModel(self.label_model)
+        # DendrogramWidget paints NJ labels at branch ends. This empty column
+        # only reserves space for labels that extend outside the dendrogram.
+        self.labels = QGraphicsWidget()
         self.labels.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Preferred)
-        self.labels.setAlignment(Qt.AlignLeft)
-        self.labels.setMaximumWidth(200)
+        self.labels.setMinimumWidth(0)
+        self.labels.setMaximumWidth(0)
 
         scenelayout.addItem(self.top_axis, 0, 0,
                             alignment=Qt.AlignLeft | Qt.AlignVCenter)
@@ -468,20 +384,45 @@ class OWHierarchicalClustering(widget.OWWidget):
 
     @Inputs.distances
     def set_distances(self, matrix):
-        self.error()
         self.Error.clear()
-
+        self.data = None
         self.matrix = None
-        self.Error.clear()
         if matrix is not None:
-            if len(matrix) < 2:
-                self.Error.empty_matrix()
-            elif not matrix.is_symmetric():
-                self.Error.not_symmetric()
-            elif not np.all(np.isfinite(matrix)):
-                self.Error.not_finite_distances()
-            else:
-                self.matrix = matrix
+            try:
+                row_items = getattr(matrix, "row_items", None)
+                if isinstance(row_items, Orange.data.Table) \
+                        and not self._has_input_features(row_items):
+                    self.Error.no_numeric_features()
+                    return
+                self._set_valid_matrix(matrix)
+            except Exception as e:
+                self.Error.distance_computation_error(error=str(e))
+
+    @Inputs.data
+    def set_data(self, data):
+        self.Error.clear()
+        self.data = data
+        self.matrix = None
+        if data is not None:
+            try:
+                from Orange import distance
+                if not self._has_input_features(data):
+                    self.Error.no_numeric_features()
+                    return
+                if data.domain.has_continuous_attributes():
+                    matrix = distance.Euclidean(data, axis=1, impute=True)
+                elif data.domain.has_discrete_attributes():
+                    matrix = distance.Hamming(data, axis=1, impute=True)
+                else:
+                    self.Error.no_numeric_features()
+                    return
+                self._set_valid_matrix(matrix)
+            except Exception as e:
+                self.Error.distance_computation_error(error=str(e))
+
+    @staticmethod
+    def _has_input_features(data):
+        return bool(data.domain.attributes)
 
     @Inputs.subset
     def set_subset(self, subset):
@@ -489,12 +430,6 @@ class OWHierarchicalClustering(widget.OWWidget):
         self.controls.label_only_subset.setDisabled(subset is None)
 
     def handleNewSignals(self):
-        if self.__pending_selection_restore is not None:
-            selection_state = self.__pending_selection_restore
-        else:
-            # save the current selection to (possibly) restore later
-            selection_state = self._save_selection()
-
         matrix = self.matrix
         if matrix is not None:
             self._set_items(matrix.row_items, matrix.axis)
@@ -502,14 +437,9 @@ class OWHierarchicalClustering(widget.OWWidget):
             self._set_items(None)
         self._update()
 
-        # Can now attempt to restore session state from a saved workflow.
-        if self.root and selection_state is not None:
-            self._restore_selection(selection_state)
-            self.__pending_selection_restore = None
-
         self.Warning.clear()
         rows = set()
-        if self.subset:
+        if self.subset and self.matrix is not None and self.root is not None:
             subsetids = set(self.subset.ids)
             if not isinstance(self.items, Orange.data.Table) \
                     or not self.matrix.axis:
@@ -524,6 +454,8 @@ class OWHierarchicalClustering(widget.OWWidget):
                     row for row, rowid in enumerate(self.items.ids[indices])
                     if rowid in subsetids
                 }
+        elif self.subset:
+            self.Warning.subset_on_no_table()
 
         self.subset_rows = rows
         self._update_labels()
@@ -587,43 +519,54 @@ class OWHierarchicalClustering(widget.OWWidget):
 
     def _clear_plot(self):
         self.dendrogram.set_root(None)
-        self.label_model.clear()
 
     def _set_displayed_root(self, root):
         self._clear_plot()
         self._displayed_root = root
+        # Pruned NJ trees can have a smaller displayed height. Keep the axis
+        # scale tied to the full tree so pruning does not visually rescale it.
+        height = self.root.value.height if self.root else None
+        self.dendrogram.set_reference_height(height)
         self.dendrogram.set_root(root)
         self._update_labels()
 
     def _update(self):
         self._clear_plot()
-
         distances = self.matrix
-
         if distances is not None:
-            method = LINKAGE_ARGS[self.linkage]
-            Z = dist_matrix_linkage(distances, linkage=method)
+            try:
+                D = np.asarray(distances, dtype=float)
 
-            tree = tree_from_linkage(Z)
-            self.linkmatrix = Z
-            self.root = tree
+                # Use stable, unique internal labels. Display labels can be
+                # duplicated, while the adapter maps TreeNode names back to rows.
+                labels = [str(i) for i in range(D.shape[0])]
+                label_to_index = dict(zip(labels, range(len(labels))))
 
-            self.top_axis.setRange(tree.value.height, 0.0)
-            self.bottom_axis.setRange(tree.value.height, 0.0)
+                nj_root = neighbor_joining_core(D, labels)
+                reorder_children(nj_root, D, label_to_index)
+                tree = treenode_to_orange_tree(nj_root, label_to_index)
 
-            if self.pruning:
-                self._set_displayed_root(prune(tree, level=self.max_depth))
-            else:
-                self._set_displayed_root(tree)
+                self.root = tree
+                self.top_axis.setRange(tree.value.height, 0.0)
+                self.bottom_axis.setRange(tree.value.height, 0.0)
+
+                if self.pruning:
+                    self._set_displayed_root(prune(tree, level=self.max_depth))
+                else:
+                    self._set_displayed_root(tree)
+            except Exception as ex:
+                self.root = None
+                self._set_displayed_root(None)
+                self.Error.tree_construction_error(error=str(ex))
         else:
-            self.linkmatrix = None
             self.root = None
             self._set_displayed_root(None)
 
         self._apply_selection()
 
+
     def _update_labels(self):
-        if not hasattr(self, "label_model"):
+        if not hasattr(self, "labels"):
             # This method can be called during widget initialization when
             # creating check box for label_only_subset, if it's value is
             # initially True.
@@ -641,19 +584,31 @@ class OWHierarchicalClustering(widget.OWWidget):
             if self.annotation is None:
                 if not self.pruning \
                         and self.subset_rows and self.color_by is None:
-                    # Model fails if number of labels and of colors mismatch
+                    # Empty strings let the dendrogram still show subset bolding.
                     labels = [""] * len(indices)
                 else:
                     labels = []
             elif self.annotation == "Enumeration":
                 labels = [str(i+1) for i in indices]
             elif self.annotation == "Name":
-                attr = self.matrix.row_items.domain.attributes
-                labels = [str(attr[i]) for i in indices]
+                row_items = self.matrix.row_items
+                labels = []
+                for i in indices:
+                    item = row_items[i]
+                    if isinstance(item, Orange.data.Instance):
+                        # Prefer class label if present
+                        if item.domain.class_vars:
+                            labels.append(str(item.get_class()))
+                        else:
+                            labels.append(str(item))
+                    elif hasattr(item, "name"):
+                        labels.append(item.name)
+                    else:
+                        labels.append(str(item))
+
             elif isinstance(self.annotation, Orange.data.Variable):
                 col_data = self.items.get_column(self.annotation)
-                labels = [self.annotation.str_val(val).replace("\n", " ")
-                          for val in col_data]
+                labels = [self.annotation.str_val(val) for val in col_data]
                 labels = [labels[idx] for idx in indices]
             else:
                 labels = []
@@ -663,68 +618,51 @@ class OWHierarchicalClustering(widget.OWWidget):
                           for row, label in enumerate(labels)]
 
             if labels and self._displayed_root is not self.root:
-                joined = leaves(self._displayed_root)
-                labels = [", ".join(labels[leaf.value.first: leaf.value.last])
-                          for leaf in joined]
+                index_to_label = {
+                    leaf.value.index: labels[pos]
+                    for pos, leaf in enumerate(leaves(self.root))
+                }
 
-        self.label_model[:] = labels
-        self.label_model.set_subset(set() if self.pruning else self.subset_rows)
-        self.labels.setMinimumWidth(1 if labels else -1)
+                new_labels = []
+                for node in leaves(self._displayed_root):
+                    leaf_indices = node.value.members
+                    new_labels.append(
+                        ", ".join(index_to_label[i] for i in leaf_indices)
+                    )
 
-        if not self.pruning and self.color_by is not None:
+                labels = new_labels
+
+        # Compute per-leaf colors (for the small rectangle) and subset bold mask
+        colors = None
+        if not self.pruning and self.color_by is not None and labels:
             col = self.items.get_column(self.color_by)
-            self.label_model.set_colors(
-                self.color_by.palette.values_to_qcolors(col[indices]))
+            colors = list(self.color_by.palette.values_to_qcolors(col[indices]))
+
+        subset = set() if self.pruning else (self.subset_rows or set())
+        bold_mask = [i in subset for i in range(len(labels))] if labels else []
+
+        self.dendrogram.set_leaf_label_max_width(
+            MAX_PRUNED_LABEL_WIDTH if self.pruning else None
+        )
+
+        # labels are rendered at branch ends
+        # by DendrogramWidget so non-ultrametric leaves stay visually attached.
+        if labels:
+            selected_mask = bold_mask if subset else None
+            self.dendrogram.set_leaf_labels(labels, colors=colors,
+                                            selected=selected_mask,
+                                            bold=bold_mask)
         else:
-            self.label_model.set_colors(None)
+            self.dendrogram.clear_leaf_labels()
 
-    def _restore_selection(self, state):
-        # type: (SelectionState) -> bool
-        """
-        Restore the (manual) node selection state.
+        self._update_label_column_width()
 
-        Return True if successful; False otherwise.
-        """
-        linkmatrix = self.linkmatrix
-        if self.selection_method == 0 and self.root:
-            selected, linksaved = state
-            linkstruct = np.array(linksaved, dtype=float)
-            selected = set(selected)  # type: Set[Tuple[int]]
-            if not selected:
-                return False
-            if linkmatrix.shape[0] != linkstruct.shape[0]:
-                return False
-            # check that the linkage matrix structure matches. Use isclose for
-            # the height column to account for inexact floating point math
-            # (e.g. summation order in different ?gemm implementations for
-            # euclidean distances, ...)
-            if np.any(linkstruct[:, :2] != linkmatrix[:, :2]) or \
-                    not np.all(np.isclose(linkstruct[:, 2], linkstruct[:, 2])):
-                return False
-            selection = []
-            indices = np.array([n.value.index for n in leaves(self.root)],
-                               dtype=int)
-            # mapping from ranges to display (pruned) nodes
-            mapping = {node.value.range: node
-                       for node in postorder(self._displayed_root)}
-            for node in postorder(self.root):  # type: Tree
-                r = tuple(indices[node.value.first: node.value.last])
-                if r in selected:
-                    if node.value.range not in mapping:
-                        # the node was pruned from display and cannot be
-                        # selected
-                        break
-                    selection.append(mapping[node.value.range])
-                    selected.remove(r)
-                if not selected:
-                    break  # found all, nothing more to do
-            if selection and selected:
-                # Could not restore all selected nodes (only partial match)
-                return False
-
-            self._set_selected_nodes(selection)
-            return True
-        return False
+    def _update_label_column_width(self):
+        width = int(self.dendrogram.leaf_label_width_hint())
+        self.labels.setMinimumWidth(width)
+        self.labels.setPreferredWidth(width)
+        self.labels.setMaximumWidth(width)
+        self.labels.updateGeometry()
 
     def _set_selected_nodes(self, selection):
         # type: (List[Tree]) -> None
@@ -747,11 +685,6 @@ class OWHierarchicalClustering(widget.OWWidget):
     def _max_depth_changed(self):
         self.pruning = 1
         self._invalidate_pruning()
-
-    def _invalidate_clustering(self):
-        self._update()
-        self._update_labels()
-        self._invalidate_output()
 
     def _invalidate_output(self):
         self.commit.deferred()
@@ -776,7 +709,7 @@ class OWHierarchicalClustering(widget.OWWidget):
     def commit(self):
         items = getattr(self.matrix, "items", self.items)
         self.Warning.many_clusters.clear()
-        if not items:
+        if not items or self.root is None:
             self.Outputs.selected_data.send(None)
             self.Outputs.annotated_data.send(None)
             return
@@ -878,8 +811,8 @@ class OWHierarchicalClustering(widget.OWWidget):
 
     def _dendrogram_geom_changed(self):
         pos = self.dendrogram.pos_at_height(self.cutoff_height)
-        geom = self.dendrogram.geometry()
-        self._set_slider_value(pos.x(), geom.width())
+        dendro_geom = self.dendrogram.geometry()
+        self._set_slider_value(pos.x(), dendro_geom.width())
 
         self.cut_line.setLength(
             self.bottom_axis.geometry().bottom()
@@ -896,11 +829,18 @@ class OWHierarchicalClustering(widget.OWWidget):
         margin = 3
         self.scene.setSceneRect(geom)
         self.view.setSceneRect(geom)
+
+        def headerFooterRect(axis):
+            rect = QRectF(axis.geometry())
+            rect.setLeft(dendro_geom.left())
+            rect.setWidth(dendro_geom.width())
+            return rect
+
         self.view.setHeaderSceneRect(
-            adjustLeft(self.top_axis.geometry()).adjusted(0, 0, 0, margin)
+            adjustLeft(headerFooterRect(self.top_axis)).adjusted(0, 0, 0, margin)
         )
         self.view.setFooterSceneRect(
-            adjustLeft(self.bottom_axis.geometry()).adjusted(0, -margin, 0, 0)
+            adjustLeft(headerFooterRect(self.bottom_axis)).adjusted(0, -margin, 0, 0)
         )
 
     def _dendrogram_slider_changed(self, value):
@@ -916,7 +856,7 @@ class OWHierarchicalClustering(widget.OWWidget):
 
     def set_cutoff_height(self, height):
         self.cutoff_height = height
-        if self.root:
+        if self.root and self.root.value.height:
             self.cut_ratio = 100 * height / self.root.value.height
         self.select_max_height(height)
 
@@ -925,9 +865,34 @@ class OWHierarchicalClustering(widget.OWWidget):
 
     def select_top_n(self, n):
         root = self._displayed_root
-        if root:
-            clusters = top_clusters(root, n)
-            self.dendrogram.set_selected_clusters(clusters)
+        if not root:
+            return
+
+        # Orange's top_clusters is tailored to hierarchical clustering. Keep
+        # splitting the highest visible NJ cluster until n clusters are shown.
+        heap = [(-root.value.height, id(root), root)]
+
+        while len(heap) < n:
+            popped = []
+            splittable = None
+            while heap:
+                pr, tie, cl = heapq.heappop(heap)
+                if not cl.is_leaf:
+                    splittable = (pr, tie, cl)
+                    break
+                popped.append((pr, tie, cl))
+
+            for item in popped:
+                heapq.heappush(heap, item)
+            if splittable is None:
+                break
+
+            _, _, cl = splittable
+            for child in cl.branches:
+                heapq.heappush(heap, (-child.value.height, id(child), child))
+
+        clusters = [cl for _, _, cl in heap]
+        self.dendrogram.set_selected_clusters(clusters)
 
     def select_max_height(self, height):
         root = self._displayed_root
@@ -979,54 +944,6 @@ class OWHierarchicalClustering(widget.OWWidget):
         self._selection_method_changed()
         self._invalidate_output()
 
-    def _save_selection(self):
-        # Save the current manual node selection state
-        selection_state = None
-        if self.selection_method == 0 and self.root:
-            assert self.linkmatrix is not None
-            linkmat = [(int(_0), int(_1), _2)
-                       for _0, _1, _2 in self.linkmatrix[:, :3].tolist()]
-            nodes_ = self.dendrogram.selected_nodes()
-            # match the display (pruned) nodes back (by ranges)
-            mapping = {node.value.range: node for node in postorder(self.root)}
-            nodes = [mapping[node.value.range] for node in nodes_]
-            indices = [tuple(node.value.index for node in leaves(node))
-                       for node in nodes]
-            if nodes:
-                selection_state = (indices, linkmat)
-        return selection_state
-
-    def save_state(self):
-        # type: () -> Dict[str, Any]
-        """
-        Save state for `set_restore_state`
-        """
-        selection = self._save_selection()
-        res = {"version": (0, 0, 0)}
-        if selection is not None:
-            res["selection_state"] = selection
-        return res
-
-    def set_restore_state(self, state):
-        # type: (Dict[str, Any]) -> bool
-        """
-        Restore session data from a saved state.
-
-        Parameters
-        ----------
-        state : Dict[str, Any]
-
-        NOTE
-        ----
-        This is method called while the instance (self) is being constructed,
-        even before its `__init__` is called. Consider `self` to be only a
-        `QObject` at this stage.
-        """
-        if "selection_state" in state:
-            selection = state["selection_state"]
-            self.__pending_selection_restore = selection
-        return True
-
     def __zoom_in(self):
         def clip(minval, maxval, val):
             return min(max(val, minval), maxval)
@@ -1052,7 +969,8 @@ class OWHierarchicalClustering(widget.OWWidget):
         factor = (1.25 ** self.zoom_factor)
         font = qfont_scaled(font, factor)
         self._main_graphics.setFont(font)
-        self.label_model.setFont(font)
+        self.dendrogram.setFont(font)
+        self._update_label_column_width()
 
     def send_report(self):
         annot = self.label_cb.currentText()
@@ -1065,10 +983,10 @@ class OWHierarchicalClustering(widget.OWWidget):
         else:
             sel = f"top {self.top_n} {pl(self.top_n, 'cluster')}"
         self.report_items((
-            ("Linkage", LINKAGE[self.linkage]),
+            ("Method", "Neighbor Joining"),
             ("Annotation", annot),
             ("Pruning",
-             self.pruning != 0 and "{} levels".format(self.max_depth)),
+            self.pruning != 0 and "{} levels".format(self.max_depth)),
             ("Selection", sel),
         ))
         self.report_plot()
@@ -1118,11 +1036,6 @@ class SliderLine(QGraphicsWidget):
     """A movable slider line."""
     valueChanged = Signal(float)
 
-    linePressed = Signal()
-    lineMoved = Signal()
-    lineReleased = Signal()
-    rangeChanged = Signal(float, float)
-
     def __init__(self, parent=None, orientation=Qt.Vertical, value=0.0,
                  length=10.0, **kwargs):
         self._orientation = orientation
@@ -1138,14 +1051,6 @@ class SliderLine(QGraphicsWidget):
             self.setCursor(Qt.SizeVerCursor)
         else:
             self.setCursor(Qt.SizeHorCursor)
-
-    def setPen(self, pen: Union[QPen, Qt.GlobalColor, Qt.PenStyle]) -> None:
-        pen = QPen(pen)
-        if self._pen != pen:
-            self.prepareGeometryChange()
-            self._pen = pen
-            self._line = None
-            self.update()
 
     def pen(self) -> QPen:
         if self._pen is None:
@@ -1170,7 +1075,6 @@ class SliderLine(QGraphicsWidget):
         if minval != self._min or maxval != self._max:
             self._min = minval
             self._max = maxval
-            self.rangeChanged.emit(minval, maxval)
             self.setValue(self._value)
 
     def setLength(self, length: float):
@@ -1179,22 +1083,8 @@ class SliderLine(QGraphicsWidget):
             self._length = length
             self._line = None
 
-    def length(self) -> float:
-        return self._length
-
-    def setOrientation(self, orientation: Qt.Orientation):
-        if self._orientation != orientation:
-            self.prepareGeometryChange()
-            self._orientation = orientation
-            self._line = None
-            if self._orientation == Qt.Vertical:
-                self.setCursor(Qt.SizeVerCursor)
-            else:
-                self.setCursor(Qt.SizeHorCursor)
-
     def mousePressEvent(self, event: QGraphicsSceneMouseEvent) -> None:
         event.accept()
-        self.linePressed.emit()
 
     def mouseMoveEvent(self, event: QGraphicsSceneMouseEvent) -> None:
         pos = event.pos()
@@ -1202,7 +1092,6 @@ class SliderLine(QGraphicsWidget):
             self.setValue(pos.y())
         else:
             self.setValue(pos.x())
-        self.lineMoved.emit()
         event.accept()
 
     def mouseReleaseEvent(self, event: QGraphicsSceneMouseEvent) -> None:
@@ -1210,7 +1099,6 @@ class SliderLine(QGraphicsWidget):
             self.setValue(event.pos().y())
         else:
             self.setValue(event.pos().x())
-        self.lineReleased.emit()
         event.accept()
 
     def shape(self) -> QPainterPath:
@@ -1237,29 +1125,32 @@ class SliderLine(QGraphicsWidget):
         painter.drawLine(self._line)
         painter.restore()
 
-
 def clusters_at_height(root, height):
-    """Return a list of clusters by cutting the clustering at `height`.
+    """Return a list of clusters by cutting the tree at `height`.
     """
-    lower = set()
-    cluster_list = []
+    selected = []
+    covered = set()
     for cl in preorder(root):
-        if cl in lower:
+        if cl in covered:
             continue
         if cl.value.height < height:
-            cluster_list.append(cl)
-            lower.update(preorder(cl))
-    return cluster_list
+            selected.append(cl)
+            covered.update(preorder(cl))
 
+    for leaf in leaves(root):
+        # NJ leaves can have positive heights; include leaves not already
+        # covered by an internal cluster below the cut.
+        if leaf not in covered:
+            selected.append(leaf)
+
+    return selected
 
 def main():
     # pragma: no cover
-    from Orange import distance  # pylint: disable=import-outside-toplevel
+    from Orange import distance
     data = Orange.data.Table("iris")
-    matrix = distance.Euclidean(distance._preprocess(data))
-    subset = data[10:30]
-    WidgetPreview(OWHierarchicalClustering).run(matrix, set_subset=subset)
-
+    matrix = distance.Euclidean(data)
+    WidgetPreview(OWNeighborJoining).run(matrix)
 
 if __name__ == "__main__":  # pragma: no cover
     main()
