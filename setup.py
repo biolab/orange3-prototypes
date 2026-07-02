@@ -63,10 +63,10 @@ if __name__ == '__main__':
             "orangecontrib.prototypes.widgets": ["icons/*.svg", "tests/*.tab"]
         },
         install_requires=[
-            'Orange3>=3.36.2',
+            'Orange3>=3.37.0',
             'scipy>=1.9.2',
             'AnyQt>=0.2.0',
-            'pandas>=1.3.0',
+            'pandas>=1.5.1',
             'openai>=1',
             'tiktoken',
         ],
