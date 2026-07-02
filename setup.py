@@ -66,7 +66,7 @@ if __name__ == '__main__':
             'Orange3>=3.37.0',
             'scipy>=1.9.2',
             'AnyQt>=0.2.0',
-            'pandas>=1.4.0',
+            'pandas>=1.5.1',
             'openai>=1',
             'tiktoken',
         ],
